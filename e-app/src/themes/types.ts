@@ -48,6 +48,15 @@ export interface ThemePalette {
   cork: string
   corkDark: string
 
+  /**
+   * Each world's signature colour, used by the shared furniture so the same
+   * couch or bench reads as belonging to this theme. Distinct from `brand`,
+   * which is always Backstage yellow and never changes with the world.
+   */
+  accent: string
+  accentLite: string
+  accentDark: string
+
   paper: string
   paperShade: string
 

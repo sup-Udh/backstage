@@ -42,6 +42,10 @@ export const detectivePalette: ThemePalette = {
   sageLite: '#9EBB87',
 
   rust: '#B4553F',
+
+  accent: '#B4553F',
+  accentLite: '#D07A62',
+  accentDark: '#8A3C2B',
   cork: '#C9A06B',
   corkDark: '#A9834F',
 

@@ -2,10 +2,14 @@ import type { Theme } from '../../themes/types'
 import type { WorldEngine } from '../../world/engine/WorldEngine'
 import { World } from '../../world/World'
 import { PixelButton } from '../../components/Button/PixelButton'
+import { ThemeSwitcher } from '../../components/ThemeSwitcher/ThemeSwitcher'
 
 interface Props {
   theme: Theme
   engine: WorldEngine
+  activeThemeId: string
+  switching: boolean
+  onSelectTheme: (id: string) => void
 }
 
 /**
@@ -13,7 +17,13 @@ interface Props {
  * stacked above it, so the page reads as a window into a room instead of a
  * marketing page that happens to contain a picture.
  */
-export function Hero({ theme, engine }: Props) {
+export function Hero({
+  theme,
+  engine,
+  activeThemeId,
+  switching,
+  onSelectTheme
+}: Props) {
   return (
     <section id="top" className="px-6 pb-20 pt-10">
       <div className="mx-auto max-w-[1400px]">
@@ -39,7 +49,16 @@ export function Hero({ theme, engine }: Props) {
           </p>
         </div>
 
-        <World theme={theme} engine={engine} />
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+          <ThemeSwitcher
+            activeId={activeThemeId}
+            onSelect={onSelectTheme}
+            disabled={switching}
+          />
+          <p className="font-pixel text-xs text-ink-3">{theme.tagline}</p>
+        </div>
+
+        <World theme={theme} engine={engine} switching={switching} />
 
         <div className="mt-16 flex flex-col items-center gap-7 sm:flex-row sm:justify-center sm:gap-12">
           <p className="text-center font-pixel text-2xl font-bold uppercase leading-tight tracking-[0.02em] text-ink sm:text-left sm:text-3xl">

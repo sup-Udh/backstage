@@ -7,6 +7,8 @@ import { CharacterTooltip } from '../components/CharacterCard/CharacterTooltip'
 interface Props {
   theme: Theme
   engine: WorldEngine
+  /** True while the world is mid-swap, so the frame can veil itself. */
+  switching?: boolean
 }
 
 interface Hover {
@@ -25,7 +27,7 @@ const MAX_SCALE = 4
  * entirely by WorldEngine, so nothing in this component re-renders per frame:
  * the only React state here is the integer scale and the hovered character.
  */
-export function World({ theme, engine }: Props) {
+export function World({ theme, engine, switching = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const pointer = useRef<{ x: number; y: number } | null>(null)
@@ -135,6 +137,19 @@ export function World({ theme, engine }: Props) {
                 width: sceneW * scale,
                 height: sceneH * scale,
                 cursor: hover ? 'pointer' : 'default'
+              }}
+            />
+
+            {/*
+              The scene change. Stepped opacity rather than a smooth fade, so
+              the swap reads as a pixel dissolve rather than a CSS transition.
+            */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 z-30 bg-ink"
+              style={{
+                opacity: switching ? 1 : 0,
+                transition: `opacity ${switching ? 200 : 260}ms steps(5, end)`
               }}
             />
 
