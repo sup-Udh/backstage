@@ -1,4 +1,9 @@
 import type { Theme, ThemePalette } from '../../themes/types'
+import { STATUS_LABEL } from '../../characters/character.states'
+import type { AgentStatus } from '../../agents/agent.types'
+import { paint } from '../pixel/ops'
+import { text, textWidth } from '../pixel/shapes'
+import { MARK_SIZE, markForModel } from '../pixel/logos'
 import { SPRITE_H, SPRITE_W } from '../pixel/characterSprite'
 import type { CharacterRuntime } from '../world.types'
 import {
@@ -8,6 +13,14 @@ import {
   type BakedProp,
   type CharacterSheet
 } from './spriteCache'
+
+/** Status tag metrics, in scene pixels. */
+const LABEL_H = 11
+const LABEL_PAD = 3
+const LABEL_GAP = 2
+
+/** Statuses that read as "this agent is doing something". */
+const ACTIVE_STATUSES: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
 
 interface Drawable {
   /** Depth key. Fractions are used to pin an overlay to its prop. */
@@ -219,6 +232,90 @@ export class WorldRenderer {
     ctx.restore()
   }
 
+  /* -------------------------------------------------------- status tag -- */
+
+  /*
+   * A tag floats above every character: the provider mark plus what that
+   * agent is doing right now. Four of these are on screen at once, so they
+   * are built from the 3x5 world font rather than DOM text - they scale with
+   * the scene and stay on the pixel grid.
+   */
+  private labelWidth(c: CharacterRuntime): number {
+    return LABEL_PAD * 2 + MARK_SIZE + LABEL_GAP + textWidth(this.labelText(c))
+  }
+
+  private labelText(c: CharacterRuntime): string {
+    return STATUS_LABEL[(c.lastStatus ?? 'idle') as AgentStatus]
+  }
+
+  private drawStatusTag(
+    ctx: CanvasRenderingContext2D,
+    c: CharacterRuntime,
+    y: number
+  ): void {
+    const status = (c.lastStatus ?? 'idle') as AgentStatus
+    const active = ACTIVE_STATUSES.includes(status)
+    const w = this.labelWidth(c)
+    const cx = Math.round(c.x)
+    const x = cx - (w >> 1)
+
+    const edge = active ? this.pal.brand : this.pal.ink3
+    const ink = active ? this.pal.cream : this.pal.steel
+
+    // Stem down to the head, drawn first so the plate caps it.
+    ctx.fillStyle = edge
+    ctx.fillRect(cx - 1, y + LABEL_H - 1, 2, 3)
+
+    ctx.fillStyle = edge
+    ctx.fillRect(x, y, w, LABEL_H)
+    ctx.fillStyle = this.pal.ink
+    ctx.fillRect(x + 1, y + 1, w - 2, LABEL_H - 2)
+
+    paint(
+      ctx,
+      markForModel(c.model),
+      { mark: active ? this.pal.brand : this.pal.steel },
+      x + LABEL_PAD,
+      y + 2
+    )
+    paint(
+      ctx,
+      text(this.labelText(c), 0, 0, ink),
+      undefined,
+      x + LABEL_PAD + MARK_SIZE + LABEL_GAP,
+      y + 3
+    )
+  }
+
+  /**
+   * Lay the tags out so two characters standing close together do not print
+   * one label on top of another: anything that overlaps a tag already placed
+   * gets bumped up a row.
+   */
+  private layoutTags(
+    chars: CharacterRuntime[]
+  ): { c: CharacterRuntime; y: number }[] {
+    const placed: { c: CharacterRuntime; y: number; x0: number; x1: number }[] = []
+    for (const c of [...chars].sort((a, b) => a.x - b.x)) {
+      const w = this.labelWidth(c)
+      const x0 = Math.round(c.x) - (w >> 1)
+      const x1 = x0 + w
+      let y = Math.round(c.y) - SPRITE_H - LABEL_H - 3
+      let moved = true
+      while (moved) {
+        moved = false
+        for (const p of placed) {
+          if (x1 > p.x0 && x0 < p.x1 && Math.abs(y - p.y) < LABEL_H + 1) {
+            y = p.y - LABEL_H - 2
+            moved = true
+          }
+        }
+      }
+      placed.push({ c, y, x0, x1 })
+    }
+    return placed
+  }
+
   /* --------------------------------------------------------- characters -- */
 
   private drawCharacter(
@@ -310,6 +407,14 @@ export class WorldRenderer {
 
     items.sort((a, b) => a.baseY - b.baseY)
     for (const item of items) item.draw()
+
+    // Tags sit above the depth pass: they are attached to characters but read
+    // as UI, so they should never be occluded by furniture.
+    for (const tag of this.layoutTags(chars)) {
+      // The hover card supersedes the tag, so they never stack up.
+      if (tag.c.def.id === hoveredId) continue
+      this.drawStatusTag(ctx, tag.c, tag.y)
+    }
 
     this.drawMotes(ctx, t)
   }

@@ -1,8 +1,11 @@
 /* Both faces bundled locally, so the app has no network dependency. */
-@import '@fontsource/geist-pixel/latin-400.css';
-@import '@fontsource/jetbrains-mono/latin-400.css';
-@import '@fontsource/jetbrains-mono/latin-500.css';
-@import '@fontsource/jetbrains-mono/latin-700.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+@import '@fontsource/inter/latin-800.css';
+@import '@fontsource/pixelify-sans/latin-400.css';
+@import '@fontsource/pixelify-sans/latin-500.css';
+@import '@fontsource/pixelify-sans/latin-600.css';
+@import '@fontsource/pixelify-sans/latin-700.css';
 @import 'tailwindcss';
 
 /*
@@ -29,10 +32,10 @@
      near-invisible on dark, so dark plates use this instead. */
   --color-dim: #7a7a96;
 
-  /* Reading tier: the main heading and anything meant to be read as prose. */
-  --font-mono: 'JetBrains Mono', ui-monospace, 'Courier New', monospace;
-  /* Pixel tier: section headings, character names, and all UI chrome. */
-  --font-pixel: 'Geist Pixel', ui-monospace, monospace;
+  /* Headings only. */
+  --font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Everything else: names, body, nav, buttons, labels, HUD, tooltips. */
+  --font-pixel: 'Pixelify Sans', ui-monospace, 'Courier New', monospace;
 }
 
 html,
@@ -46,23 +49,10 @@ body {
   background: var(--color-cream);
   color: var(--color-ink);
   font-family: var(--font-pixel);
+  font-weight: 500;
   /* Pixel type is crisper without synthetic smoothing tweaks. */
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
-}
-
-/*
- * Geist Pixel ships a single 400 weight. Without this, any `font-bold` left on
- * a pixel-tier element makes the browser synthesise a bold by smearing the
- * glyph, which destroys the square edges the face is built from. This rule is
- * unlayered, so it outranks Tailwind's `font-*` weight utilities and the pixel
- * tier can never be faked-bold. Hierarchy there comes from size and colour.
- *
- * JetBrains Mono ships real 400/500/700, so the reading tier is unaffected.
- */
-.font-pixel {
-  font-weight: 400;
-  font-synthesis-weight: none;
 }
 
 /* Pixel art must never be interpolated, at any scale. */

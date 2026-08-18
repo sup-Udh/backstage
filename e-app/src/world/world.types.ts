@@ -20,6 +20,8 @@ export type Bubble = 'none' | 'think' | 'talk' | 'spark'
  */
 export interface CharacterRuntime {
   def: CharacterDef
+  /** Which model drives this character, for the provider badge. */
+  model: string
   /** Feet position in scene pixels. */
   x: number
   y: number

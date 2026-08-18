@@ -38,6 +38,7 @@ export class WorldEngine {
 
     this.chars = theme.characters.map((def): CharacterRuntime => ({
       def,
+      model: runtime.get(def.agentId)?.model ?? 'Unknown',
       x: theme.scene.desks[def.homeDesk % theme.scene.desks.length].x,
       y: theme.scene.desks[def.homeDesk % theme.scene.desks.length].y,
       facing: 'down',

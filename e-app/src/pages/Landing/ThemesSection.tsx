@@ -15,10 +15,10 @@ export function ThemesSection({ theme, activeThemeId }: Props) {
     >
       <div className="mx-auto max-w-[1400px]">
         <header className="mb-10 max-w-2xl">
-          <h2 className="font-pixel text-4xl uppercase leading-none tracking-[-0.01em] text-ink sm:text-5xl">
+          <h2 className="font-heading text-4xl font-extrabold uppercase leading-none tracking-[-0.02em] text-ink sm:text-5xl">
             Choose your world
           </h2>
-          <p className="mt-4 font-mono text-base leading-relaxed text-ink-3">
+          <p className="mt-4 font-pixel text-lg leading-relaxed text-ink-3">
             The office is a theme, not the product. Your agents keep their
             work when the set changes.
           </p>
@@ -57,7 +57,7 @@ export function ThemesSection({ theme, activeThemeId }: Props) {
                   <h3 className="font-pixel text-base font-bold uppercase leading-none tracking-[0.06em] text-ink">
                     {t.name}
                   </h3>
-                  <p className="mt-2 min-h-[32px] font-mono text-xs leading-tight text-ink-3">
+                  <p className="mt-2 min-h-[32px] font-pixel text-xs leading-tight text-ink-3">
                     {t.blurb}
                   </p>
                   <p

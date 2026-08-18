@@ -37,7 +37,7 @@ export function Header() {
       <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-6">
         <a href="#top" className="flex items-center gap-3">
           <PixelMark />
-          <span className="font-pixel text-2xl uppercase tracking-[-0.02em] text-ink">
+          <span className="font-pixel text-2xl font-bold uppercase tracking-[-0.02em] text-ink">
             Backstage
           </span>
         </a>

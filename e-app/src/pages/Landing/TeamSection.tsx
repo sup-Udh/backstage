@@ -12,10 +12,10 @@ export function TeamSection({ theme, agents }: Props) {
     <section id="team" className="border-t-[3px] border-ink bg-cream-2 px-6 py-20">
       <div className="mx-auto max-w-[1400px]">
         <header className="mb-10 flex flex-wrap items-end justify-between gap-4">
-          <h2 className="font-pixel text-4xl uppercase leading-none tracking-[-0.01em] text-ink sm:text-5xl">
+          <h2 className="font-heading text-4xl font-extrabold uppercase leading-none tracking-[-0.02em] text-ink sm:text-5xl">
             Meet your team
           </h2>
-          <p className="font-mono text-sm text-ink-3">
+          <p className="font-pixel text-base text-ink-3">
             Four agents. One office. Status is live.
           </p>
         </header>

@@ -50,7 +50,7 @@ export function CharacterCard({ character, agent }: Props) {
         <h3 className="font-pixel text-xl font-bold uppercase leading-none tracking-[0.06em] text-ink">
           {character.name}
         </h3>
-        <p className="mt-1.5 font-mono text-sm leading-none text-ink-3">
+        <p className="mt-1.5 font-pixel text-sm leading-none text-ink-3">
           {character.role}
         </p>
 
@@ -58,7 +58,7 @@ export function CharacterCard({ character, agent }: Props) {
 
         <p className="font-pixel text-xs leading-none text-ink-3">
           <span className="uppercase tracking-[0.12em]">Model</span>{' '}
-          <span className="ml-1 font-mono text-ink">{agent?.model ?? '--'}</span>
+          <span className="ml-1 text-ink">{agent?.model ?? '--'}</span>
         </p>
 
         <div className="mt-2">

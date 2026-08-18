@@ -32,13 +32,13 @@ export function CharacterTooltip({ agent, left, top }: Props) {
         <p className="font-pixel text-base font-bold uppercase leading-none tracking-[0.1em] text-brand">
           {agent.name}
         </p>
-        <p className="mt-1 font-mono text-xs leading-none text-cream-2">
+        <p className="mt-1 font-pixel text-xs leading-none text-cream-2">
           {agent.role}
         </p>
 
         <div className="my-2 h-px bg-ink-3" />
 
-        <p className="font-mono text-[11px] leading-none text-dim">
+        <p className="font-pixel text-[11px] leading-none text-dim">
           Powered by <span className="text-cream">{agent.model}</span>
         </p>
 
@@ -54,7 +54,7 @@ export function CharacterTooltip({ agent, left, top }: Props) {
         </p>
 
         {agent.task && (
-          <p className="mt-1 max-w-[190px] font-mono text-[11px] leading-tight text-dim">
+          <p className="mt-1 max-w-[190px] font-pixel text-[11px] leading-tight text-dim">
             {agent.task}
           </p>
         )}

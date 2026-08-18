@@ -221,15 +221,11 @@ export class Director {
   }
 }
 
+/**
+ * The status label above each head already names the activity, so thought and
+ * speech bubbles would just repeat it. Only the success burst remains: that is
+ * a moment worth punctuating rather than a state worth labelling.
+ */
 function bubbleFor(status: AgentStatus): Bubble {
-  switch (status) {
-    case 'thinking':
-      return 'think'
-    case 'talking':
-      return 'talk'
-    case 'success':
-      return 'spark'
-    default:
-      return 'none'
-  }
+  return status === 'success' ? 'spark' : 'none'
 }

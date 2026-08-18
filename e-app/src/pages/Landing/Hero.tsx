@@ -25,14 +25,14 @@ export function Hero({ theme, engine }: Props) {
               </span>
               {theme.name} — Live
             </p>
-            <h1 className="font-mono text-5xl font-bold uppercase leading-[0.95] tracking-[-0.03em] text-ink sm:text-6xl lg:text-7xl">
+            <h1 className="font-heading text-5xl font-extrabold uppercase leading-[0.95] tracking-[-0.03em] text-ink sm:text-6xl lg:text-7xl">
               Your AI team is
               <br />
               already at work.
             </h1>
           </div>
 
-          <p className="max-w-md font-mono text-base leading-relaxed text-ink-3 lg:pb-2">
+          <p className="max-w-md font-pixel text-lg leading-relaxed text-ink-3 lg:pb-2">
             Backstage turns your AI agents into characters that work,
             collaborate and get things done inside a world you can actually
             see.
@@ -42,7 +42,7 @@ export function Hero({ theme, engine }: Props) {
         <World theme={theme} engine={engine} />
 
         <div className="mt-16 flex flex-col items-center gap-7 sm:flex-row sm:justify-center sm:gap-12">
-          <p className="text-center font-pixel text-2xl uppercase leading-tight text-ink sm:text-left sm:text-3xl">
+          <p className="text-center font-pixel text-2xl font-bold uppercase leading-tight tracking-[0.02em] text-ink sm:text-left sm:text-3xl">
             Stop watching terminals.
             <br />
             <span className="text-brand-deep">Start watching your AI work.</span>

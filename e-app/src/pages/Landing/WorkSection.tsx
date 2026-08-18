@@ -72,10 +72,10 @@ export function WorkSection({ theme }: Props) {
     <section id="work" className="border-t-[3px] border-ink px-6 py-20">
       <div className="mx-auto max-w-[1400px]">
         <header className="mb-12 max-w-2xl">
-          <h2 className="font-pixel text-4xl uppercase leading-none tracking-[-0.01em] text-ink sm:text-5xl">
+          <h2 className="font-heading text-4xl font-extrabold uppercase leading-none tracking-[-0.02em] text-ink sm:text-5xl">
             They don&apos;t just answer.
           </h2>
-          <p className="mt-4 font-mono text-base leading-relaxed text-ink-3">
+          <p className="mt-4 font-pixel text-lg leading-relaxed text-ink-3">
             They investigate. They code. They research. They collaborate.
           </p>
         </header>
@@ -96,7 +96,7 @@ export function WorkSection({ theme }: Props) {
                 <p className="font-pixel text-lg font-bold uppercase leading-none tracking-[0.08em] text-ink">
                   {step.label}
                 </p>
-                <p className="mt-1.5 font-mono text-xs leading-tight text-ink-3">
+                <p className="mt-1.5 font-pixel text-xs leading-tight text-ink-3">
                   {step.note}
                 </p>
               </div>
@@ -123,13 +123,13 @@ export function WorkSection({ theme }: Props) {
               {TERMINAL_LINES.map((line) => (
                 <p
                   key={line}
-                  className="font-mono text-sm leading-none text-dim"
+                  className="font-pixel text-base leading-none text-dim"
                 >
                   <span className="mr-2 text-dim">&gt;</span>
                   {line}
                 </p>
               ))}
-              <p className="font-mono text-sm leading-none text-dim">
+              <p className="font-pixel text-base leading-none text-dim">
                 <span className="mr-2">&gt;</span>
                 <span className="blink text-brand">_</span>
               </p>
@@ -144,7 +144,7 @@ export function WorkSection({ theme }: Props) {
               scale={4}
               className="relative shrink-0"
             />
-            <p className="relative font-pixel text-3xl uppercase leading-tight text-ink sm:text-4xl">
+            <p className="relative font-pixel text-3xl font-bold uppercase leading-tight tracking-[0.02em] text-ink sm:text-4xl">
               Watch them
               <br />
               work.
