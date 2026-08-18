@@ -1,14 +1,163 @@
-@import "tailwindcss";
+/* Both faces bundled locally, so the app has no network dependency. */
+@import '@fontsource/geist-pixel/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+@import '@fontsource/jetbrains-mono/latin-700.css';
+@import 'tailwindcss';
+
+/*
+ * The palette is the same one the world renders with, restated as design
+ * tokens so the UI and the pixel art cannot drift apart. #FFC94F is the
+ * accent; cream and off-white carry the page; ink does every outline.
+ */
+@theme {
+  --color-ink: #1b1b2a;
+  --color-ink-2: #2e2e45;
+  --color-ink-3: #4a4a63;
+
+  --color-brand: #ffc94f;
+  --color-brand-lite: #ffe29a;
+  --color-brand-pale: #fff3d0;
+  --color-brand-deep: #e8a128;
+  --color-brand-shadow: #c97f1c;
+
+  --color-cream: #fff6e4;
+  --color-cream-2: #f5e7cc;
+  --color-paper: #fffdf5;
+  --color-rule: #e3d3b4;
+  /* Muted text on ink surfaces. ink-3 is tuned for cream and goes
+     near-invisible on dark, so dark plates use this instead. */
+  --color-dim: #7a7a96;
+
+  /* Reading tier: the main heading and anything meant to be read as prose. */
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+  /* Pixel tier: section headings, character names, and all UI chrome. */
+  --font-pixel: 'Geist Pixel', ui-monospace, monospace;
+}
 
 html,
 body,
 #root {
-  width: 100%;
   height: 100%;
   margin: 0;
 }
 
 body {
-  background: #000;
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-pixel);
+  /* Pixel type is crisper without synthetic smoothing tweaks. */
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/*
+ * Geist Pixel ships a single 400 weight. Without this, any `font-bold` left on
+ * a pixel-tier element makes the browser synthesise a bold by smearing the
+ * glyph, which destroys the square edges the face is built from. This rule is
+ * unlayered, so it outranks Tailwind's `font-*` weight utilities and the pixel
+ * tier can never be faked-bold. Hierarchy there comes from size and colour.
+ *
+ * JetBrains Mono ships real 400/500/700, so the reading tier is unaffected.
+ */
+.font-pixel {
+  font-weight: 400;
+  font-synthesis-weight: none;
+}
+
+/* Pixel art must never be interpolated, at any scale. */
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/*
+ * Hard, offset shadows only. A blurred shadow next to pixel art immediately
+ * reads as a different medium, so every raised surface uses a solid step.
+ */
+.pixel-shadow {
+  box-shadow: 4px 4px 0 0 var(--color-ink);
+}
+.pixel-shadow-sm {
+  box-shadow: 3px 3px 0 0 var(--color-ink);
+}
+.pixel-shadow-brand {
+  box-shadow: 4px 4px 0 0 var(--color-brand-shadow);
+}
+
+/*
+ * Notched corners, built the classic way: a square element plus four
+ * offset copies of its own background, which removes the corner pixels.
+ */
+.pixel-notch {
+  position: relative;
+}
+.pixel-notch::before {
+  content: '';
+  position: absolute;
+  inset: -3px 0;
+  background: inherit;
+  z-index: -1;
+}
+.pixel-notch::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+  background: inherit;
+  z-index: -1;
+}
+
+/* A 1px dotted rule that stays on the pixel grid. */
+.pixel-rule {
+  height: 2px;
+  background-image: linear-gradient(
+    to right,
+    var(--color-rule) 0 4px,
+    transparent 4px 8px
+  );
+  background-size: 8px 2px;
+}
+
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+.blink {
+  animation: blink 1.1s steps(1, end) infinite;
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.bob {
+  animation: bob 2.4s steps(2, end) infinite;
+}
+
+/* Scrollbar, kept in the palette rather than left as OS chrome. */
+::-webkit-scrollbar {
+  width: 12px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-cream-2);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink);
+  border: 3px solid var(--color-cream-2);
+}
+
+::selection {
+  background: var(--color-brand);
+  color: var(--color-ink);
 }

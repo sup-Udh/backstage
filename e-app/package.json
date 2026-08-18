@@ -1,14 +1,17 @@
 {
-  "name": "cast",
+  "name": "backstage",
   "version": "0.1.0",
-  "description": "CAST - Your AI team, brought to life.",
+  "description": "Backstage - give your AI agents a place to work.",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview"
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource/geist-pixel": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
