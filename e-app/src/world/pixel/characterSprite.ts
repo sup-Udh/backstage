@@ -21,14 +21,15 @@ import type {
  * individuals without becoming larger relative to the desks.
  *
  *   y0..y1    hair volume and above-head accessories
- *   y2..y13   head — 12 rows, deliberately large
- *   y14       neck
- *   y15..y22  torso, shoulders and arms
- *   y23..y27  legs
- *   y28..y29  feet
+ *   y2..y10   head — 8 wide, narrower than the shoulders
+ *   y11       neck
+ *   y12..y20  torso, shoulders and arms
+ *   y21..y26  legs, with a visible gap between them
+ *   y27..y28  feet
  *
- * Light comes from the upper left throughout: highlights top and left, shadow
- * bottom and right, three to four shades per material.
+ * The head is deliberately narrower than the torso. An equal-width head and
+ * body is what made the first attempt read as a rectangle rather than a
+ * person, and no amount of detail rescues a silhouette that shape.
  */
 export const SPRITE_W = 20
 export const SPRITE_H = 30
@@ -106,55 +107,68 @@ export function appearancePalette(a: CharacterAppearance): Palette {
 
 /* ---------------------------------------------------------------- head --- */
 
+/** Head geometry. Narrow, so the shoulders always win the silhouette. */
+const HEAD_X = 6
+const HEAD_W = 8
+const HEAD_Y = 2
+const HEAD_H = 9
+
 /**
  * Hair, drawn in two passes: `back` sits behind the head (length, volume) and
  * `front` over it (fringe, parting). Splitting them is what lets a silhouette
- * extend past the skull without covering the face.
+ * extend past the skull without covering the face — which is most of what
+ * makes one character distinguishable from another at this size.
  */
 function hairBack(a: CharacterAppearance, dy: number): Op[] {
-  const y = 2 + dy
+  const y = HEAD_Y + dy
   switch (a.hairStyle) {
     case 'long':
       return [
-        [3, y + 2, 3, 14, 'hairShade'],
-        [14, y + 2, 3, 14, 'hairShade'],
-        [3, y + 2, 3, 6, 'hair'],
-        [2, y + 5, 1, 8, 'hairDeep'],
-        [17, y + 5, 1, 8, 'hairDeep']
+        [3, y + 1, 3, 15, 'ink'],
+        [14, y + 1, 3, 15, 'ink'],
+        [4, y + 2, 2, 13, 'hairShade'],
+        [14, y + 2, 2, 13, 'hairDeep'],
+        [4, y + 2, 2, 5, 'hair']
       ]
     case 'bob':
       return [
-        [3, y + 2, 3, 9, 'hairShade'],
-        [14, y + 2, 3, 9, 'hairShade'],
-        [3, y + 10, 14, 1, 'hairDeep']
+        [4, y + 1, 2, 10, 'ink'],
+        [14, y + 1, 2, 10, 'ink'],
+        [4, y + 2, 2, 8, 'hairShade'],
+        [14, y + 2, 2, 8, 'hairDeep']
       ]
     case 'ponytail':
       return [
-        [15, y + 3, 3, 3, 'hair'],
-        [16, y + 5, 3, 7, 'hairShade'],
-        [17, y + 9, 2, 4, 'hairDeep']
+        [14, y + 2, 4, 3, 'ink'],
+        [15, y + 3, 3, 8, 'ink'],
+        [15, y + 3, 2, 2, 'hair'],
+        [16, y + 5, 2, 6, 'hairShade']
       ]
     case 'bun':
       return [
-        [7, y - 2, 6, 4, 'ink'],
-        [8, y - 1, 4, 2, 'hair'],
-        [11, y - 1, 1, 2, 'hairShade']
+        [8, y - 3, 5, 4, 'ink'],
+        [9, y - 2, 3, 2, 'hair'],
+        [11, y - 2, 1, 2, 'hairShade']
       ]
     case 'curly':
       return [
-        [3, y + 1, 4, 4, 'hair'],
-        [13, y + 1, 4, 4, 'hairShade'],
-        [2, y + 4, 3, 5, 'hairShade'],
-        [15, y + 4, 3, 5, 'hairDeep'],
-        [4, y - 1, 4, 3, 'hair'],
-        [12, y - 1, 4, 3, 'hairShade']
+        [3, y - 1, 5, 6, 'ink'],
+        [12, y - 1, 5, 6, 'ink'],
+        [4, y, 3, 4, 'hair'],
+        [13, y, 3, 4, 'hairShade'],
+        [5, y - 2, 4, 3, 'ink'],
+        [11, y - 2, 4, 3, 'ink'],
+        [6, y - 1, 2, 2, 'hair'],
+        [12, y - 1, 2, 2, 'hairShade']
       ]
     case 'messy':
       return [
-        [3, y, 3, 4, 'hair'],
-        [15, y, 3, 4, 'hairShade'],
-        [5, y - 2, 3, 3, 'hair'],
-        [12, y - 2, 3, 3, 'hairShade']
+        [4, y - 2, 3, 4, 'ink'],
+        [13, y - 2, 3, 4, 'ink'],
+        [4, y - 1, 2, 3, 'hair'],
+        [14, y - 1, 2, 3, 'hairShade'],
+        [8, y - 3, 4, 3, 'ink'],
+        [9, y - 2, 2, 2, 'hair']
       ]
     default:
       return []
@@ -162,163 +176,136 @@ function hairBack(a: CharacterAppearance, dy: number): Op[] {
 }
 
 function hairFront(a: CharacterAppearance, dy: number): Op[] {
-  const y = 2 + dy
+  const y = HEAD_Y + dy
   const ops: Op[] = []
 
   // The cap every style shares, so the skull reads as one shape.
-  ops.push([4, y, 12, 4, 'hair'])
-  ops.push([4, y, 12, 1, 'hairLit'])
-  ops.push([14, y + 1, 2, 3, 'hairShade'])
+  ops.push([HEAD_X, y, HEAD_W, 3, 'hair'])
+  ops.push([HEAD_X, y, HEAD_W, 1, 'hairLit'])
+  ops.push([HEAD_X + HEAD_W - 2, y + 1, 2, 2, 'hairShade'])
 
   switch (a.hairStyle) {
     case 'swept':
       // Side parting: thick over the left brow, sweeping right and thinning.
-      ops.push([4, y + 4, 7, 2, 'hair'])
-      ops.push([4, y + 4, 4, 1, 'hairLit'])
-      ops.push([11, y + 4, 4, 1, 'hairShade'])
-      ops.push([15, y + 4, 1, 2, 'hairShade'])
+      ops.push([HEAD_X, y + 3, 5, 1, 'hair'])
+      ops.push([HEAD_X, y + 3, 3, 1, 'hairLit'])
+      ops.push([HEAD_X + 5, y + 3, 3, 1, 'hairShade'])
       break
     case 'slick':
-      // Combed flat and back: a hard, glossy top edge.
-      ops.push([4, y + 4, 12, 1, 'hairShade'])
-      ops.push([5, y, 9, 1, 'white'])
-      ops.push([4, y + 1, 1, 4, 'hairDeep'])
+      ops.push([HEAD_X, y + 3, HEAD_W, 1, 'hairShade'])
+      ops.push([HEAD_X + 1, y, HEAD_W - 3, 1, 'hairLit'])
       break
     case 'short':
-      ops.push([4, y + 4, 12, 1, 'hair'])
-      ops.push([4, y + 4, 5, 1, 'hairLit'])
+      ops.push([HEAD_X, y + 3, HEAD_W, 1, 'hair'])
+      ops.push([HEAD_X, y + 3, 3, 1, 'hairLit'])
       break
     case 'buzz':
-      ops.push([4, y + 3, 12, 1, 'hairShade'])
-      ops.push([5, y + 1, 4, 1, 'hairLit'])
+      // Cropped: the hair barely clears the brow, so the skull shape shows.
+      ops.push([HEAD_X, y + 2, HEAD_W, 1, 'hairShade'])
       break
     case 'messy':
-      // Broken outline: tufts of different lengths.
-      ops.push([4, y + 4, 3, 2, 'hair'])
-      ops.push([8, y + 4, 2, 1, 'hair'])
-      ops.push([11, y + 4, 4, 2, 'hairShade'])
-      ops.push([6, y - 1, 2, 2, 'hair'])
-      ops.push([10, y - 1, 3, 2, 'hairShade'])
+      ops.push([HEAD_X, y + 3, 3, 1, 'hair'])
+      ops.push([HEAD_X + 4, y + 3, 4, 1, 'hairShade'])
       break
     case 'curly':
-      ops.push([4, y + 4, 12, 2, 'hair'])
-      ops.push([5, y + 3, 2, 2, 'hairLit'])
-      ops.push([9, y + 3, 2, 2, 'hairLit'])
-      ops.push([13, y + 4, 2, 2, 'hairShade'])
+      ops.push([HEAD_X, y + 3, HEAD_W, 1, 'hair'])
+      ops.push([HEAD_X + 1, y + 2, 2, 1, 'hairLit'])
+      ops.push([HEAD_X + 5, y + 2, 2, 1, 'hairLit'])
       break
-    case 'bun':
-      ops.push([4, y + 4, 12, 1, 'hair'])
-      ops.push([4, y + 4, 1, 4, 'hair'])
-      ops.push([15, y + 4, 1, 4, 'hairShade'])
-      break
-    case 'bob':
-    case 'long':
-    case 'ponytail':
-      ops.push([4, y + 4, 12, 2, 'hair'])
-      ops.push([4, y + 4, 5, 1, 'hairLit'])
-      ops.push([12, y + 4, 4, 2, 'hairShade'])
+    default:
+      ops.push([HEAD_X, y + 3, HEAD_W, 1, 'hair'])
+      ops.push([HEAD_X, y + 3, 3, 1, 'hairLit'])
       break
   }
   return ops
 }
 
-/** Brows carry most of the expression at this size. */
+/** Brows carry most of the expression at this size: one row, two clusters. */
 function brows(exp: Expression, dy: number): Op[] {
-  const y = 8 + dy
+  const y = HEAD_Y + 4 + dy
+  const l = HEAD_X + 1
+  const r = HEAD_X + 5
   switch (exp) {
     case 'serious':
-      return [
-        [6, y, 3, 1, 'hairShade'],
-        [11, y, 3, 1, 'hairShade']
-      ]
     case 'focused':
       return [
-        [6, y, 3, 1, 'hairShade'],
-        [11, y, 3, 1, 'hairShade'],
-        [8, y + 1, 1, 1, 'skinShade']
+        [l, y, 2, 1, 'hairShade'],
+        [r, y, 2, 1, 'hairShade']
       ]
     case 'skeptical':
-      // One brow raised: the whole read comes from a single pixel of offset.
+      // One brow a pixel higher. The whole read is that single offset.
       return [
-        [6, y - 1, 3, 1, 'hairShade'],
-        [11, y, 3, 1, 'hairShade']
-      ]
-    case 'tired':
-      return [
-        [6, y, 3, 1, 'hairShade'],
-        [11, y, 3, 1, 'hairShade'],
-        [6, y + 4, 3, 1, 'skinShade'],
-        [11, y + 4, 3, 1, 'skinShade']
+        [l, y - 1, 2, 1, 'hairShade'],
+        [r, y, 2, 1, 'hairShade']
       ]
     case 'friendly':
       return [
-        [6, y - 1, 3, 1, 'hairShade'],
-        [11, y - 1, 3, 1, 'hairShade']
+        [l, y - 1, 2, 1, 'hairShade'],
+        [r, y - 1, 2, 1, 'hairShade']
+      ]
+    case 'tired':
+      return [
+        [l, y, 2, 1, 'hairShade'],
+        [r, y, 2, 1, 'hairShade'],
+        [l, y + 3, 2, 1, 'skinShade'],
+        [r, y + 3, 2, 1, 'skinShade']
       ]
     default:
       return [
-        [6, y, 3, 1, 'hairShade'],
-        [11, y, 3, 1, 'hairShade']
+        [l, y, 2, 1, 'hairShade'],
+        [r, y, 2, 1, 'hairShade']
       ]
   }
 }
 
 function eyes(a: CharacterAppearance, exp: Expression, dy: number): Op[] {
-  const y = 10 + dy
+  const y = HEAD_Y + 5 + dy
+  const l = HEAD_X + 1
+  const r = HEAD_X + 5
   const ops: Op[] = []
 
-  if (exp === 'friendly') {
-    // Creased into a smile: a two-pixel arc rather than a dot.
-    ops.push([6, y, 3, 1, 'ink'])
-    ops.push([11, y, 3, 1, 'ink'])
-  } else if (exp === 'tired') {
-    ops.push([6, y, 3, 1, 'ink'])
-    ops.push([11, y, 3, 1, 'ink'])
-    ops.push([6, y + 1, 1, 1, 'ink'])
-    ops.push([13, y + 1, 1, 1, 'ink'])
+  if (exp === 'friendly' || exp === 'tired') {
+    // Creased shut: a flat line rather than a pupil.
+    ops.push([l, y + 1, 2, 1, 'ink'])
+    ops.push([r, y + 1, 2, 1, 'ink'])
   } else {
-    ops.push([6, y, 2, 2, 'white'])
-    ops.push([12, y, 2, 2, 'white'])
-    ops.push([7, y, 1, 2, 'ink'])
-    ops.push([12, y, 1, 2, 'ink'])
-    // A single lit pixel makes the eye read as wet rather than painted.
-    ops.push([6, y, 1, 1, 'skinLit'])
+    ops.push([l, y, 2, 2, 'white'])
+    ops.push([r, y, 2, 2, 'white'])
+    ops.push([l + 1, y, 1, 2, 'ink'])
+    ops.push([r + 1, y, 1, 2, 'ink'])
   }
 
   if (a.glasses) {
-    ops.push([5, y - 1, 5, 4, 'ink2'])
-    ops.push([11, y - 1, 5, 4, 'ink2'])
-    ops.push([6, y, 3, 2, 'white'])
-    ops.push([12, y, 3, 2, 'white'])
-    ops.push([7, y, 1, 2, 'ink'])
-    ops.push([12, y, 1, 2, 'ink'])
-    ops.push([10, y, 1, 1, 'ink2'])
-    ops.push([6, y, 1, 1, 'shirtLit'])
+    ops.push([l - 1, y - 1, 4, 4, 'ink2'])
+    ops.push([r - 1, y - 1, 4, 4, 'ink2'])
+    ops.push([l, y, 2, 2, 'white'])
+    ops.push([r, y, 2, 2, 'white'])
+    ops.push([l + 1, y, 1, 2, 'ink'])
+    ops.push([r + 1, y, 1, 2, 'ink'])
+    ops.push([l + 3, y, 1, 1, 'ink2'])
   }
   return ops
 }
 
 function mouth(exp: Expression, dy: number, open: boolean): Op[] {
-  const y = 13 + dy
-  if (open) return [[9, y - 1, 3, 2, 'ink'], [9, y - 1, 3, 1, 'skinDeep']]
+  const y = HEAD_Y + 8 + dy
+  const x = HEAD_X + 2
+  if (open) return [[x, y - 1, 3, 2, 'ink']]
   switch (exp) {
     case 'smirk':
       return [
-        [8, y, 3, 1, 'skinShade'],
-        [11, y - 1, 1, 1, 'skinShade']
+        [x, y, 3, 1, 'skinShade'],
+        [x + 3, y - 1, 1, 1, 'skinShade']
       ]
     case 'friendly':
       return [
-        [8, y, 4, 1, 'skinShade'],
-        [7, y - 1, 1, 1, 'skinShade'],
-        [12, y - 1, 1, 1, 'skinShade']
+        [x, y, 4, 1, 'skinShade'],
+        [x - 1, y - 1, 1, 1, 'skinShade']
       ]
     case 'serious':
-      return [[8, y, 4, 1, 'skinDeep']]
-    case 'tired':
-      return [[8, y, 3, 1, 'skinShade']]
+      return [[x, y, 4, 1, 'skinDeep']]
     default:
-      return [[8, y, 3, 1, 'skinShade']]
+      return [[x, y, 3, 1, 'skinShade']]
   }
 }
 
@@ -329,60 +316,50 @@ function head(
   mouthOpen: boolean
 ): Op[] {
   const exp = expressionOf(a)
-  const y = 2 + dy
+  const y = HEAD_Y + dy
   const ops: Op[] = []
 
   ops.push(...hairBack(a, dy))
 
   if (facing === 'up') {
-    // Back of the head: all hair, no face.
-    ops.push([4, y - 1, 12, 14, 'ink'])
-    ops.push([5, y, 10, 12, 'hair'])
-    ops.push([5, y, 10, 2, 'hairLit'])
-    ops.push([13, y, 2, 12, 'hairShade'])
-    ops.push([6, y + 12, 8, 1, 'hairDeep'])
-    // Ears just catch the light at the edge of the skull.
-    ops.push([4, y + 6, 1, 2, 'skinShade'])
-    ops.push([15, y + 6, 1, 2, 'skinShade'])
+    ops.push([HEAD_X - 1, y - 1, HEAD_W + 2, HEAD_H + 2, 'ink'])
+    ops.push([HEAD_X, y, HEAD_W, HEAD_H, 'hair'])
+    ops.push([HEAD_X, y, HEAD_W, 1, 'hairLit'])
+    ops.push([HEAD_X + HEAD_W - 2, y, 2, HEAD_H, 'hairShade'])
+    ops.push([HEAD_X - 1, y + 5, 1, 2, 'skinShade'])
+    ops.push([HEAD_X + HEAD_W, y + 5, 1, 2, 'skinShade'])
     return ops
   }
 
   if (facing === 'side') {
-    ops.push([4, y - 1, 12, 14, 'ink'])
-    ops.push([5, y, 10, 12, 'skin'])
-    ops.push([5, y, 10, 4, 'hair'])
-    ops.push([5, y, 6, 1, 'hairLit'])
-    ops.push([5, y + 4, 4, 8, 'hair'])
-    ops.push([5, y + 4, 2, 4, 'hairShade'])
-    ops.push([13, y + 2, 2, 10, 'skinShade'])
-    ops.push([15, y + 6, 1, 2, 'skin']) // nose in profile
-    ops.push([15, y + 8, 1, 1, 'skinShade'])
-    ops.push([10, y + 8, 2, 2, 'white'])
-    ops.push([11, y + 8, 1, 2, 'ink'])
-    ops.push([10, y + 6, 3, 1, 'hairShade'])
-    if (a.glasses) {
-      ops.push([9, y + 7, 6, 1, 'ink2'])
-      ops.push([9, y + 8, 1, 2, 'ink2'])
-    }
-    ops.push([12, y + 11, 2, 1, mouthOpen ? 'ink' : 'skinShade'])
-    ops.push([7, y + 6, 2, 2, 'skinShade']) // ear
+    ops.push([HEAD_X - 1, y - 1, HEAD_W + 2, HEAD_H + 2, 'ink'])
+    ops.push([HEAD_X, y, HEAD_W, HEAD_H, 'skin'])
+    ops.push([HEAD_X, y, HEAD_W, 3, 'hair'])
+    ops.push([HEAD_X, y, 5, 1, 'hairLit'])
+    ops.push([HEAD_X, y + 3, 3, 6, 'hair'])
+    ops.push([HEAD_X + HEAD_W - 1, y + 2, 1, 7, 'skinShade'])
+    ops.push([HEAD_X + HEAD_W, y + 5, 1, 1, 'skin']) // nose
+    ops.push([HEAD_X + 5, y + 5, 2, 2, 'white'])
+    ops.push([HEAD_X + 6, y + 5, 1, 2, 'ink'])
+    ops.push([HEAD_X + 5, y + 4, 2, 1, 'hairShade'])
+    if (a.glasses) ops.push([HEAD_X + 4, y + 4, 4, 1, 'ink2'])
+    ops.push([HEAD_X + 5, y + 8, 2, 1, mouthOpen ? 'ink' : 'skinShade'])
+    ops.push([HEAD_X + 2, y + 5, 2, 2, 'skinShade']) // ear
     return ops
   }
 
   // Front view.
-  ops.push([4, y - 1, 12, 14, 'ink'])
-  ops.push([5, y, 10, 12, 'skin'])
-  ops.push([5, y, 10, 1, 'skinLit'])
-  // Cheek and jaw shading, lit from the upper left.
-  ops.push([13, y + 1, 2, 11, 'skinShade'])
-  ops.push([6, y + 11, 8, 1, 'skinShade'])
-  ops.push([5, y + 11, 1, 1, 'skinDeep'])
+  ops.push([HEAD_X - 1, y - 1, HEAD_W + 2, HEAD_H + 2, 'ink'])
+  ops.push([HEAD_X, y, HEAD_W, HEAD_H, 'skin'])
+  ops.push([HEAD_X, y, HEAD_W, 1, 'skinLit'])
+  // Cheek and jaw, lit from the upper left.
+  ops.push([HEAD_X + HEAD_W - 1, y + 1, 1, HEAD_H - 1, 'skinShade'])
+  ops.push([HEAD_X + 1, y + HEAD_H - 1, HEAD_W - 2, 1, 'skinShade'])
   // Ears.
-  ops.push([4, y + 6, 1, 3, 'skin'])
-  ops.push([15, y + 6, 1, 3, 'skinShade'])
-  // Nose: two pixels of shadow, no outline.
-  ops.push([10, y + 9, 1, 2, 'skinShade'])
-  ops.push([10, y + 11, 1, 1, 'skinDeep'])
+  ops.push([HEAD_X - 1, y + 4, 1, 2, 'skin'])
+  ops.push([HEAD_X + HEAD_W, y + 4, 1, 2, 'skinShade'])
+  // Nose: one pixel of shadow on the centre line.
+  ops.push([HEAD_X + 4, y + 6, 1, 1, 'skinShade'])
 
   ops.push(...hairFront(a, dy))
   ops.push(...brows(exp, dy))
@@ -400,57 +377,30 @@ function expressionOf(a: CharacterAppearance): Expression {
 
 type ArmPose = 'down' | 'typing' | 'chin' | 'gesture' | 'up' | 'hold'
 
+const TORSO_Y = 12
+const TORSO_H = 9
+
 interface Frame {
-  /** Shoulder half-width from centre. */
+  /** Shoulder half-width from the centre line at x=10. */
   half: number
   /** Vertical offset of the whole upper body. */
   lean: number
-  /** Horizontal offset of the head, for posture. */
-  headShift: number
 }
 
 function frameFor(a: CharacterAppearance): Frame {
   const build = a.build ?? 'regular'
+  // Slim 10 wide, regular 12, broad 14 — a visible step in the outline.
   const half = build === 'slim' ? 5 : build === 'broad' ? 7 : 6
-
   switch (a.posture ?? 'upright') {
     case 'relaxed':
-      return { half, lean: 0, headShift: 1 }
+      return { half, lean: 1 }
     case 'rigid':
-      return { half, lean: -1, headShift: 0 }
-    case 'forward':
-      return { half, lean: 0, headShift: -1 }
+      return { half, lean: -1 }
     case 'slouched':
-      return { half, lean: 1, headShift: 1 }
+      return { half, lean: 1 }
     default:
-      return { half, lean: 0, headShift: 0 }
+      return { half, lean: 0 }
   }
-}
-
-/** The outer garment's shoulder line, which is most of the silhouette. */
-function shoulders(a: CharacterAppearance, f: Frame, dy: number): Op[] {
-  const y = 15 + dy + f.lean
-  const style = a.outfitStyle ?? 'suit'
-  const left = 10 - f.half
-  const w = f.half * 2
-  const ops: Op[] = []
-
-  if (style === 'hoodie') {
-    // The hood is the silhouette: a raised collar and a bulkier line.
-    ops.push([left - 1, y - 2, w + 2, 4, 'ink'])
-    ops.push([left, y - 1, w, 2, 'outfitShade'])
-    ops.push([left + 1, y - 1, 3, 1, 'outfit'])
-  } else if (style === 'coat') {
-    ops.push([left - 2, y, w + 4, 10, 'ink'])
-    ops.push([left - 1, y + 1, w + 2, 8, 'outfit'])
-    ops.push([left - 1, y + 1, 2, 8, 'outfitLit'])
-    ops.push([left + w - 1, y + 1, 2, 8, 'outfitDeep'])
-  } else if (style === 'labcoat') {
-    ops.push([left - 1, y, w + 2, 9, 'ink'])
-    ops.push([left, y + 1, w, 7, 'outfitLit'])
-    ops.push([left + w - 2, y + 1, 2, 7, 'outfit'])
-  }
-  return ops
 }
 
 function torso(
@@ -462,10 +412,12 @@ function torso(
 ): Op[] {
   const f = frameFor(a)
   const ops: Op[] = []
-  const y = 15 + dy + f.lean
+  const y = TORSO_Y + dy + f.lean
   const left = 10 - f.half
   const w = f.half * 2
   const style = a.outfitStyle ?? 'suit'
+  // A coat hangs past the hips, which lengthens the silhouette.
+  const bodyH = style === 'coat' || style === 'labcoat' ? TORSO_H + 3 : TORSO_H
 
   if (arms === 'up') {
     const lift = frame % 2 === 0 ? 0 : -1
@@ -478,59 +430,58 @@ function torso(
   }
 
   // Neck, in shadow under the jaw.
-  ops.push([8, 14 + dy, 4, 2, 'skinShade'])
-  ops.push([8, 14 + dy, 4, 1, 'skinDeep'])
-
-  ops.push(...shoulders(a, f, dy))
-
-  // Body block: outline, base, then light and shadow columns.
-  ops.push([left - 1, y, w + 2, 9, 'ink'])
-  ops.push([left, y + 1, w, 7, 'outfit'])
-  ops.push([left, y + 1, 2, 7, 'outfitLit'])
-  ops.push([left + w - 2, y + 1, 2, 7, 'outfitShade'])
-  ops.push([left, y + 7, w, 1, 'outfitDeep'])
-
-  // Sleeves, a shade darker so the arms separate from the chest.
-  ops.push([left, y + 2, 2, 6, 'outfitShade'])
-  ops.push([left + w - 2, y + 2, 2, 6, 'outfitDeep'])
+  ops.push([9, 11 + dy, 3, 2, 'skinShade'])
 
   if (style === 'hoodie') {
-    // Kangaroo pocket and drawstrings.
-    ops.push([left + 2, y + 5, w - 4, 2, 'outfitShade'])
-    ops.push([9, y + 1, 1, 3, 'shirtLit'])
-    ops.push([11, y + 1, 1, 3, 'shirtLit'])
+    // The hood is the silhouette: a raised collar behind the neck.
+    ops.push([left, y - 3, w, 4, 'ink'])
+    ops.push([left + 1, y - 2, w - 2, 2, 'outfitShade'])
+  }
+
+  // Body block: outline, base, then light and shadow columns.
+  ops.push([left - 1, y - 1, w + 2, bodyH + 1, 'ink'])
+  ops.push([left, y, w, bodyH - 1, 'outfit'])
+  ops.push([left, y, 2, bodyH - 1, 'outfitLit'])
+  ops.push([left + w - 2, y, 2, bodyH - 1, 'outfitShade'])
+  ops.push([left, y + bodyH - 2, w, 1, 'outfitDeep'])
+
+  // Sleeves, a shade darker so the arms separate from the chest.
+  ops.push([left, y + 2, 2, bodyH - 4, 'outfitShade'])
+  ops.push([left + w - 2, y + 2, 2, bodyH - 4, 'outfitDeep'])
+
+  if (style === 'hoodie') {
+    ops.push([left + 2, y + 4, w - 4, 2, 'outfitShade'])
+    ops.push([9, y, 1, 3, 'shirtLit'])
+    ops.push([11, y, 1, 3, 'shirtLit'])
   } else if (style === 'cardigan') {
-    ops.push([9, y + 1, 3, 7, 'shirt'])
-    ops.push([9, y + 1, 1, 7, 'shirtShade'])
-    ops.push([10, y + 3, 1, 1, 'acc'])
-    ops.push([10, y + 6, 1, 1, 'acc'])
+    ops.push([9, y, 3, bodyH - 1, 'shirt'])
+    ops.push([9, y, 1, bodyH - 1, 'shirtShade'])
+    ops.push([10, y + 2, 1, 1, 'acc'])
+    ops.push([10, y + 5, 1, 1, 'acc'])
   } else {
     // Shirt showing in the jacket opening.
-    ops.push([8, y + 1, 5, 2, 'shirt'])
-    ops.push([8, y + 1, 5, 1, 'shirtLit'])
+    ops.push([9, y, 3, 2, 'shirt'])
+    ops.push([9, y, 3, 1, 'shirtLit'])
     if (a.vest) {
-      ops.push([8, y + 3, 5, 5, 'vest'])
-      ops.push([12, y + 3, 1, 5, 'vestShade'])
-      ops.push([9, y + 5, 1, 1, 'acc'])
+      ops.push([9, y + 2, 3, bodyH - 4, 'vest'])
+      ops.push([11, y + 2, 1, bodyH - 4, 'vestShade'])
     }
-    // Lapels: the two diagonal pixels that make a jacket read as a jacket.
-    if (style === 'suit' || style === 'blazer' || style === 'vest') {
-      ops.push([7, y + 1, 2, 2, 'outfitLit'])
-      ops.push([12, y + 1, 2, 2, 'outfitShade'])
-      ops.push([8, y + 3, 1, 2, 'outfitDeep'])
-      ops.push([12, y + 3, 1, 2, 'outfitDeep'])
+    if (style === 'suit' || style === 'blazer' || style === 'vest' || style === 'coat') {
+      // Lapels: the two diagonal pixels that make a jacket read as a jacket.
+      ops.push([8, y, 1, 2, 'outfitLit'])
+      ops.push([12, y, 1, 2, 'outfitShade'])
+      ops.push([8, y + 2, 1, 1, 'outfitDeep'])
+      ops.push([12, y + 2, 1, 1, 'outfitDeep'])
     }
   }
 
   if (a.accent) {
-    ops.push([10, y + 2, 1, 1, 'accentShade'])
-    ops.push([9, y + 3, 3, 4, 'accent'])
-    ops.push([11, y + 3, 1, 4, 'accentShade'])
-    ops.push([9, y + 3, 1, 2, 'accentShade'])
+    ops.push([10, y + 1, 1, 1, 'accentShade'])
+    ops.push([10, y + 2, 1, 4, 'accent'])
   }
 
   // Hands. Their position is the main read on what a character is doing.
-  const handY = y + 7
+  const handY = y + bodyH - 3
   if (arms === 'down') {
     ops.push([left, handY, 2, 2, 'skin'])
     ops.push([left + w - 2, handY, 2, 2, 'skinShade'])
@@ -540,21 +491,21 @@ function torso(
     ops.push([left + 1, handY + l, 2, 2, 'skin'])
     ops.push([left + w - 3, handY + r, 2, 2, 'skinShade'])
   } else if (arms === 'chin') {
-    ops.push([left + w - 1, y + 1, 3, 7, 'ink'])
-    ops.push([left + w - 1, y + 2, 2, 5, 'outfitShade'])
-    ops.push([12, 14 + dy - (frame % 2), 2, 2, 'skin'])
+    ops.push([left + w - 1, y, 2, bodyH - 2, 'ink'])
+    ops.push([left + w - 1, y + 1, 2, bodyH - 4, 'outfitShade'])
+    ops.push([12, 11 + dy - (frame % 2), 2, 2, 'skin'])
     ops.push([left, handY, 2, 2, 'skin'])
   } else if (arms === 'gesture') {
     ops.push([left, handY, 2, 2, 'skin'])
-    ops.push([left + w - 2, y + 4 - (frame % 2), 3, 2, 'skin'])
+    ops.push([left + w - 1, y + 2 - (frame % 2), 3, 2, 'skin'])
   } else if (arms === 'hold') {
-    ops.push([left + 1, handY - 1, 2, 2, 'skin'])
-    ops.push([left + w - 3, handY - 1, 2, 2, 'skinShade'])
+    ops.push([left + 1, handY, 2, 2, 'skin'])
+    ops.push([left + w - 3, handY, 2, 2, 'skinShade'])
   }
 
   if (facing === 'side') {
     // Trim the far shoulder so the profile does not read as front-on.
-    ops.push([left - 1, y, 2, 9, 'none'])
+    ops.push([left - 1, y - 1, 2, bodyH + 1, 'none'])
   }
   return ops
 }
@@ -563,73 +514,75 @@ function torso(
 
 /**
  * One memorable item per character, drawn last so it sits on top and can
- * break the silhouette — which is the point of having it.
+ * break the silhouette — which is the point of having it. Everything here is
+ * placed outside the torso block, so nothing ever covers the chest.
  */
 function accessory(a: CharacterAppearance, dy: number, arms: ArmPose): Op[] {
   const f = frameFor(a)
-  const y = 15 + dy + f.lean
+  const y = TORSO_Y + dy + f.lean
   const left = 10 - f.half
   const w = f.half * 2
   const ops: Op[] = []
+  const handY = y + TORSO_H - 3
+  const free = arms === 'down' || arms === 'hold'
 
   switch (a.accessory ?? 'none') {
     case 'headphones':
       // Band over the hair, cups at the ears: unmistakable in silhouette.
-      ops.push([4, 1 + dy, 12, 2, 'ink'])
-      ops.push([5, 1 + dy, 10, 1, 'accShade'])
-      ops.push([2, 7 + dy, 3, 5, 'ink'])
-      ops.push([15, 7 + dy, 3, 5, 'ink'])
-      ops.push([3, 8 + dy, 2, 3, 'acc'])
-      ops.push([16, 8 + dy, 2, 3, 'accShade'])
+      ops.push([HEAD_X - 1, dy, HEAD_W + 2, 2, 'ink'])
+      ops.push([HEAD_X, dy, HEAD_W, 1, 'accShade'])
+      ops.push([HEAD_X - 3, 5 + dy, 3, 4, 'ink'])
+      ops.push([HEAD_X + HEAD_W, 5 + dy, 3, 4, 'ink'])
+      ops.push([HEAD_X - 2, 6 + dy, 2, 2, 'acc'])
+      ops.push([HEAD_X + HEAD_W + 1, 6 + dy, 2, 2, 'accShade'])
       break
     case 'notebook':
-      if (arms === 'down' || arms === 'hold') {
-        ops.push([left - 2, y + 4, 5, 6, 'ink'])
-        ops.push([left - 1, y + 5, 3, 4, 'white'])
-        ops.push([left - 1, y + 5, 3, 1, 'acc'])
+      if (free) {
+        ops.push([left - 4, handY - 1, 4, 5, 'ink'])
+        ops.push([left - 3, handY, 2, 3, 'white'])
+        ops.push([left - 3, handY, 2, 1, 'acc'])
       }
       break
     case 'tablet':
-      if (arms === 'down' || arms === 'hold') {
-        ops.push([left + w - 3, y + 3, 6, 7, 'ink'])
-        ops.push([left + w - 2, y + 4, 4, 5, 'ink2'])
-        ops.push([left + w - 2, y + 5, 3, 1, 'acc'])
-        ops.push([left + w - 2, y + 7, 2, 1, 'accLit'])
+      if (free) {
+        ops.push([left + w, handY - 2, 4, 6, 'ink'])
+        ops.push([left + w + 1, handY - 1, 2, 4, 'ink2'])
+        ops.push([left + w + 1, handY, 2, 1, 'acc'])
       }
       break
     case 'mug':
       if (arms !== 'up') {
-        ops.push([left + w - 1, y + 5, 4, 4, 'ink'])
-        ops.push([left + w, y + 6, 2, 2, 'white'])
-        ops.push([left + w + 2, y + 6, 1, 1, 'ink'])
+        ops.push([left + w, handY, 4, 4, 'ink'])
+        ops.push([left + w + 1, handY + 1, 2, 2, 'white'])
+        ops.push([left + w + 3, handY + 1, 1, 1, 'ink'])
       }
       break
     case 'badge':
-      ops.push([left + 1, y + 4, 3, 4, 'ink'])
-      ops.push([left + 2, y + 5, 1, 2, 'acc'])
+      ops.push([left + 1, y + 3, 2, 3, 'ink'])
+      ops.push([left + 1, y + 4, 1, 1, 'acc'])
       break
     case 'scarf':
-      ops.push([7, y - 1, 7, 3, 'ink'])
-      ops.push([7, y, 6, 2, 'acc'])
-      ops.push([12, y, 1, 2, 'accShade'])
-      ops.push([13, y + 2, 2, 5, 'acc'])
-      ops.push([14, y + 2, 1, 5, 'accShade'])
+      ops.push([left, y - 2, w, 3, 'ink'])
+      ops.push([left + 1, y - 1, w - 2, 2, 'acc'])
+      ops.push([left + w - 3, y - 1, 2, 2, 'accShade'])
+      ops.push([left + w - 2, y + 1, 2, 5, 'ink'])
+      ops.push([left + w - 2, y + 1, 1, 4, 'acc'])
       break
     case 'briefcase':
       if (arms === 'down') {
-        ops.push([left + w - 1, y + 8, 6, 5, 'ink'])
-        ops.push([left + w, y + 9, 4, 3, 'accShade'])
-        ops.push([left + w + 1, y + 7, 2, 1, 'ink'])
+        ops.push([left + w, handY + 2, 5, 5, 'ink'])
+        ops.push([left + w + 1, handY + 3, 3, 3, 'accShade'])
+        ops.push([left + w + 2, handY + 1, 1, 1, 'ink'])
       }
       break
     case 'earpiece':
-      ops.push([15, 8 + dy, 2, 3, 'ink'])
-      ops.push([15, 9 + dy, 1, 1, 'accLit'])
+      ops.push([HEAD_X + HEAD_W, 5 + dy, 2, 3, 'ink'])
+      ops.push([HEAD_X + HEAD_W, 6 + dy, 1, 1, 'accLit'])
       break
     case 'pen':
-      if (arms === 'down' || arms === 'hold') {
-        ops.push([left - 1, y + 5, 1, 4, 'acc'])
-        ops.push([left - 1, y + 5, 1, 1, 'ink'])
+      if (free) {
+        ops.push([left - 2, handY - 1, 1, 4, 'acc'])
+        ops.push([left - 2, handY - 1, 1, 1, 'ink'])
       }
       break
     default:
@@ -640,18 +593,21 @@ function accessory(a: CharacterAppearance, dy: number, arms: ArmPose): Op[] {
 
 /* ----------------------------------------------------------------- legs -- */
 
+const LEG_Y = 21
+
+/** Two legs with a two-pixel gap, so the lower body is never a solid slab. */
 function standLegs(dy: number): Op[] {
-  const y = 23 + dy
+  const y = LEG_Y + dy
   return [
-    [5, y, 10, 5, 'ink'],
-    [6, y, 3, 5, 'trousers'],
-    [11, y, 3, 5, 'trousersShade'],
-    [6, y, 3, 1, 'trousers'],
-    [9, y, 2, 5, 'ink'],
-    [5, y + 5, 5, 2, 'ink'],
-    [10, y + 5, 5, 2, 'ink'],
-    [6, y + 5, 4, 1, 'shoes'],
-    [11, y + 5, 3, 1, 'shoes']
+    [5, y, 4, 6, 'ink'],
+    [11, y, 4, 6, 'ink'],
+    [6, y, 2, 5, 'trousers'],
+    [12, y, 2, 5, 'trousersShade'],
+    [6, y, 2, 1, 'trousers'],
+    [5, y + 6, 5, 2, 'ink'],
+    [10, y + 6, 5, 2, 'ink'],
+    [6, y + 6, 3, 1, 'shoes'],
+    [11, y + 6, 3, 1, 'shoes']
   ]
 }
 
@@ -659,27 +615,27 @@ function standLegs(dy: number): Op[] {
 function walkLegs(dy: number, frame: number): Op[] {
   const f = frame % 4
   if (f === 0 || f === 2) return standLegs(dy)
-  const y = 23 + dy
+  const y = LEG_Y + dy
   const liftLeft = f === 1
   return [
-    [5, y, 10, 5, 'ink'],
-    [9, y, 2, 5, 'ink'],
-    liftLeft ? [6, y, 3, 4, 'trousers'] : [6, y, 3, 5, 'trousers'],
-    liftLeft ? [11, y, 3, 5, 'trousersShade'] : [11, y, 3, 4, 'trousersShade'],
-    liftLeft ? [5, y + 4, 5, 2, 'ink'] : [5, y + 5, 5, 2, 'ink'],
-    liftLeft ? [10, y + 5, 5, 2, 'ink'] : [10, y + 4, 5, 2, 'ink'],
-    liftLeft ? [6, y + 4, 4, 1, 'shoes'] : [6, y + 5, 4, 1, 'shoes'],
-    liftLeft ? [11, y + 5, 3, 1, 'shoes'] : [11, y + 4, 3, 1, 'shoes']
+    [5, y, 4, liftLeft ? 5 : 6, 'ink'],
+    [11, y, 4, liftLeft ? 6 : 5, 'ink'],
+    [6, y, 2, liftLeft ? 4 : 5, 'trousers'],
+    [12, y, 2, liftLeft ? 5 : 4, 'trousersShade'],
+    liftLeft ? [5, y + 5, 5, 2, 'ink'] : [5, y + 6, 5, 2, 'ink'],
+    liftLeft ? [10, y + 6, 5, 2, 'ink'] : [10, y + 5, 5, 2, 'ink'],
+    liftLeft ? [6, y + 5, 3, 1, 'shoes'] : [6, y + 6, 3, 1, 'shoes'],
+    liftLeft ? [11, y + 6, 3, 1, 'shoes'] : [11, y + 5, 3, 1, 'shoes']
   ]
 }
 
 /** Seated: knees forward, so the legs read as folded rather than standing. */
 function sitLegs(dy: number): Op[] {
-  const y = 23 + dy
+  const y = LEG_Y + dy
   return [
-    [4, y, 12, 4, 'ink'],
-    [5, y + 1, 4, 2, 'trousers'],
-    [11, y + 1, 4, 2, 'trousersShade'],
+    [5, y, 10, 4, 'ink'],
+    [6, y + 1, 3, 2, 'trousers'],
+    [11, y + 1, 3, 2, 'trousersShade'],
     [5, y + 4, 5, 2, 'ink'],
     [10, y + 4, 5, 2, 'ink'],
     [6, y + 4, 3, 1, 'shoes'],
