@@ -4,6 +4,11 @@ interface Props {
   onSubmit: (text: string) => void
   disabled?: boolean
   placeholder?: string
+  /**
+   * Visible rows. The transcript wants room to compose; a live session wants
+   * a single line, because you are talking to a process that is waiting.
+   */
+  rows?: number
 }
 
 /**
@@ -12,8 +17,17 @@ interface Props {
  * Deliberately a control surface rather than a chat bubble: hard border,
  * brand focus ring, a square send key. Enter submits and Shift+Enter breaks
  * a line, which is what anyone typing a task will expect.
+ *
+ * The same control serves every tab that sends rather than filters — the
+ * transcript, a live PTY session and the task list — so the bottom of the
+ * command centre never changes shape as the user moves between them.
  */
-export function PromptBox({ onSubmit, disabled = false, placeholder }: Props) {
+export function PromptBox({
+  onSubmit,
+  disabled = false,
+  placeholder,
+  rows = 2
+}: Props) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
 
@@ -44,7 +58,7 @@ export function PromptBox({ onSubmit, disabled = false, placeholder }: Props) {
       }`}
     >
       <textarea
-        rows={2}
+        rows={rows}
         value={value}
         disabled={disabled}
         onChange={(e) => setValue(e.target.value)}

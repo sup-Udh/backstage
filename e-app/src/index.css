@@ -163,6 +163,34 @@ body {
   animation: bob 2.4s steps(2, end) infinite;
 }
 
+/*
+ * The terminal surface.
+ *
+ * The emulator underneath is a real one — it has to be, or a full-screen CLI
+ * like Claude Code cannot draw itself. What is overridden here is only its
+ * appearance: xterm ships assuming a dark console, and Backstage is paper.
+ * The ANSI palette is remapped in the panel's theme object; these rules deal
+ * with the chrome xterm draws around it.
+ */
+.xterm .xterm-viewport {
+  background: transparent !important;
+  scrollbar-width: thin;
+}
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+}
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: var(--color-cream-2);
+}
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--color-rule);
+  border: 2px solid var(--color-cream-2);
+}
+/* The block cursor is brand yellow, so it reads as a Backstage caret. */
+.xterm .xterm-cursor-block {
+  outline: none;
+}
+
 /* Scrollbar, kept in the palette rather than left as OS chrome. */
 ::-webkit-scrollbar {
   width: 12px;

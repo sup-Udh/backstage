@@ -377,6 +377,19 @@ export class WorldEngine {
   }
 
   /**
+   * Which character is currently playing an agent.
+   *
+   * The cast is chosen by slot and re-cast whenever the theme changes, so the
+   * body on screen is the only authority on who portrays whom — resolving it
+   * from a character id or an agent id anywhere else would drift the moment
+   * the user switches worlds.
+   */
+  characterFor(agentId: string | null): CharacterDef | null {
+    if (!agentId) return null
+    return this.chars.find((c) => c.agentId === agentId)?.def ?? null
+  }
+
+  /**
    * Hit-test in scene pixels. Front-most character wins, so an overlapping
    * pair resolves the way the user expects.
    */

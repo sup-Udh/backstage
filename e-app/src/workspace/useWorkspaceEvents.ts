@@ -4,7 +4,7 @@ import { useBackstage } from '../stores/backstageStore'
 import type { AgentSession, FileChange } from '../shared/providerApi'
 
 /**
- * Real workspace events into the world and the activity feed.
+ * Real workspace events into the world, the store and the session surfaces.
  *
  * This is the piece that makes an external CLI agent a first-class inhabitant.
  * When `claude` runs in a Backstage terminal, the process is real, the PTY is
@@ -13,13 +13,33 @@ import type { AgentSession, FileChange } from '../shared/providerApi'
  *
  * Character state follows the process, never the other way round: a session
  * that has exited can never leave a character showing WORKING.
+ *
+ * Every subscription lives here rather than inside a panel, so the session
+ * lists survive the command centre switching tabs — a terminal that is not on
+ * screen is still a running process, and the world must keep saying so.
  */
 
 let nextId = 5_000_000
 
 export function useWorkspaceEvents(): void {
   const ingestEvent = useBackstage((s) => s.ingestEvent)
+  const setAgentSessions = useBackstage((s) => s.setAgentSessions)
+  const setTerminalSessions = useBackstage((s) => s.setTerminalSessions)
   const known = useRef(new Map<string, string>())
+
+  /* Mirror live PTY sessions, so every surface sees the same session list. */
+  useEffect(() => {
+    if (!window.backstage?.terminal) return
+    void window.backstage.terminal.list().then(setTerminalSessions)
+    return window.backstage.terminal.onSessions(setTerminalSessions)
+  }, [setTerminalSessions])
+
+  /* Mirror external CLI sessions for the tasks and session surfaces. */
+  useEffect(() => {
+    if (!window.backstage?.sessions) return
+    void window.backstage.sessions.list().then(setAgentSessions)
+    return window.backstage.sessions.onChanged(setAgentSessions)
+  }, [setAgentSessions])
 
   /* External CLI sessions become characters in the world. */
   useEffect(() => {

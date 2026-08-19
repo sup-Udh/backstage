@@ -34,11 +34,17 @@ export function AgentInspector({ agent, character, onFocus, onClose }: Props) {
         </div>
 
         <div className="min-w-0 flex-1">
+          {/*
+            The name comes from the view, not the costume. A configured agent
+            is re-cast by the theme and answers to the character's name; an
+            external CLI session is Claude or Codex in every world, and the
+            view is the thing that already knows which of those applies.
+          */}
           <p className="font-pixel text-base font-bold uppercase leading-none tracking-[0.06em] text-brand">
-            {character.name}
+            {agent.name}
           </p>
           <p className="mt-1.5 font-ui text-xs leading-none text-cream-2">
-            {character.role}
+            {agent.role}
           </p>
           <p className="mt-2 flex items-center gap-1.5 font-pixel text-xs font-semibold uppercase tracking-[0.06em]">
             <span
@@ -81,7 +87,7 @@ export function AgentInspector({ agent, character, onFocus, onClose }: Props) {
           onClick={onFocus}
           className="mt-3 w-full border-2 border-brand-shadow bg-brand px-2 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
         >
-          Centre on {character.name}
+          Centre on {agent.name}
         </button>
       </div>
     </aside>

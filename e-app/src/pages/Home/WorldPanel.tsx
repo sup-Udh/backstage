@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { Theme } from '../../themes/types'
 import type { WorldEngine } from '../../world/engine/WorldEngine'
 import { CharacterTooltip } from '../../components/CharacterCard/CharacterTooltip'
 import { AgentInspector } from './AgentInspector'
-import { STATUS_GLYPH } from '../../characters/character.states'
 import { useBackstage } from '../../stores/backstageStore'
 
 interface Props {
-  theme: Theme
   engine: WorldEngine
   switching: boolean
 }
@@ -26,19 +23,31 @@ interface Hover {
  * and zoom in. Whole-number zoom only — a fractional scale would put sprite
  * edges between device pixels.
  */
-export function WorldPanel({ theme, engine, switching }: Props) {
+export function WorldPanel({ engine, switching }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const pointer = useRef<{ x: number; y: number } | null>(null)
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null)
 
   const [hover, setHover] = useState<Hover | null>(null)
-  const [selected, setSelected] = useState<string | null>(null)
   const [zoom, setZoom] = useState(3)
   const [dragging, setDragging] = useState(false)
 
   const agents = useSyncExternalStore(engine.subscribeViews, engine.getViews)
   const setChatTarget = useBackstage((s) => s.setChatTarget)
+
+  /*
+   * Selection is shared, not local. Clicking a character here and choosing one
+   * in the TALK TO selector are the same act, and opening a CLI session
+   * highlights whoever is running it — so the world reads its focus from the
+   * store and pushes it down to the engine, which draws the ring.
+   */
+  const selected = useBackstage((s) => s.selectedAgentId)
+  const selectAgent = useBackstage((s) => s.selectAgent)
+
+  useEffect(() => {
+    engine.setSelected(selected)
+  }, [engine, selected])
 
   /* The canvas backing store matches the panel, so the camera has room to work. */
   const resize = useCallback(() => {
@@ -130,10 +139,14 @@ export function WorldPanel({ theme, engine, switching }: Props) {
     const s = engine.toScene(p.x, p.y)
     const hit = engine.hitTest(s.x, s.y)
     const next = hit?.id ?? null
-    engine.setSelected(next)
-    setSelected(next)
-    // Selecting someone in the world is the same as choosing them in the chat.
-    if (next) setChatTarget(next)
+    /*
+     * Selecting someone in the world is the same as choosing them in the
+     * command centre. `setChatTarget` carries the highlight with it, so a
+     * configured agent needs only the one call; a CLI session has no entry in
+     * the TALK TO list, so it is highlighted directly instead.
+     */
+    if (next && !next.startsWith('cli-')) setChatTarget(next)
+    else selectAgent(next)
   }
 
   const onLeave = () => {
@@ -161,13 +174,13 @@ export function WorldPanel({ theme, engine, switching }: Props) {
   const selectedAgent = selected
     ? agents.find((a) => a.characterId === selected)
     : undefined
-  const selectedChar = selected
-    ? theme.characters.find((c) => c.id === selected)
-    : undefined
-
-  const active = agents.filter((a) =>
-    ['working', 'thinking', 'talking', 'success'].includes(a.status)
-  ).length
+  /*
+   * The cast is chosen by slot and re-cast on every theme change, so the
+   * engine is the only thing that knows which body is currently playing an
+   * agent. Matching on ids here would silently break the moment the user
+   * switches worlds.
+   */
+  const selectedChar = engine.characterFor(selected)
 
   return (
     <section className="relative flex h-full min-h-0 min-w-0 flex-col">
@@ -235,37 +248,9 @@ export function WorldPanel({ theme, engine, switching }: Props) {
             agent={selectedAgent}
             character={selectedChar}
             onFocus={() => engine.focusOn(selectedChar.id)}
-            onClose={() => {
-              engine.setSelected(null)
-              setSelected(null)
-            }}
+            onClose={() => selectAgent(null)}
           />
         )}
-      </div>
-
-      {/* World HUD. */}
-      <div className="flex shrink-0 items-center justify-between border-t-[3px] border-ink bg-ink px-4 py-2.5">
-        <span className="border-2 border-brand-shadow bg-brand px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
-          {theme.name}
-        </span>
-
-        <span className="flex items-center gap-4 font-mono text-[11px] font-medium uppercase tracking-[0.06em]">
-          <span className="text-cream-2">
-            <span className="text-brand">{agents.length}</span> agents
-          </span>
-          <span aria-hidden className="h-3 w-px bg-ink-3" />
-          <span className="flex items-center gap-1.5 text-cream-2">
-            <span aria-hidden className={active > 0 ? 'text-brand' : 'text-dim'}>
-              {STATUS_GLYPH.working}
-            </span>
-            <span className={active > 0 ? 'text-brand' : 'text-dim'}>{active}</span>
-            active
-          </span>
-        </span>
-
-        <span className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-dim">
-          Drag to pan · scroll to zoom · click an agent
-        </span>
       </div>
     </section>
   )

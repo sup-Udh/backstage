@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import { defaultThemeId, isKnownTheme } from '../themes'
 import type { AgentEvent } from '../agents/agentEvents'
-import type { AgentSession, ProviderStatus } from '../shared/providerApi'
+import type {
+  AgentSession,
+  ProviderStatus,
+  TerminalSession
+} from '../shared/providerApi'
 
 /**
  * The application store.
@@ -11,7 +15,9 @@ import type { AgentSession, ProviderStatus } from '../shared/providerApi'
  * because putting them here would re-render the tree sixty times a second.
  *
  * The world and the command centre both read from this, which is what keeps
- * the two panels describing the same office.
+ * the two panels describing the same office — the agent selected in the world
+ * is the agent the command centre is addressed to, and the session shown in
+ * the terminal is the session whose character is working on screen.
  */
 
 export type AppView = 'landing' | 'app'
@@ -22,15 +28,16 @@ export type AppView = 'landing' | 'app'
  */
 export type ExecutionMode = 'real' | 'fake'
 
-/** Which workspace drawer is open, or null for none. */
-export type DrawerId =
-  | 'files'
-  | 'git'
-  | 'terminal'
-  | 'tasks'
-  | 'commands'
-  | 'activity'
-  | null
+/**
+ * Which surface the command centre is showing.
+ *
+ * Always exactly one — the panel is a tool with tabs, not a stack of drawers,
+ * so there is no "closed" state to represent. Activity is deliberately absent:
+ * it is no longer a destination. It is shown in context inside the session and
+ * task surfaces that produced it.
+ */
+export type TabId = 'messages' | 'files' | 'git' | 'terminal' | 'tasks' | 'commands'
+
 export type PageId = 'home' | 'cases' | 'agents' | 'themes' | 'account'
 
 export interface ChatMessage {
@@ -96,12 +103,26 @@ interface BackstageState {
   mode: ExecutionMode
   /** Which agent the chat is addressed to, or 'all' for the team. */
   chatTarget: string
+  /**
+   * The character highlighted in the world.
+   *
+   * Shared rather than local to the world panel, because selecting someone is
+   * a whole-workspace act: it moves the TALK TO selector, rings the character
+   * on the floor and opens their inspector, whichever surface started it.
+   */
+  selectedAgentId: string | null
 
-  /** The open workspace drawer, and the file being viewed in it. */
-  drawer: DrawerId
+  /** The command centre's active tab, and the file being viewed in it. */
+  tab: TabId
   openFile: string | null
   /** Live external CLI sessions, mirrored from the main process. */
   agentSessions: AgentSession[]
+  /** Live PTY sessions, mirrored from the main process. */
+  terminalSessions: TerminalSession[]
+  /** Which PTY the session surface is showing, and writing input to. */
+  activeTerminalId: string | null
+  /** A session another surface has asked the terminal to bring forward. */
+  requestedSessionId: string | null
   /** A command queued for the terminal to run once it is visible. */
   pendingCommand: string | null
   /**
@@ -118,9 +139,13 @@ interface BackstageState {
 
   setProvider: (status: ProviderStatus | null) => void
   setChatTarget: (target: string) => void
-  setDrawer: (drawer: DrawerId) => void
+  selectAgent: (agentId: string | null) => void
+  setTab: (tab: TabId) => void
   setOpenFile: (path: string | null) => void
   setAgentSessions: (sessions: AgentSession[]) => void
+  setTerminalSessions: (sessions: TerminalSession[]) => void
+  setActiveTerminal: (id: string | null) => void
+  requestSession: (id: string | null) => void
   queueCommand: (command: string | null) => void
   markTerminalOpened: () => void
   setMode: (mode: ExecutionMode) => void
@@ -145,9 +170,14 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   provider: null,
   mode: loadMode(),
   chatTarget: 'jane',
-  drawer: null,
+  selectedAgentId: null,
+
+  tab: 'messages',
   openFile: null,
   agentSessions: [],
+  terminalSessions: [],
+  activeTerminalId: null,
+  requestedSessionId: null,
   pendingCommand: null,
   terminalEverOpened: false,
 
@@ -175,15 +205,27 @@ export const useBackstage = create<BackstageState>((set, get) => ({
 
   setProvider: (provider) => set({ provider }),
 
-  setChatTarget: (chatTarget) => set({ chatTarget }),
+  /*
+   * Choosing who to talk to also rings them in the world. The two surfaces
+   * describe the same office, so they must never disagree about who is in
+   * focus.
+   */
+  setChatTarget: (chatTarget) =>
+    set({ chatTarget, selectedAgentId: chatTarget === 'all' ? null : chatTarget }),
 
-  /** Toggling the open drawer closes it, which is what a bar button implies. */
-  setDrawer: (drawer) =>
-    set((s) => ({ drawer: s.drawer === drawer ? null : drawer })),
+  selectAgent: (selectedAgentId) => set({ selectedAgentId }),
 
-  setOpenFile: (openFile) => set({ openFile, drawer: openFile ? 'files' : 'files' }),
+  setTab: (tab) => set({ tab }),
+
+  setOpenFile: (openFile) => set({ openFile, tab: 'files' }),
 
   setAgentSessions: (agentSessions) => set({ agentSessions }),
+
+  setTerminalSessions: (terminalSessions) => set({ terminalSessions }),
+
+  setActiveTerminal: (activeTerminalId) => set({ activeTerminalId }),
+
+  requestSession: (requestedSessionId) => set({ requestedSessionId }),
 
   queueCommand: (pendingCommand) => set({ pendingCommand }),
 
@@ -228,7 +270,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
             text: event.activity,
             at: event.at
           }
-        ].slice(-40)
+        ].slice(-60)
       }
 
       if (event.message) {
