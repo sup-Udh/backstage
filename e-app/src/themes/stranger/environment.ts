@@ -1,7 +1,13 @@
 import type { Prop, SceneDef, ThemePalette } from '../types'
 import { backdrop, standardLayout } from '../shared/room'
 import { clockFace, deskUnit, plant } from '../shared/props'
-import { arcadeCabinet, crtSet, poster, stringLights } from '../shared/furniture'
+import {
+  arcadeCabinet,
+  coffeeTable,
+  crtSet,
+  poster,
+  stringLights
+} from '../shared/furniture'
 
 /** A basement at night: wood panelling, navy dark, fairy lights, CRT glow. */
 export const strangerPalette: ThemePalette = {
@@ -73,8 +79,10 @@ function props(): Prop[] {
 
   desks.forEach((d, i) => list.push({ id: `desk-${i}`, ops: d.ops, baseY: d.baseY }))
 
-  // A boxy CRT sits on the middle desk, sorted just in front of it.
-  list.push({ id: 'crt', ops: crtSet(120, 128), baseY: 128.5 })
+  // The CRT stands on its own table: the set sorts behind the table front,
+  // so the table edge overlaps its base and it reads as sitting on it.
+  list.push({ id: 'crt', ops: crtSet(116, 136), baseY: 136 })
+  list.push({ id: 'crt-table', ops: coffeeTable(110, 138), baseY: 137 })
   list.push({ id: 'arcade', ops: arcadeCabinet(252, 128), baseY: 128 })
   list.push({ id: 'arcade-2', ops: arcadeCabinet(284, 122), baseY: 122 })
   list.push({ id: 'plant', ops: plant(8, 142, 37), baseY: 142 })
@@ -90,8 +98,7 @@ export const strangerScene: SceneDef = {
     height: 160,
     horizon: HORIZON,
     floorStyle: 'carpet',
-    wallStyle: 'panelled',
-    dim: true
+    wallStyle: 'panelled'
   }),
   props: props(),
   ...standardLayout({ stations: STATIONS, stationY: STATION_Y, breakX: 236 }),

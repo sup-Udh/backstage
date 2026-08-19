@@ -29,9 +29,9 @@ export const labPalette: ThemePalette = {
   floorLine: '#7C7C73',
   floorShadow: '#6C6C64',
 
-  wood: '#9A7F52',
-  woodDark: '#75603C',
-  woodLite: '#B99C6C',
+  wood: '#9CA29C',
+  woodDark: '#767C76',
+  woodLite: '#B6BCB4',
 
   screen: '#1A231E',
   screenLite: '#2A382E',

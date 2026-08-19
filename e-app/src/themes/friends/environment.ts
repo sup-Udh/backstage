@@ -24,11 +24,11 @@ export const friendsPalette: ThemePalette = {
   wallLite: '#B294C4',
   wallShade: '#816497',
 
-  floor: '#C9A275',
-  floorLit: '#D8B489',
-  floorAlt: '#BC9364',
-  floorLine: '#A87C4E',
-  floorShadow: '#916B41',
+  floor: '#D9BB90',
+  floorLit: '#E7CDA8',
+  floorAlt: '#CCAC7E',
+  floorLine: '#B69163',
+  floorShadow: '#A67F52',
 
   wood: '#B48A55',
   woodDark: '#8A6236',

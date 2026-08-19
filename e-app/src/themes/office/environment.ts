@@ -52,9 +52,9 @@ export const officePalette: ThemePalette = {
   cork: '#C9A06B',
   corkDark: '#A9834F',
 
-  accent: '#6E7F91',
-  accentLite: '#8496A8',
-  accentDark: '#54636F',
+  accent: '#4E627A',
+  accentLite: '#657B94',
+  accentDark: '#39485B',
 
   paper: '#FFFFFF',
   paperShade: '#E4E0D4',

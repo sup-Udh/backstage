@@ -23,8 +23,6 @@ export interface BackdropSpec {
   wallStyle: WallStyle
   /** Pools of light thrown onto the floor, as [x, width] pairs. */
   lightPools?: [number, number][]
-  /** Darken the room overall, for the night-time worlds. */
-  dim?: boolean
 }
 
 function wallSurface(spec: BackdropSpec): Op[] {

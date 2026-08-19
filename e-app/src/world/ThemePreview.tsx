@@ -4,10 +4,13 @@ import { createPixelCanvas, paint } from './pixel/ops'
 import { SPRITE_H, SPRITE_W } from './pixel/characterSprite'
 import { buildCharacterSheet, frameRect } from './engine/spriteCache'
 
-/** The window into each world, in scene pixels. */
-const CROP = { x: 60, y: 28, w: 96, h: 60 }
+/**
+ * The window into each world, in scene pixels. Wide and short so the card
+ * reads as a letterboxed view into a room rather than a stamp on a page.
+ */
+const CROP = { x: 44, y: 30, w: 132, h: 56 }
 /** Where the two sample characters stand inside that window. */
-const CAST_X = [100, 132]
+const CAST_X = [92, 140]
 const CAST_Y = 85
 
 /**
@@ -70,7 +73,7 @@ interface Props {
   className?: string
 }
 
-export function ThemePreview({ theme, scale = 2, className }: Props) {
+export function ThemePreview({ theme, scale = 3, className }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
