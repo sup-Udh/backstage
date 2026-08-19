@@ -53,6 +53,7 @@ export class WorldEngine {
       .filter((a) => a.visible)
       .map((a): CharacterRuntime => ({
         agentId: a.id,
+        ownName: a.useOwnName ? a.name : undefined,
         def: castFor(theme, a.slot),
         model: a.model,
         x: theme.scene.desks[a.slot % theme.scene.desks.length].x,
@@ -129,6 +130,7 @@ export class WorldEngine {
 
       const c: CharacterRuntime = {
         agentId: agent.id,
+        ownName: agent.useOwnName ? agent.name : undefined,
         def: castFor(this.theme, agent.slot),
         model: agent.model,
         // Just off the left edge, so the walk in is visible.
@@ -341,11 +343,11 @@ export class WorldEngine {
       return {
         characterId: c.agentId,
         /*
-         * The world shows the character's name. The agent underneath keeps
-         * its own identity and configuration; switching theme re-casts the
-         * same team rather than replacing it.
+         * The world shows the character's name, because switching theme
+         * re-casts the team rather than replacing it. External CLI sessions
+         * opt out: Claude is Claude in every world.
          */
-        name: c.def.name,
+        name: agent?.useOwnName ? agent.name : c.def.name,
         role: agent?.role ?? c.def.role,
         model: agent?.model ?? 'Unknown',
         status: agent?.status ?? 'idle',

@@ -17,23 +17,6 @@ import type { AgentSession, FileChange } from '../shared/providerApi'
 
 let nextId = 5_000_000
 
-/** CLI session status -> the agent status the world already understands. */
-function statusFor(s: AgentSession) {
-  switch (s.status) {
-    case 'working':
-      return 'working' as const
-    case 'waiting':
-      // The CLI has gone quiet: it is waiting on the user, not computing.
-      return 'talking' as const
-    case 'error':
-      return 'error' as const
-    case 'starting':
-      return 'thinking' as const
-    default:
-      return 'idle' as const
-  }
-}
-
 export function useWorkspaceEvents(): void {
   const ingestEvent = useBackstage((s) => s.ingestEvent)
   const known = useRef(new Map<string, string>())
@@ -55,7 +38,8 @@ export function useWorkspaceEvents(): void {
             name,
             role: 'CLI Session',
             model: `${s.provider} cli`,
-            slot: 4 + known.current.size
+            slot: 4 + known.current.size,
+            useOwnName: true
           })
           teamRuntime.show(agentId)
           ingestEvent({
@@ -127,6 +111,3 @@ export function useWorkspaceEvents(): void {
     })
   }, [ingestEvent])
 }
-
-/** Exposed so the world can tint a character that is a live CLI session. */
-export { statusFor }

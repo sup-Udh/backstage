@@ -21,6 +21,8 @@ export type Bubble = 'none' | 'think' | 'talk' | 'spark'
 export interface CharacterRuntime {
   /** Which agent this body belongs to. The definition is only its look. */
   agentId: string
+  /** Set when the agent keeps its own name, e.g. an external CLI session. */
+  ownName?: string
   def: CharacterDef
   /** Which model drives this character, for the provider badge. */
   model: string

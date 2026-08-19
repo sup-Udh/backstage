@@ -28,6 +28,14 @@ export interface Agent {
    * rather than a character id, because the cast changes with the world.
    */
   slot: number
+  /**
+   * Show this agent's own name rather than the character's.
+   *
+   * Configured agents are re-cast by the theme — Jane becomes Rachel in
+   * another world. An external CLI session is not part of any cast: it is
+   * Claude or Codex wherever it runs, so it keeps its name.
+   */
+  useOwnName?: boolean
   /** Which model powers this agent, e.g. "Claude Opus". */
   model: string
   status: AgentStatus

@@ -4,6 +4,7 @@ import type { WorldEngine } from '../../world/engine/WorldEngine'
 import { CharacterTooltip } from '../../components/CharacterCard/CharacterTooltip'
 import { AgentInspector } from './AgentInspector'
 import { STATUS_GLYPH } from '../../characters/character.states'
+import { useBackstage } from '../../stores/backstageStore'
 
 interface Props {
   theme: Theme
@@ -37,6 +38,7 @@ export function WorldPanel({ theme, engine, switching }: Props) {
   const [dragging, setDragging] = useState(false)
 
   const agents = useSyncExternalStore(engine.subscribeViews, engine.getViews)
+  const setChatTarget = useBackstage((s) => s.setChatTarget)
 
   /* The canvas backing store matches the panel, so the camera has room to work. */
   const resize = useCallback(() => {
@@ -130,6 +132,8 @@ export function WorldPanel({ theme, engine, switching }: Props) {
     const next = hit?.id ?? null
     engine.setSelected(next)
     setSelected(next)
+    // Selecting someone in the world is the same as choosing them in the chat.
+    if (next) setChatTarget(next)
   }
 
   const onLeave = () => {

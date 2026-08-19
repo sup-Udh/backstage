@@ -72,6 +72,7 @@ export interface FakeAgentSpec {
   name?: string
   role?: string
   slot?: number
+  useOwnName?: boolean
 }
 
 export class FakeAgentRuntime implements AgentRuntime {
@@ -177,6 +178,7 @@ export class FakeAgentRuntime implements AgentRuntime {
       if (spec.name) existing.name = spec.name
       if (spec.role) existing.role = spec.role
       if (spec.slot !== undefined) existing.slot = spec.slot
+      if (spec.useOwnName !== undefined) existing.useOwnName = spec.useOwnName
       return existing
     }
     const agent: Agent = {
@@ -184,6 +186,7 @@ export class FakeAgentRuntime implements AgentRuntime {
       name: spec.name ?? spec.id,
       role: spec.role ?? 'Agent',
       slot: spec.slot ?? this.agents.length,
+      useOwnName: spec.useOwnName,
       model: spec.model,
       status: 'idle',
       task: null,

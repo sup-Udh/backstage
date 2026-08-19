@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { TerminalSession } from '../shared/providerApi'
+import { useBackstage } from '../stores/backstageStore'
 
 /**
  * A real terminal.
@@ -51,6 +52,8 @@ export function TerminalPanel() {
   const [sessions, setSessions] = useState<TerminalSession[]>([])
   const [active, setActive] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const pendingCommand = useBackstage((s) => s.pendingCommand)
+  const queueCommand = useBackstage((s) => s.queueCommand)
 
   // Keep a ref in step, so the output listener can filter without re-binding.
   useEffect(() => {
@@ -177,6 +180,18 @@ export function TerminalPanel() {
     }
     // Only on mount and when the session list first arrives.
   }, [sessions.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /*
+   * A command chosen in the Commands panel is typed into the live session
+   * rather than run behind the user's back, so they see the real process and
+   * can interrupt it.
+   */
+  useEffect(() => {
+    if (!pendingCommand || !active) return
+    // A trailing carriage return is what submits the line to the shell.
+    void window.backstage.terminal.write(active, pendingCommand + String.fromCharCode(13))
+    queueCommand(null)
+  }, [pendingCommand, active, queueCommand])
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#14141F]">

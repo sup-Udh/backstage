@@ -45,6 +45,8 @@ interface Live {
   buffer: string
   /** Keystrokes since the last newline, used to spot the command being run. */
   pending: string
+  /** True while an escape sequence is being skipped over. */
+  inEscape: boolean
 }
 
 function defaultShell(): string {
@@ -117,7 +119,7 @@ class TerminalSessions extends EventEmitter {
       pid: proc.pid
     }
 
-    const live: Live = { meta, proc, buffer: '', pending: '' }
+    const live: Live = { meta, proc, buffer: '', pending: '', inEscape: false }
     this.sessions.set(id, live)
 
     proc.onData((data) => {
@@ -153,8 +155,22 @@ class TerminalSessions extends EventEmitter {
     const live = this.sessions.get(id)
     if (!live || live.meta.status === 'exited') return false
 
+    /*
+     * The stream carries terminal protocol as well as typed characters —
+     * xterm reports focus changes, mouse moves and bracketed paste as escape
+     * sequences. Those must be skipped, or a focus report arriving just before
+     * a keystroke turns "claude" into "[Iclaude" and nothing matches.
+     */
     for (const ch of data) {
-      if (ch === '\r' || ch === '\n') {
+      if (live.inEscape) {
+        // CSI and OSC sequences terminate on a letter or a bell.
+        if (/[a-zA-Z~]/.test(ch)) live.inEscape = false
+        continue
+      }
+
+      if (ch === '\x1b') {
+        live.inEscape = true
+      } else if (ch === '\r' || ch === '\n') {
         const command = live.pending.trim()
         live.pending = ''
         if (command) this.noteCommand(live, command)

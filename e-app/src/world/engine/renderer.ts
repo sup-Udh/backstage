@@ -265,9 +265,14 @@ export class WorldRenderer {
     return STATUS_LABEL[(c.lastStatus ?? 'idle') as AgentStatus]
   }
 
+  /** The name shown above a character: its own if it is a CLI session. */
+  private displayName(c: CharacterRuntime): string {
+    return (c.ownName ?? c.def.name).toUpperCase()
+  }
+
   /** Width of the name plate, which sits above the status tag. */
   private nameWidth(c: CharacterRuntime): number {
-    return LABEL_PAD * 2 + textWidth(c.def.name.toUpperCase())
+    return LABEL_PAD * 2 + textWidth(this.displayName(c))
   }
 
   /**
@@ -283,7 +288,7 @@ export class WorldRenderer {
     y: number,
     selected: boolean
   ): void {
-    const label = c.def.name.toUpperCase()
+    const label = this.displayName(c)
     const w = this.nameWidth(c)
     const x = Math.round(c.x) - (w >> 1)
 
