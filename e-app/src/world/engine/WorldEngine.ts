@@ -210,6 +210,42 @@ export class WorldEngine {
     return { ...this.cam }
   }
 
+  /** The canvas size the camera is drawing into, in CSS pixels. */
+  getViewport(): { width: number; height: number } {
+    return { width: this.viewW, height: this.viewH }
+  }
+
+  /**
+   * Where each character's labels should sit, in CSS pixels within the canvas.
+   *
+   * Labels are DOM rather than paint — text rasterised into the scene buffer
+   * is unreadable once the room is scaled to fit a window — so the overlay
+   * needs the one thing only the engine knows: where everybody currently is on
+   * screen. Read every frame while characters walk, so it is deliberately a
+   * plain projection with no allocation beyond the array itself.
+   */
+  getLabelAnchors(): LabelAnchor[] {
+    const { x: camX, y: camY, scale } = this.cam
+    return this.chars.map((c) => {
+      const x = Math.round((c.x - camX) * scale)
+      const head = Math.round((c.y - WORLD_SPRITE_H - camY) * scale)
+      const feet = Math.round((c.y - camY) * scale)
+      return {
+        agentId: c.agentId,
+        x,
+        head,
+        feet,
+        // A margin either side, so a label does not pop as its character
+        // walks past the edge of the viewport.
+        onScreen:
+          x > -MARGIN &&
+          x < this.viewW + MARGIN &&
+          feet > -MARGIN &&
+          head < this.viewH + MARGIN
+      }
+    })
+  }
+
   /** The zoom at which the whole room is visible, for the UI to compare. */
   getFitScale(): number {
     return this.fitScale()
@@ -412,6 +448,28 @@ export class WorldEngine {
     return null
   }
 }
+
+/** Where a character's labels attach, in CSS pixels within the canvas. */
+export interface LabelAnchor {
+  agentId: string
+  /** Horizontal centre of the sprite. */
+  x: number
+  /** Top of the sprite; a name sits above this. */
+  head: number
+  /** Bottom of the sprite; a status sits below this. */
+  feet: number
+  onScreen: boolean
+}
+
+/**
+ * How far outside the viewport a character keeps its labels, in CSS pixels.
+ *
+ * Small on purpose. The overlay pulls labels back inside the frame so one at
+ * the very edge stays readable, and a generous margin here would combine with
+ * that to pin labels to the edge for characters who have walked out of view
+ * entirely — a name with nobody under it.
+ */
+const MARGIN = 16
 
 /**
  * Slack around the sprite that still counts as clicking the character, in

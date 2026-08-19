@@ -3,6 +3,7 @@ import type { Theme } from '../themes/types'
 import type { WorldEngine } from './engine/WorldEngine'
 import { AgentStatus } from '../components/AgentStatus/AgentStatus'
 import { CharacterTooltip } from '../components/CharacterCard/CharacterTooltip'
+import { WorldLabelLayer } from './labels/WorldLabelLayer'
 
 interface Props {
   theme: Theme
@@ -168,6 +169,13 @@ export function World({ theme, engine, switching = false }: Props) {
               className="pixelated block"
               style={{ cursor: hover ? 'pointer' : 'default' }}
             />
+
+            {/*
+              The same label overlay the workspace uses, so a character is
+              named the same way in both — readable text over the canvas rather
+              than text painted into it at scene resolution.
+            */}
+            <WorldLabelLayer engine={engine} hoveredId={hover?.id ?? null} />
 
             {/*
               The scene change. Stepped opacity rather than a smooth fade, so

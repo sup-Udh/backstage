@@ -1,8 +1,4 @@
 import type { Theme, ThemePalette } from '../../themes/types'
-import { STATUS_LABEL } from '../../characters/character.states'
-import type { AgentStatus } from '../../agents/agent.types'
-import { createPixelCanvas, paint } from '../pixel/ops'
-import { text, textWidth } from '../pixel/shapes'
 import type { CharacterRuntime } from '../world.types'
 import {
   bakeOps,
@@ -14,36 +10,6 @@ import {
   type CharacterSheet
 } from './spriteCache'
 
-/**
- * Tag metrics, in scene pixels.
- *
- * Deliberately smaller than the character they label. The tag says what an
- * agent is *doing*; the sprite says *who they are*, and the sprite has to win
- * that contest — a bright plate wider than the person reverses the hierarchy.
- *
- * Both plates are the glyph height plus a one-pixel edge and nothing else. The
- * previous two pixels of interior padding read as generous at UI scale, but at
- * world scale they were a fifth of the character's height spent on whitespace.
- */
-const LABEL_H = 7
-const LABEL_PAD = 2
-const LABEL_GAP = 2
-
-/** Height of the name plate that sits above the status tag. */
-const NAME_H = 7
-
-/**
- * The state pip: a small brand square ahead of the status word.
- *
- * This used to be the 7x7 provider mark. At world scale a logo that tall
- * forced the plate two pixels taller than the text needed and cost nine
- * pixels of width on every character, which made the busiest thing on screen
- * the labels rather than the office. Which model is behind an agent is still
- * one hover away, and is spelled out in the inspector.
- */
-const PIP_W = 2
-const PIP_H = 3
-
 /** The four neighbours a 1px outline is stamped into. */
 const AROUND = [
   [-1, 0],
@@ -51,9 +17,6 @@ const AROUND = [
   [0, -1],
   [0, 1]
 ] as const
-
-/** Statuses that read as "this agent is doing something". */
-const ACTIVE_STATUSES: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
 
 interface Drawable {
   /** Depth key. Fractions are used to pin an overlay to its prop. */
@@ -88,8 +51,6 @@ export class WorldRenderer {
   private background: BakedProp | null
   private props: BakedProp[]
   private sheets = new Map<string, CharacterSheet>()
-  /** Rasterised status tags, keyed by label and state. */
-  private tags = new Map<string, HTMLCanvasElement>()
   private motes: Mote[] = []
 
   constructor(private theme: Theme) {
@@ -277,164 +238,6 @@ export class WorldRenderer {
     ctx.restore()
   }
 
-  /* -------------------------------------------------------- status tag -- */
-
-  /*
-   * A tag floats above every character: the provider mark plus what that
-   * agent is doing right now. Four of these are on screen at once, so they
-   * are built from the 3x5 world font rather than DOM text - they scale with
-   * the scene and stay on the pixel grid.
-   */
-  private labelWidth(c: CharacterRuntime): number {
-    // One pixel of outline either side, rather than a plate's worth of padding.
-    return 2 + PIP_W + LABEL_GAP + textWidth(this.labelText(c))
-  }
-
-  private labelText(c: CharacterRuntime): string {
-    return STATUS_LABEL[(c.lastStatus ?? 'idle') as AgentStatus]
-  }
-
-  /** The name shown above a character: its own if it is a CLI session. */
-  private displayName(c: CharacterRuntime): string {
-    return (c.ownName ?? c.def.name).toUpperCase()
-  }
-
-  /** Width of the name plate, which sits above the status tag. */
-  private nameWidth(c: CharacterRuntime): number {
-    return LABEL_PAD * 2 + textWidth(this.displayName(c))
-  }
-
-  /**
-   * The name plate.
-   *
-   * The status tag says what an agent is doing; this says who they are. A
-   * selected character gets a brand plate, so the agent the user is talking to
-   * is obvious at a glance without any extra chrome.
-   */
-  private drawNamePlate(
-    ctx: CanvasRenderingContext2D,
-    c: CharacterRuntime,
-    y: number,
-    selected: boolean
-  ): void {
-    const label = this.displayName(c)
-    const w = this.nameWidth(c)
-    const x = Math.round(c.x) - (w >> 1)
-
-    /*
-     * Quiet by default, bright when chosen.
-     *
-     * A cream plate on every head made the labels the brightest thing in the
-     * room, so the eye landed on a row of signs before it found anybody. The
-     * resting state is now a dark plate with light lettering — still perfectly
-     * readable, but it sits behind the character rather than in front of them.
-     *
-     * That frees the brand fill to mean something: the agent the user is
-     * talking to is the one wearing yellow. Selection is marked by emphasis,
-     * never by making a character larger.
-     */
-    ctx.fillStyle = this.pal.ink
-    ctx.fillRect(x, y, w, NAME_H)
-    if (selected) {
-      ctx.fillStyle = this.pal.brand
-      ctx.fillRect(x + 1, y + 1, w - 2, NAME_H - 2)
-    }
-
-    // The glyph is 5 tall in a 7 tall plate, so one pixel of edge either side.
-    paint(
-      ctx,
-      text(label, 0, 0, selected ? this.pal.ink : this.pal.cream),
-      undefined,
-      x + LABEL_PAD,
-      y + 1
-    )
-  }
-
-  /**
-   * The status tag, baked once per label.
-   *
-   * Deliberately not a plate. A filled bar two and a half times wider than the
-   * person standing under it is the loudest shape on screen, and it was being
-   * drawn once per character — so the room read as a row of labels with some
-   * pixel art behind them.
-   *
-   * Outlined text instead: the same words, legible over any furniture, but as
-   * a floating identifier rather than a sign. There are only a handful of
-   * status words and two states, so each is rasterised once and the frame loop
-   * blits it.
-   */
-  private statusTag(label: string, active: boolean): HTMLCanvasElement {
-    const key = `${label}|${active}`
-    const cached = this.tags.get(key)
-    if (cached) return cached
-
-    const tx = 1 + PIP_W + LABEL_GAP
-    const { canvas, ctx } = createPixelCanvas(tx + textWidth(label) + 1, LABEL_H)
-
-    /*
-     * Idle agents are muted and active ones are warm, so a quiet office stays
-     * quiet and the one agent actually working is what the eye finds. State is
-     * carried by colour and by the pip — never by making anything bigger.
-     */
-    const accent = active ? this.pal.brand : this.pal.steel
-    const ink = active ? this.pal.cream : this.pal.steel
-
-    // Outline first, so the glyphs sit on top of their own shadow.
-    const halo = text(label, 0, 0, this.pal.ink)
-    for (const [ox, oy] of AROUND) paint(ctx, halo, undefined, tx + ox, 1 + oy)
-    paint(ctx, text(label, 0, 0, ink), undefined, tx, 1)
-
-    // The pip, outlined the same way and centred against the 5px glyphs.
-    ctx.fillStyle = this.pal.ink
-    ctx.fillRect(0, 1, PIP_W + 2, PIP_H + 2)
-    ctx.fillStyle = accent
-    ctx.fillRect(1, 2, PIP_W, PIP_H)
-
-    this.tags.set(key, canvas)
-    return canvas
-  }
-
-  private drawStatusTag(
-    ctx: CanvasRenderingContext2D,
-    c: CharacterRuntime,
-    y: number
-  ): void {
-    const status = (c.lastStatus ?? 'idle') as AgentStatus
-    const active = ACTIVE_STATUSES.includes(status)
-    const tag = this.statusTag(this.labelText(c), active)
-    ctx.drawImage(tag, Math.round(c.x) - (tag.width >> 1), y)
-  }
-
-  /**
-   * Lay the tags out so two characters standing close together do not print
-   * one label on top of another: anything that overlaps a tag already placed
-   * gets bumped up a row.
-   */
-  private layoutTags(
-    chars: CharacterRuntime[]
-  ): { c: CharacterRuntime; y: number }[] {
-    const placed: { c: CharacterRuntime; y: number; x0: number; x1: number }[] = []
-    for (const c of [...chars].sort((a, b) => a.x - b.x)) {
-      const w = Math.max(this.labelWidth(c), this.nameWidth(c))
-      const x0 = Math.round(c.x) - (w >> 1)
-      const x1 = x0 + w
-      // Room for the name plate above the status tag.
-      let y = Math.round(c.y) - WORLD_SPRITE_H - LABEL_H - NAME_H - 2
-      let moved = true
-      while (moved) {
-        moved = false
-        for (const p of placed) {
-          if (x1 > p.x0 && x0 < p.x1 && Math.abs(y - p.y) < LABEL_H + NAME_H + 2) {
-            y = p.y - LABEL_H - NAME_H - 3
-            moved = true
-          }
-        }
-      }
-      placed.push({ c, y, x0, x1 })
-    }
-    return placed
-  }
-
   /* --------------------------------------------------------- characters -- */
 
   private drawCharacter(
@@ -579,14 +382,13 @@ export class WorldRenderer {
     items.sort((a, b) => a.baseY - b.baseY)
     for (const item of items) item.draw()
 
-    // Tags sit above the depth pass: they are attached to characters but read
-    // as UI, so they should never be occluded by furniture.
-    for (const tag of this.layoutTags(chars)) {
-      // The hover card supersedes the tags, so they never stack up.
-      if (tag.c.agentId === hoveredId) continue
-      this.drawNamePlate(ctx, tag.c, tag.y, tag.c.agentId === selectedId)
-      this.drawStatusTag(ctx, tag.c, tag.y + NAME_H + 1)
-    }
+    /*
+     * Names and statuses are deliberately absent here. They are drawn as DOM
+     * over this canvas by WorldLabelLayer: text painted into the scene buffer
+     * is rasterised at scene resolution and then upscaled with the room, which
+     * is exactly what made it unreadable. The engine publishes anchors; the
+     * overlay does the typography.
+     */
 
     this.drawMotes(ctx, t)
     ctx.setTransform(1, 0, 0, 1, 0, 0)

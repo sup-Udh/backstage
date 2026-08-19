@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import type { WorldEngine } from '../../world/engine/WorldEngine'
 import { CharacterTooltip } from '../../components/CharacterCard/CharacterTooltip'
 import { AgentInspector } from './AgentInspector'
+import { WorldLabelLayer } from '../../world/labels/WorldLabelLayer'
 import { useBackstage } from '../../stores/backstageStore'
 
 interface Props {
@@ -194,6 +195,17 @@ export function WorldPanel({ engine, switching }: Props) {
           onWheel={onWheel}
           className="pixelated block h-full w-full"
           style={{ cursor: dragging ? 'grabbing' : hover ? 'pointer' : 'grab' }}
+        />
+
+        {/*
+          Names and statuses, as DOM over the canvas. They follow characters
+          around the room but are sized independently of the camera, so they
+          stay readable however far out the user zooms.
+        */}
+        <WorldLabelLayer
+          engine={engine}
+          hoveredId={hover?.id ?? null}
+          selectedId={selected}
         />
 
         <div
