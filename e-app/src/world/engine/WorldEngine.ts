@@ -88,7 +88,7 @@ export class WorldEngine {
     const walker = Math.min(2, this.chars.length - 1)
 
     this.chars.forEach((c, i) => {
-      const agent = this.runtime.get(c.def.agentId)
+      const agent = this.runtime.get(c.agentId)
       if (!agent) return
 
       if (i === walker) {
@@ -340,9 +340,12 @@ export class WorldEngine {
       const agent = this.runtime.get(c.agentId)
       return {
         characterId: c.agentId,
-        // The configured name wins: this is the user's agent, wearing
-        // whichever costume the active world provides.
-        name: agent?.name ?? c.def.name,
+        /*
+         * The world shows the character's name. The agent underneath keeps
+         * its own identity and configuration; switching theme re-casts the
+         * same team rather than replacing it.
+         */
+        name: c.def.name,
         role: agent?.role ?? c.def.role,
         model: agent?.model ?? 'Unknown',
         status: agent?.status ?? 'idle',

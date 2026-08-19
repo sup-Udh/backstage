@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { defaultThemeId, isKnownTheme } from '../themes'
 import type { AgentEvent } from '../agents/agentEvents'
-import type { ProviderStatus } from '../shared/providerApi'
+import type { AgentSession, ProviderStatus } from '../shared/providerApi'
 
 /**
  * The application store.
@@ -21,6 +21,16 @@ export type AppView = 'landing' | 'app'
  * calls the connected provider.
  */
 export type ExecutionMode = 'real' | 'fake'
+
+/** Which workspace drawer is open, or null for none. */
+export type DrawerId =
+  | 'files'
+  | 'git'
+  | 'terminal'
+  | 'tasks'
+  | 'commands'
+  | 'activity'
+  | null
 export type PageId = 'home' | 'cases' | 'agents' | 'themes' | 'account'
 
 export interface ChatMessage {
@@ -87,6 +97,20 @@ interface BackstageState {
   /** Which agent the chat is addressed to, or 'all' for the team. */
   chatTarget: string
 
+  /** The open workspace drawer, and the file being viewed in it. */
+  drawer: DrawerId
+  openFile: string | null
+  /** Live external CLI sessions, mirrored from the main process. */
+  agentSessions: AgentSession[]
+  /** A command queued for the terminal to run once it is visible. */
+  pendingCommand: string | null
+  /**
+   * Whether the terminal has ever been opened. Once it has, its panel stays
+   * mounted: unmounting would dispose the xterm instance and lose the
+   * scrollback of a session that is still running.
+   */
+  terminalEverOpened: boolean
+
   enterApp: () => void
   exitToLanding: () => void
   setPage: (page: PageId) => void
@@ -94,6 +118,11 @@ interface BackstageState {
 
   setProvider: (status: ProviderStatus | null) => void
   setChatTarget: (target: string) => void
+  setDrawer: (drawer: DrawerId) => void
+  setOpenFile: (path: string | null) => void
+  setAgentSessions: (sessions: AgentSession[]) => void
+  queueCommand: (command: string | null) => void
+  markTerminalOpened: () => void
   setMode: (mode: ExecutionMode) => void
   pushUserMessage: (text: string) => void
   pushSystemMessage: (text: string) => void
@@ -116,6 +145,11 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   provider: null,
   mode: loadMode(),
   chatTarget: 'jane',
+  drawer: null,
+  openFile: null,
+  agentSessions: [],
+  pendingCommand: null,
+  terminalEverOpened: false,
 
   enterApp: () => set({ view: 'app', page: 'home' }),
   exitToLanding: () => set({ view: 'landing' }),
@@ -142,6 +176,18 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   setProvider: (provider) => set({ provider }),
 
   setChatTarget: (chatTarget) => set({ chatTarget }),
+
+  /** Toggling the open drawer closes it, which is what a bar button implies. */
+  setDrawer: (drawer) =>
+    set((s) => ({ drawer: s.drawer === drawer ? null : drawer })),
+
+  setOpenFile: (openFile) => set({ openFile, drawer: openFile ? 'files' : 'files' }),
+
+  setAgentSessions: (agentSessions) => set({ agentSessions }),
+
+  queueCommand: (pendingCommand) => set({ pendingCommand }),
+
+  markTerminalOpened: () => set({ terminalEverOpened: true }),
 
   setMode: (mode) => {
     try {

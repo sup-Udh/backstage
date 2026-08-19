@@ -129,15 +129,16 @@ export function CommandCenter({ theme, engine }: Props) {
    * The configured name wins over the character's own: this is the user's
    * agent, wearing whichever costume the active world provides.
    */
-  const nameFor = (agentId?: string) =>
-    configs.find((a) => a.id === agentId)?.name ??
-    agents.find((v) => v.characterId === agentId)?.name ??
-    'Agent'
+  const nameFor = (agentId?: string) => {
+    const cfg = configs.find((a) => a.id === agentId)
+    if (cfg) {
+      const cast = theme.characters
+      return cast[((cfg.characterSlot % cast.length) + cast.length) % cast.length].name
+    }
+    return agents.find((v) => v.characterId === agentId)?.name ?? 'Agent'
+  }
 
-  const targetName =
-    target === 'all'
-      ? 'The team'
-      : (configs.find((a) => a.id === target)?.name ?? 'your team')
+  const targetName = target === 'all' ? 'The team' : nameFor(target)
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col border-l-[3px] border-ink bg-cream">
@@ -183,13 +184,22 @@ export function CommandCenter({ theme, engine }: Props) {
             onChange={(e) => setTarget(e.target.value)}
             className="min-w-0 flex-1 border-2 border-ink bg-paper px-2 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink outline-none focus:border-brand-deep"
           >
+            {/*
+              Named for the active world's cast. The agent underneath is the
+              same configuration; only who plays it changes with the theme.
+            */}
             {configs
               .filter((a) => a.enabled)
-              .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} — {a.role}
-                </option>
-              ))}
+              .map((a) => {
+                const cast = theme.characters
+                const character =
+                  cast[((a.characterSlot % cast.length) + cast.length) % cast.length]
+                return (
+                  <option key={a.id} value={a.id}>
+                    {character.name} — {a.role}
+                  </option>
+                )
+              })}
             <option value="all">All agents</option>
           </select>
         </div>

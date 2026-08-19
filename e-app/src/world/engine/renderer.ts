@@ -25,6 +25,9 @@ const LABEL_H = 9
 const LABEL_PAD = 2
 const LABEL_GAP = 2
 
+/** Height of the name plate that sits above the status tag. */
+const NAME_H = 9
+
 /** Statuses that read as "this agent is doing something". */
 const ACTIVE_STATUSES: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
 
@@ -262,6 +265,42 @@ export class WorldRenderer {
     return STATUS_LABEL[(c.lastStatus ?? 'idle') as AgentStatus]
   }
 
+  /** Width of the name plate, which sits above the status tag. */
+  private nameWidth(c: CharacterRuntime): number {
+    return LABEL_PAD * 2 + textWidth(c.def.name.toUpperCase())
+  }
+
+  /**
+   * The name plate.
+   *
+   * The status tag says what an agent is doing; this says who they are. A
+   * selected character gets a brand plate, so the agent the user is talking to
+   * is obvious at a glance without any extra chrome.
+   */
+  private drawNamePlate(
+    ctx: CanvasRenderingContext2D,
+    c: CharacterRuntime,
+    y: number,
+    selected: boolean
+  ): void {
+    const label = c.def.name.toUpperCase()
+    const w = this.nameWidth(c)
+    const x = Math.round(c.x) - (w >> 1)
+
+    ctx.fillStyle = this.pal.ink
+    ctx.fillRect(x, y, w, NAME_H)
+    ctx.fillStyle = selected ? this.pal.brand : this.pal.cream2
+    ctx.fillRect(x + 1, y + 1, w - 2, NAME_H - 2)
+
+    paint(
+      ctx,
+      text(label, 0, 0, this.pal.ink),
+      undefined,
+      x + LABEL_PAD,
+      y + 2
+    )
+  }
+
   private drawStatusTag(
     ctx: CanvasRenderingContext2D,
     c: CharacterRuntime,
@@ -316,16 +355,17 @@ export class WorldRenderer {
   ): { c: CharacterRuntime; y: number }[] {
     const placed: { c: CharacterRuntime; y: number; x0: number; x1: number }[] = []
     for (const c of [...chars].sort((a, b) => a.x - b.x)) {
-      const w = this.labelWidth(c)
+      const w = Math.max(this.labelWidth(c), this.nameWidth(c))
       const x0 = Math.round(c.x) - (w >> 1)
       const x1 = x0 + w
-      let y = Math.round(c.y) - SPRITE_H - LABEL_H - 1
+      // Room for the name plate above the status tag.
+      let y = Math.round(c.y) - SPRITE_H - LABEL_H - NAME_H - 2
       let moved = true
       while (moved) {
         moved = false
         for (const p of placed) {
-          if (x1 > p.x0 && x0 < p.x1 && Math.abs(y - p.y) < LABEL_H + 1) {
-            y = p.y - LABEL_H - 2
+          if (x1 > p.x0 && x0 < p.x1 && Math.abs(y - p.y) < LABEL_H + NAME_H + 2) {
+            y = p.y - LABEL_H - NAME_H - 3
             moved = true
           }
         }
@@ -463,9 +503,10 @@ export class WorldRenderer {
     // Tags sit above the depth pass: they are attached to characters but read
     // as UI, so they should never be occluded by furniture.
     for (const tag of this.layoutTags(chars)) {
-      // The hover card supersedes the tag, so they never stack up.
-      if (tag.c.def.id === hoveredId) continue
-      this.drawStatusTag(ctx, tag.c, tag.y)
+      // The hover card supersedes the tags, so they never stack up.
+      if (tag.c.agentId === hoveredId) continue
+      this.drawNamePlate(ctx, tag.c, tag.y, tag.c.agentId === selectedId)
+      this.drawStatusTag(ctx, tag.c, tag.y + NAME_H + 1)
     }
 
     this.drawMotes(ctx, t)

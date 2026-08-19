@@ -7,6 +7,9 @@ export default defineConfig({
   main: {
     build: {
       rollupOptions: {
+        // node-pty and chokidar are native/CJS: they must be required at
+        // runtime rather than bundled into the main chunk.
+        external: ['@lydell/node-pty', 'chokidar'],
         input: {
           index: resolve(__dirname, 'electron/main.ts')
         }

@@ -1,9 +1,25 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AgentRuntimeEvent,
+  AgentSession,
   BackstageApi,
-  RunTaskParams
+  FileChange,
+  RunTaskParams,
+  TerminalSession
 } from '../src/shared/providerApi'
+
+/**
+ * Subscribe to a push channel, handing the renderer only the payload — never
+ * the IpcRendererEvent, which would give it a `sender` it has no business
+ * holding. Returns an unsubscribe function.
+ */
+function subscribe<T>(channel: string, handler: (payload: T) => void): () => void {
+  const listener = (_e: unknown, payload: T) => handler(payload)
+  ipcRenderer.on(channel, listener)
+  return () => {
+    ipcRenderer.removeListener(channel, listener)
+  }
+}
 
 /**
  * The bridge.
@@ -52,6 +68,56 @@ const api: BackstageApi = {
         ipcRenderer.removeListener('agent:event', listener)
       }
     }
+  },
+
+  /*
+   * The terminal surface. The renderer can ask for a session and write to one
+   * by id, but has no way to name a program to run — process creation stays
+   * entirely in the main process.
+   */
+  terminal: {
+    list: () => ipcRenderer.invoke('terminal:list'),
+    create: (options) => ipcRenderer.invoke('terminal:create', options ?? {}),
+    write: (id, data) => ipcRenderer.invoke('terminal:write', id, data),
+    resize: (id, cols, rows) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
+    kill: (id) => ipcRenderer.invoke('terminal:kill', id),
+    close: (id) => ipcRenderer.invoke('terminal:close', id),
+    buffer: (id) => ipcRenderer.invoke('terminal:buffer', id),
+    onOutput: (handler) =>
+      subscribe<{ id: string; data: string }>('terminal:output', handler),
+    onExit: (handler) =>
+      subscribe<{ id: string; exitCode: number }>('terminal:exit', handler),
+    onSessions: (handler) =>
+      subscribe<TerminalSession[]>('terminal:sessions', handler)
+  },
+
+  sessions: {
+    list: () => ipcRenderer.invoke('agentSession:list'),
+    onChanged: (handler) =>
+      subscribe<AgentSession[]>('agentSession:changed', handler)
+  },
+
+  files: {
+    list: (path: string) => ipcRenderer.invoke('files:list', path),
+    read: (path: string) => ipcRenderer.invoke('files:read', path),
+    search: (query: string, filenames?: boolean) =>
+      ipcRenderer.invoke('files:search', query, filenames),
+    onChanges: (handler) =>
+      subscribe<{ changes: FileChange[]; total: number }>(
+        'workspace:fileChanges',
+        handler
+      )
+  },
+
+  git: {
+    status: () => ipcRenderer.invoke('git:status'),
+    diff: (path?: string) => ipcRenderer.invoke('git:diff', path),
+    log: () => ipcRenderer.invoke('git:log'),
+    branch: () => ipcRenderer.invoke('git:branch')
+  },
+
+  commands: {
+    list: () => ipcRenderer.invoke('commands:list')
   }
 }
 

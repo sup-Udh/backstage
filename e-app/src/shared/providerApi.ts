@@ -117,6 +117,71 @@ export interface ToolFamilyInfo {
   blurb: string
 }
 
+/* -------------------------------------------------------------- terminal -- */
+
+export type TerminalStatus = 'starting' | 'running' | 'exited'
+export type SessionAgent = 'claude' | 'codex' | 'gemini' | null
+
+export interface TerminalSession {
+  id: string
+  title: string
+  cwd: string
+  shell: string
+  status: TerminalStatus
+  createdAt: number
+  exitCode?: number
+  agent: SessionAgent
+  command: string | null
+  pid?: number
+}
+
+export type AgentSessionStatus =
+  | 'starting'
+  | 'working'
+  | 'waiting'
+  | 'exited'
+  | 'error'
+
+/** A real external CLI session, e.g. Claude Code running in a PTY. */
+export interface AgentSession {
+  id: string
+  provider: SessionAgent
+  terminalSessionId: string
+  cwd: string
+  status: AgentSessionStatus
+  startedAt: number
+  endedAt?: number
+  lastOutput?: string
+}
+
+export interface FileChange {
+  kind: 'created' | 'modified' | 'deleted'
+  path: string
+  at: number
+}
+
+/* ----------------------------------------------------------- project ---- */
+
+export interface DirEntry {
+  name: string
+  path: string
+  kind: 'dir' | 'file'
+  size?: number
+}
+
+export interface ProjectCommand {
+  label: string
+  command: string
+  source: string
+}
+
+export interface TextResult {
+  success: boolean
+  output?: string
+  content?: string
+  error?: string
+}
+
 /* ------------------------------------------------------------------- api -- */
 
 export interface BackstageApi {
@@ -145,6 +210,46 @@ export interface BackstageApi {
     run(params: RunTaskParams): Promise<RunTaskAck>
     /** Subscribe to runtime events. Returns an unsubscribe function. */
     onEvent(handler: (event: AgentRuntimeEvent) => void): () => void
+  }
+
+  terminal: {
+    list(): Promise<TerminalSession[]>
+    create(options?: { cols?: number; rows?: number; title?: string }): Promise<TerminalSession>
+    /** Send keystrokes to a live PTY. This is real stdin. */
+    write(id: string, data: string): Promise<boolean>
+    resize(id: string, cols: number, rows: number): Promise<void>
+    kill(id: string): Promise<void>
+    close(id: string): Promise<TerminalSession[]>
+    /** Replay buffer, so a reopened panel shows prior output. */
+    buffer(id: string): Promise<string>
+    onOutput(handler: (e: { id: string; data: string }) => void): () => void
+    onExit(handler: (e: { id: string; exitCode: number }) => void): () => void
+    onSessions(handler: (sessions: TerminalSession[]) => void): () => void
+  }
+
+  sessions: {
+    list(): Promise<AgentSession[]>
+    onChanged(handler: (sessions: AgentSession[]) => void): () => void
+  }
+
+  files: {
+    list(path: string): Promise<DirEntry[]>
+    read(path: string): Promise<TextResult>
+    search(query: string, filenames?: boolean): Promise<TextResult>
+    onChanges(
+      handler: (e: { changes: FileChange[]; total: number }) => void
+    ): () => void
+  }
+
+  git: {
+    status(): Promise<TextResult>
+    diff(path?: string): Promise<TextResult>
+    log(): Promise<TextResult>
+    branch(): Promise<{ branch: string | null }>
+  }
+
+  commands: {
+    list(): Promise<ProjectCommand[]>
   }
 }
 
