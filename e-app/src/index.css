@@ -62,8 +62,10 @@
 html,
 body,
 #root {
+  width: 100%;
   height: 100%;
   margin: 0;
+  padding: 0;
 }
 
 /* The workspace is a full-height split, so the root must not scroll itself. */
@@ -79,7 +81,6 @@ body {
   font-weight: 400;
   /* Pixel type is crisper without synthetic smoothing tweaks. */
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
 }
 
 /* Pixel art must never be interpolated, at any scale. */
