@@ -38,7 +38,13 @@ function defaults(): AgentConfig[] {
         'You are an investigator. Inspect evidence before drawing conclusions. Use the workspace tools whenever the task concerns the project. Never invent project details.',
       tools: ['filesystem', 'git', 'web'],
       profile: 'normal',
-      enabled: true
+      enabled: true,
+      autoMode: false,
+      triggers: [],
+      workspace: null,
+      canTalkTo: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     },
     {
       id: 'codex',
@@ -51,7 +57,13 @@ function defaults(): AgentConfig[] {
         'You are a software engineer. Inspect the existing implementation before modifying it. Prefer minimal, safe changes. Run the relevant build or tests after a modification and report what actually happened.',
       tools: ['filesystem', 'terminal', 'git'],
       profile: 'deep',
-      enabled: true
+      enabled: true,
+      autoMode: false,
+      triggers: [],
+      workspace: null,
+      canTalkTo: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     },
     {
       id: 'researcher',
@@ -64,7 +76,13 @@ function defaults(): AgentConfig[] {
         'You are a research specialist. Use the web tools when current external information is required. Clearly separate sourced facts from your own inference, and cite the URL you took something from.',
       tools: ['web', 'filesystem'],
       profile: 'normal',
-      enabled: true
+      enabled: true,
+      autoMode: false,
+      triggers: [],
+      workspace: null,
+      canTalkTo: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     },
     {
       id: 'lead',
@@ -77,7 +95,13 @@ function defaults(): AgentConfig[] {
         'You are the team lead. Assess scope and risk, and say what should be done first and why. Keep answers short and decisive.',
       tools: ['filesystem', 'git'],
       profile: 'quick',
-      enabled: true
+      enabled: true,
+      autoMode: false,
+      triggers: [],
+      workspace: null,
+      canTalkTo: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     }
   ]
 }
@@ -102,7 +126,13 @@ function normalise(raw: unknown): AgentConfig | null {
     )
       ? (a.profile as ExecutionProfile)
       : 'normal',
-    enabled: a.enabled !== false
+    enabled: a.enabled !== false,
+    autoMode: !!a.autoMode,
+    triggers: Array.isArray(a.triggers) ? a.triggers.map(String) : [],
+    workspace: a.workspace ? String(a.workspace) : null,
+    canTalkTo: Array.isArray(a.canTalkTo) ? a.canTalkTo.map(String) : [],
+    createdAt: Number.isFinite(a.createdAt) ? Number(a.createdAt) : Date.now(),
+    updatedAt: Number.isFinite(a.updatedAt) ? Number(a.updatedAt) : Date.now()
   }
 }
 
@@ -147,7 +177,7 @@ export function upsertAgent(input: Partial<AgentConfig> & { id?: string }): Agen
   const existing = input.id ? list.find((a) => a.id === input.id) : undefined
 
   if (existing) {
-    Object.assign(existing, normalise({ ...existing, ...input }))
+    Object.assign(existing, normalise({ ...existing, ...input, updatedAt: Date.now() }))
     persist()
     return existing
   }

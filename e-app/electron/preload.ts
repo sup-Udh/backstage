@@ -55,6 +55,9 @@ const api: BackstageApi = {
     remove: (agentId) => ipcRenderer.invoke('agents:remove', agentId),
     toolFamilies: () => ipcRenderer.invoke('agents:toolFamilies'),
     run: (params: RunTaskParams) => ipcRenderer.invoke('agents:run', params),
+    loadChat: (workspaceId, agentId) => ipcRenderer.invoke('agents:loadChat', workspaceId, agentId),
+    appendChat: (workspaceId, agentId, message) => ipcRenderer.invoke('agents:appendChat', workspaceId, agentId, message),
+    clearChat: (workspaceId, agentId) => ipcRenderer.invoke('agents:clearChat', workspaceId, agentId),
 
     /*
      * Events are pushed while a task runs. The listener is wrapped so the

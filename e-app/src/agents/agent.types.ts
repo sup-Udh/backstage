@@ -41,10 +41,15 @@ export interface Agent {
   status: AgentStatus
   /** Human readable current task, shown in tooltips. */
   task: string | null
+  /** Specific execution/task ID the agent is currently working on. */
+  taskId: string | null
+  executionId: string | null
   /**
    * Whether this agent is configured and available at all.
    */
   active: boolean
+  /** Whether the agent has been actively spawned into the workspace. */
+  spawned: boolean
   /**
    * Whether the agent is physically present in the world right now.
    *

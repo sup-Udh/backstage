@@ -351,6 +351,7 @@ export class FakeAgentRuntime implements AgentRuntime {
     action?: string
     tool?: string
     model?: string
+    targetAgentId?: string
   }): void {
     const id = event.agentId
 
@@ -379,6 +380,16 @@ export class FakeAgentRuntime implements AgentRuntime {
 
       case 'agent.message':
         if (id) this.hold(id, 'talking', 'Reporting back')
+        break
+
+      case 'agent.delegated':
+        if (id && event.targetAgentId) {
+          // Phase 18: Pixel-World Synchronization
+          // When an agent delegates a task to someone, both walk to a conversation spot and talk.
+          this.hold(id, 'talking', `Delegating to ${event.targetAgentId}`)
+          this.show(event.targetAgentId)
+          this.hold(event.targetAgentId, 'talking', `Listening to ${id}`)
+        }
         break
 
       case 'agent.completed':

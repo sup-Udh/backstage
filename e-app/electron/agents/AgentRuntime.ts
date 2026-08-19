@@ -24,102 +24,120 @@ import { BudgetTracker, budgetFor } from './execution'
 export type EventSink = (event: RuntimeEvent) => void
 
 export class AgentRuntime {
-  private running = false
+  private queues: Record<string, { taskId: string; prompt: string; history: Turn[]; depth?: number; parentTaskId?: string }[]> = {}
+  private activeAgents = new Set<string>()
 
   constructor(private emit: EventSink) {}
-
-  isRunning(): boolean {
-    return this.running
-  }
 
   private send(type: RuntimeEventType, fields: Partial<RuntimeEvent> = {}): void {
     this.emit({ type, at: Date.now(), ...fields })
   }
 
   /**
-   * Run a task. With more than one agent they work in sequence, each seeing
-   * what the previous one reported — enough for real collaboration without a
-   * swarm scheduler.
+   * Run a task. Concurrently broadcasts the task to all targeted agents.
+   * If an agent is already busy, the task is added to their queue.
    */
   async runTask(
     taskId: string,
     prompt: string,
     agents: AgentConfig[],
-    history: Turn[]
+    history: Turn[],
+    depth: number = 0,
+    parentTaskId?: string
   ): Promise<void> {
-    if (this.running || agents.length === 0) return
-    this.running = true
+    if (agents.length === 0) return
 
     const title = prompt.trim().replace(/\s+/g, ' ').slice(0, 60)
-    this.send('task.created', { taskId, task: title, activity: `New task: ${title}` })
 
-    /** What earlier agents found, passed along to the next. */
-    const shared: string[] = []
-    let anySucceeded = false
+    for (const agent of agents) {
+      this.send('task.created', { taskId, parentTaskId, depth, agentId: agent.id, agentName: agent.name, task: title, activity: `New task: ${title}` })
+      
+      if (!this.queues[agent.id]) {
+        this.queues[agent.id] = []
+      }
+      this.queues[agent.id].push({ taskId, prompt, history, depth, parentTaskId } as any)
+      this.processQueue(agent)
+    }
+  }
+
+  private async processQueue(agent: AgentConfig): Promise<void> {
+    if (this.activeAgents.has(agent.id)) return
+    
+    const queue = this.queues[agent.id]
+    if (!queue || queue.length === 0) return
+
+    this.activeAgents.add(agent.id)
+    const taskDef = queue.shift()!
+
+    const { taskId, prompt, history } = taskDef
 
     try {
-      for (const agent of agents) {
-        this.send('agent.activated', {
+      this.send('agent.activated', {
+        taskId,
+        parentTaskId: taskDef.parentTaskId,
+        depth: taskDef.depth,
+        agentId: agent.id,
+        agentName: agent.name,
+        activity: 'joined the task.'
+      })
+      this.send('agent.thinking', {
+        taskId,
+        parentTaskId: taskDef.parentTaskId,
+        depth: taskDef.depth,
+        agentId: agent.id,
+        agentName: agent.name,
+        action: 'Reading the brief'
+      })
+
+      try {
+        const text = await this.loop(taskId, prompt, agent, history)
+
+        this.send('agent.completed', {
           taskId,
           agentId: agent.id,
           agentName: agent.name,
-          activity: 'joined the task.'
+          activity: 'finished.',
+          message: text
         })
-        this.send('agent.thinking', {
+
+        // Persist message to ConversationStore
+        const workspaceRoot = getWorkspaceRoot() || 'default'
+        require('./conversationStore').conversationStore.append(workspaceRoot, agent.id, {
+          id: Date.now().toString(),
+          role: 'agent',
+          agentId: agent.id,
+          text,
+          timestamp: Date.now()
+        })
+
+        this.send('task.completed', { taskId, agentId: agent.id, agentName: agent.name, task: prompt.slice(0, 60), activity: 'Task closed.' })
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Something went wrong while working.'
+        this.send('agent.failed', {
           taskId,
           agentId: agent.id,
           agentName: agent.name,
-          action: 'Reading the brief'
+          activity: 'could not finish.',
+          message
         })
-
-        const brief =
-          shared.length === 0
-            ? prompt
-            : `${prompt}\n\n--- what your colleagues have already reported ---\n${shared.join('\n\n')}`
-
-        try {
-          const text = await this.loop(taskId, brief, agent, history)
-          anySucceeded = true
-          shared.push(`${agent.name} (${agent.role}): ${text}`)
-
-          this.send('agent.completed', {
-            taskId,
-            agentId: agent.id,
-            agentName: agent.name,
-            activity: 'finished.',
-            message: text
-          })
-        } catch (err) {
-          const message =
-            err instanceof Error ? err.message : 'Something went wrong while working.'
-          this.send('agent.failed', {
-            taskId,
-            agentId: agent.id,
-            agentName: agent.name,
-            activity: 'could not finish.',
-            message
-          })
-        } finally {
-          /*
-           * Back to idle, still in the room. The character stays at its desk
-           * so the office accumulates the user's team rather than emptying
-           * after every task.
-           */
-          this.send('agent.idle', {
-            taskId,
-            agentId: agent.id,
-            agentName: agent.name
-          })
-        }
-      }
-
-      if (anySucceeded) {
-        this.send('task.completed', { taskId, task: title, activity: 'Task closed.' })
-      } else {
-        this.send('task.failed', { taskId, task: title, activity: 'Task failed.' })
+        this.send('task.failed', { taskId, agentId: agent.id, agentName: agent.name, task: prompt.slice(0, 60), activity: 'Task failed.' })
+      } finally {
+        /*
+         * Back to idle, still in the room. The character stays at its desk
+         * so the office accumulates the user's team rather than emptying
+         * after every task.
+         */
+        this.send('agent.idle', {
+          taskId,
+          agentId: agent.id,
+          agentName: agent.name
+        })
       }
     } finally {
-      this.running = false
+      this.activeAgents.delete(agent.id)
+      // Check for more tasks in this agent's queue
+      void this.processQueue(agent)
     }
   }
 

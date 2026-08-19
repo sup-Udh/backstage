@@ -94,9 +94,12 @@ interface BackstageState {
   /** True while the world is veiled mid-theme-swap. */
   switching: boolean
 
-  messages: ChatMessage[]
-  activity: ActivityEntry[]
-  task: TaskState | null
+  /** Per-agent chat history. Keyed by agentId. */
+  agentMessages: Record<string, ChatMessage[]>
+  /** Per-agent activity feeds. Keyed by agentId. */
+  agentActivity: Record<string, ActivityEntry[]>
+  /** Per-agent current task. Keyed by agentId. */
+  agentTasks: Record<string, TaskState | null>
 
   /** Mirror of the main process's provider state. Never holds a key. */
   provider: ProviderStatus | null
@@ -151,6 +154,7 @@ interface BackstageState {
   setMode: (mode: ExecutionMode) => void
   pushUserMessage: (text: string) => void
   pushSystemMessage: (text: string) => void
+  loadConversation: (workspaceId: string, agentId: string) => Promise<void>
   /** Fold a runtime event into the transcript, feed and task state. */
   ingestEvent: (event: AgentEvent) => void
   clearConversation: () => void
@@ -164,9 +168,9 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   themeId: loadThemeId(),
   switching: false,
 
-  messages: [],
-  activity: [],
-  task: null,
+  agentMessages: {},
+  agentActivity: {},
+  agentTasks: {},
   provider: null,
   mode: loadMode(),
   chatTarget: 'jane',
@@ -241,78 +245,128 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   },
 
   pushSystemMessage: (text) =>
-    set((s) => ({
-      messages: [
-        ...s.messages,
-        { id: nextId++, kind: 'system', text, at: Date.now() }
-      ]
-    })),
+    set((s) => {
+      const target = s.chatTarget
+      const current = s.agentMessages[target] || []
+      return {
+        agentMessages: {
+          ...s.agentMessages,
+          [target]: [
+            ...current,
+            { id: nextId++, kind: 'system', text, at: Date.now() }
+          ]
+        }
+      }
+    }),
 
   pushUserMessage: (text) =>
-    set((s) => ({
-      messages: [
-        ...s.messages,
-        { id: nextId++, kind: 'user', text, at: Date.now() }
-      ]
-    })),
+    set((s) => {
+      const target = s.chatTarget
+      const current = s.agentMessages[target] || []
+      return {
+        agentMessages: {
+          ...s.agentMessages,
+          [target]: [
+            ...current,
+            { id: nextId++, kind: 'user', text, at: Date.now() }
+          ]
+        }
+      }
+    }),
 
   ingestEvent: (event) =>
     set((s) => {
+      const target = event.agentId || s.chatTarget
       const next: Partial<BackstageState> = {}
 
       if (event.activity) {
-        next.activity = [
-          ...s.activity,
-          {
-            id: event.id,
-            agentId: event.agentId,
-            agentName: event.agentName,
-            text: event.activity,
-            at: event.at
-          }
-        ].slice(-60)
-      }
-
-      if (event.message) {
-        next.messages = [
-          ...s.messages,
-          {
-            id: event.id,
-            kind: 'agent',
-            agentId: event.agentId,
-            text: event.message,
-            at: event.at
-          }
-        ]
-      }
-
-      if (event.type === 'task.created' && event.task) {
-        next.task = {
-          id: event.id,
-          title: event.task,
-          status: 'running',
-          startedAt: event.at
+        const currentActivity = s.agentActivity[target] || []
+        next.agentActivity = {
+          ...s.agentActivity,
+          [target]: [
+            ...currentActivity,
+            {
+              id: event.id,
+              agentId: event.agentId,
+              agentName: event.agentName,
+              text: event.activity,
+              at: event.at
+            }
+          ].slice(-60)
         }
       }
 
-      if (event.type === 'task.failed' && s.task) {
-        next.task = { ...s.task, status: 'failed' }
+      if (event.message) {
+        const currentMessages = s.agentMessages[target] || []
+        next.agentMessages = {
+          ...s.agentMessages,
+          [target]: [
+            ...currentMessages,
+            {
+              id: event.id,
+              kind: 'agent',
+              agentId: event.agentId,
+              text: event.message,
+              at: event.at
+            }
+          ]
+        }
       }
 
-      if (event.type === 'task.completed' && s.task) {
+      if (event.type === 'task.created' && event.task) {
+        next.agentTasks = {
+          ...s.agentTasks,
+          [target]: {
+            id: event.id,
+            title: event.task,
+            status: 'running',
+            startedAt: event.at
+          }
+        }
+      }
+
+      const currentTask = s.agentTasks[target]
+      if (event.type === 'task.failed' && currentTask) {
+        next.agentTasks = {
+          ...s.agentTasks,
+          [target]: { ...currentTask, status: 'failed' }
+        }
+      }
+
+      if (event.type === 'task.completed' && currentTask) {
         // The closing summary is whichever line the lead agent just spoke.
-        const lastAgentLine = [...(next.messages ?? s.messages)]
+        const currentMessages = (next.agentMessages ? next.agentMessages[target] : s.agentMessages[target]) || []
+        const lastAgentLine = [...currentMessages]
           .reverse()
           .find((m) => m.kind === 'agent')
-        next.task = {
-          ...s.task,
-          status: 'complete',
-          result: lastAgentLine?.text
+        
+        next.agentTasks = {
+          ...s.agentTasks,
+          [target]: {
+            ...currentTask,
+            status: 'complete',
+            result: lastAgentLine?.text
+          }
         }
       }
 
       return next
     }),
 
-  clearConversation: () => set({ messages: [], activity: [], task: null })
+  clearConversation: () => set((s) => ({
+    agentMessages: { ...s.agentMessages, [s.chatTarget]: [] },
+    agentActivity: { ...s.agentActivity, [s.chatTarget]: [] },
+    agentTasks: { ...s.agentTasks, [s.chatTarget]: null }
+  })),
+
+  loadConversation: async (workspaceId: string, agentId: string) => {
+    if (!window.backstage?.agents) return
+    const messages = await window.backstage.agents.loadChat(workspaceId, agentId)
+    set((s) => ({
+      agentMessages: {
+        ...s.agentMessages,
+        [agentId]: messages
+      }
+    }))
+  }
 }))

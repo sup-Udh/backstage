@@ -10,7 +10,7 @@
 export type ExecutionProfile = 'quick' | 'normal' | 'deep'
 
 /** Tool families an agent can be granted. */
-export type ToolFamily = 'filesystem' | 'terminal' | 'git' | 'web'
+export type ToolFamily = 'filesystem' | 'terminal' | 'git' | 'web' | 'orchestration'
 
 /** Who an agent is. Persisted; survives restarts. */
 export interface AgentConfig {
@@ -29,6 +29,8 @@ export interface AgentConfig {
   tools: string[]
   profile: ExecutionProfile
   enabled: boolean
+  autoMode: boolean
+  triggers: string[]
 }
 
 export type TaskStatus = 'queued' | 'running' | 'completed' | 'failed'
@@ -38,6 +40,8 @@ export interface AgentTask {
   prompt: string
   status: TaskStatus
   assignedAgents: string[]
+  depth?: number
+  parentTaskId?: string
   createdAt: number
   completedAt?: number
   result?: string
@@ -62,6 +66,7 @@ export type RuntimeEventType =
   | 'agent.tool.completed'
   | 'agent.tool.failed'
   | 'agent.message'
+  | 'agent.delegated'
   | 'file.created'
   | 'file.modified'
   | 'file.deleted'
@@ -69,7 +74,10 @@ export type RuntimeEventType =
 export interface RuntimeEvent {
   type: RuntimeEventType
   taskId?: string
+  parentTaskId?: string
+  depth?: number
   agentId?: string
+  targetAgentId?: string
   /** Display name, so the renderer need not resolve config. */
   agentName?: string
   /** Line for the activity feed. */

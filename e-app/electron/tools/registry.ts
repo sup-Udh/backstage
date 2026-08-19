@@ -4,6 +4,7 @@ import { terminalTools } from './terminal'
 import { gitTools } from './git'
 import { webTools } from './web'
 import { overviewTools } from './overview'
+import { teamTools } from './team'
 
 /**
  * Every tool an agent can reach, grouped into families.
@@ -14,21 +15,23 @@ import { overviewTools } from './overview'
  * researcher run shell commands?" not "can it call terminal_run?".
  */
 
-export type ToolFamily = 'filesystem' | 'terminal' | 'git' | 'web'
+export type ToolFamily = 'filesystem' | 'terminal' | 'git' | 'web' | 'orchestration'
 
 const FAMILIES: Record<ToolFamily, AgentTool[]> = {
   // Orientation belongs with filesystem: it is the cheap way to start reading.
   filesystem: [...overviewTools, ...filesystemTools],
   terminal: terminalTools,
   git: gitTools,
-  web: webTools
+  web: webTools,
+  orchestration: teamTools
 }
 
 export const TOOL_FAMILIES: { id: ToolFamily; label: string; blurb: string }[] = [
   { id: 'filesystem', label: 'Filesystem', blurb: 'Read, search, create and edit files' },
   { id: 'terminal', label: 'Terminal', blurb: 'Run builds, tests and commands' },
   { id: 'git', label: 'Git', blurb: 'Status, diff and history' },
-  { id: 'web', label: 'Web', blurb: 'Search and fetch pages' }
+  { id: 'web', label: 'Web', blurb: 'Search and fetch pages' },
+  { id: 'orchestration', label: 'Orchestration', blurb: 'Delegate tasks to other agents on the team' }
 ]
 
 const ALL: AgentTool[] = Object.values(FAMILIES).flat()

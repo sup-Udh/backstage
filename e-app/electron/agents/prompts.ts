@@ -1,6 +1,8 @@
 import type { WorkspaceInfo } from '../workspace/WorkspaceManager'
 import type { AgentConfig } from './agent.types'
 
+import { getWorkspaceContext } from '../workspace/context'
+
 /**
  * Agent instructions.
  *
@@ -57,14 +59,17 @@ export function systemPromptFor(
   toolNames: string[]
 ): string {
   const workspaceBlock = workspace.root
-    ? `Workspace: ${workspace.name}
-Root: ${workspace.root}
-All file and terminal paths are relative to this root. You cannot reach outside it.`
+    ? `Workspace: ${workspace.name}\nRoot: ${workspace.root}\n\n${getWorkspaceContext()}\nAll file and terminal paths are relative to this root. You cannot reach outside it.`
     : `No workspace folder is open, so you have no access to the user's files or
 terminal. If the task needs the project, say a workspace must be opened first —
 do not guess at its contents.`
 
+  const relationships = agent.canTalkTo && agent.canTalkTo.length > 0
+    ? `You can delegate tasks to the following agents on your team using the delegate_task tool: ${agent.canTalkTo.join(', ')}.`
+    : `You are working alone. You cannot delegate tasks to any other agents.`
+
   const identity = `You are ${agent.name}. Your role is ${agent.role}.
+${relationships}
 ${agent.instructions.trim()}`
 
   return `${BASE}

@@ -82,6 +82,7 @@ export interface AgentRuntimeEvent {
   type: string
   taskId?: string
   agentId?: string
+  targetAgentId?: string
   agentName?: string
   activity?: string
   message?: string
@@ -109,6 +110,13 @@ export interface AgentConfig {
   tools: string[]
   profile: ExecutionProfile
   enabled: boolean
+  workspace: string | null
+  canTalkTo: string[]
+  autoMode: boolean
+  /** List of agent IDs that this agent should automatically react to when they finish a task */
+  triggers: string[]
+  createdAt: number
+  updatedAt: number
 }
 
 export interface ToolFamilyInfo {
@@ -208,6 +216,9 @@ export interface BackstageApi {
     remove(agentId: string): Promise<AgentConfig[]>
     toolFamilies(): Promise<ToolFamilyInfo[]>
     run(params: RunTaskParams): Promise<RunTaskAck>
+    loadChat(workspaceId: string, agentId: string): Promise<any[]>
+    appendChat(workspaceId: string, agentId: string, message: any): Promise<void>
+    clearChat(workspaceId: string, agentId: string): Promise<void>
     /** Subscribe to runtime events. Returns an unsubscribe function. */
     onEvent(handler: (event: AgentRuntimeEvent) => void): () => void
   }

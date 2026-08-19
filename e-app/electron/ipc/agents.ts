@@ -60,8 +60,16 @@ function assign(target: string | undefined): AgentConfig[] {
   return target === 'all' ? team.slice(0, 3) : team.slice(0, 1)
 }
 
+import { systemBus } from '../agents/EventBus'
+import { initTriggerEngine } from '../agents/TriggerEngine'
+
 export function registerAgentHandlers(): void {
-  runtime = new AgentRuntime((event) => broadcast('agent:event', event))
+  runtime = new AgentRuntime((event) => systemBus.emitEvent(event))
+  initTriggerEngine(runtime)
+
+  systemBus.onEvent((event) => {
+    broadcast('agent:event', event)
+  })
 
   ipcMain.handle('agents:list', (): AgentConfig[] => listAgents())
 
@@ -82,11 +90,20 @@ export function registerAgentHandlers(): void {
     (): ToolFamilyInfo[] => TOOL_FAMILIES.map((f) => ({ ...f }))
   )
 
+  ipcMain.handle('agents:loadChat', (_e, workspaceId: string, agentId: string) => {
+    return require('../agents/conversationStore').conversationStore.load(workspaceId, agentId)
+  })
+
+  ipcMain.handle('agents:appendChat', (_e, workspaceId: string, agentId: string, message: any) => {
+    require('../agents/conversationStore').conversationStore.append(workspaceId, agentId, message)
+  })
+
+  ipcMain.handle('agents:clearChat', (_e, workspaceId: string, agentId: string) => {
+    require('../agents/conversationStore').conversationStore.clear(workspaceId, agentId)
+  })
+
   ipcMain.handle('agents:run', async (_e, params: RunTaskParams): Promise<RunTaskAck> => {
     if (!runtime) return { accepted: false, error: 'Runtime not ready.' }
-    if (runtime.isRunning()) {
-      return { accepted: false, error: 'A task is already running.' }
-    }
 
     const prompt = typeof params?.prompt === 'string' ? params.prompt.trim() : ''
     if (!prompt) return { accepted: false, error: 'Empty prompt.' }

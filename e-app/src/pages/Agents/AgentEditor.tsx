@@ -10,6 +10,7 @@ import { CharacterSprite } from '../../world/CharacterSprite'
 
 interface Props {
   agent: Partial<AgentConfig> | null
+  agents: AgentConfig[]
   theme: Theme
   providers: ProviderStatus[]
   families: ToolFamilyInfo[]
@@ -39,6 +40,7 @@ const label =
  */
 export function AgentEditor({
   agent,
+  agents,
   theme,
   providers,
   families,
@@ -57,6 +59,8 @@ export function AgentEditor({
     tools: ['filesystem', 'git'],
     profile: 'normal',
     enabled: true,
+    workspace: null,
+    canTalkTo: [],
     ...agent
   })
 
@@ -113,6 +117,22 @@ export function AgentEditor({
             placeholder="Investigator"
           />
         </div>
+      </div>
+
+      <div className="mt-4">
+        <label className={label} htmlFor="agent-workspace">
+          Workspace
+        </label>
+        <input
+          id="agent-workspace"
+          className={`mt-1.5 ${field} font-mono text-xs`}
+          value={draft.workspace ?? ''}
+          onChange={(e) => set('workspace', e.target.value || null)}
+          placeholder="C:\code\project"
+        />
+        <p className="mt-1.5 font-ui text-xs text-ink-3">
+          Lock this agent to a specific workspace directory.
+        </p>
       </div>
 
       {/* Character: a slot into the active world's cast. */}
@@ -236,6 +256,77 @@ export function AgentEditor({
         </div>
       </div>
 
+      <div className="mt-4">
+        <span className={label}>Communication</span>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {agents
+            .filter((a) => a.id !== agent?.id)
+            .map((a) => {
+              const on = (draft.canTalkTo ?? []).includes(a.id)
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => {
+                    const current = draft.canTalkTo ?? []
+                    set('canTalkTo', on ? current.filter((id) => id !== a.id) : [...current, a.id])
+                  }}
+                  aria-pressed={on}
+                  className={`border-2 px-3 py-2 text-left transition-colors ${
+                    on ? 'border-ink bg-brand-pale' : 'border-rule bg-cream hover:border-ink'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
+                    <span aria-hidden className={on ? 'text-brand-deep' : 'text-ink-3'}>
+                      {on ? '☑' : '☐'}
+                    </span>
+                    {a.name}
+                  </span>
+                  <span className="mt-0.5 block font-ui text-xs text-ink-3">
+                    {a.role}
+                  </span>
+                </button>
+              )
+            })}
+        </div>
+        <p className="mt-1.5 font-ui text-xs text-ink-3">
+          Who this agent is allowed to communicate with.
+        </p>
+      </div>
+      <div className="mt-4">
+        <span className={label}>Automation Triggers</span>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {agents
+            .filter((a) => a.id !== agent?.id)
+            .map((a) => {
+              const on = (draft.triggers ?? []).includes(a.id)
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  onClick={() => {
+                    const current = draft.triggers ?? []
+                    set('triggers', on ? current.filter((id) => id !== a.id) : [...current, a.id])
+                  }}
+                  aria-pressed={on}
+                  className={`border-2 px-3 py-2 text-left transition-colors ${
+                    on ? 'border-ink bg-brand-pale' : 'border-rule bg-cream hover:border-ink'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
+                    <span aria-hidden className={on ? 'text-brand-deep' : 'text-ink-3'}>
+                      {on ? '⚡' : '☐'}
+                    </span>
+                    {a.name} finishes a task
+                  </span>
+                </button>
+              )
+            })}
+        </div>
+        <p className="mt-1.5 font-ui text-xs text-ink-3">
+          When these agents complete a task, this agent will automatically wake up and review their work (if AUTO mode is ON).
+        </p>
+      </div>
       <div className="mt-4">
         <span className={label}>Execution</span>
         <div className="mt-2 flex flex-wrap gap-2">

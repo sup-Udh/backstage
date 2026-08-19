@@ -32,8 +32,8 @@ const SUGGESTIONS = [
  * after the prompt and finishes after the replies.
  */
 export function MessagesPanel({ theme, agents, configs, statuses, onSubmit }: Props) {
-  const messages = useBackstage((s) => s.messages)
-  const task = useBackstage((s) => s.task)
+  const messages = useBackstage((s) => s.agentMessages[s.chatTarget] || [])
+  const task = useBackstage((s) => s.agentTasks[s.chatTarget] || null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {

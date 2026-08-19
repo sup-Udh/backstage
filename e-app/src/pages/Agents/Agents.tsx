@@ -45,6 +45,7 @@ export function Agents() {
       {editing ? (
         <AgentEditor
           agent={editing}
+          agents={agents}
           theme={theme}
           providers={statuses}
           families={families}
@@ -119,7 +120,13 @@ export function Agents() {
                     </p>
 
                     <div className="mt-2.5">
-                      <StatusChip status={runtime?.status ?? 'idle'} />
+                      {runtime?.visible ? (
+                        <StatusChip status={runtime?.status ?? 'idle'} />
+                      ) : (
+                        <span className="inline-block border-2 border-rule bg-paper px-2 py-0.5 font-pixel text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                          ● Configured
+                        </span>
+                      )}
                     </div>
 
                     {runtime?.task && (
@@ -128,13 +135,26 @@ export function Agents() {
                       </p>
                     )}
 
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setEditing(a)}
                         className="border-2 border-ink bg-cream px-3 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-brand-pale"
                       >
-                        Configure
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (runtime?.visible) {
+                            import('../../agents/team').then(m => m.teamRuntime.hide(a.id))
+                          } else {
+                            import('../../agents/team').then(m => m.teamRuntime.show(a.id))
+                          }
+                        }}
+                        className="border-2 border-ink bg-brand px-3 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-brand-lite"
+                      >
+                        {runtime?.visible ? 'Despawn' : 'Spawn'}
                       </button>
                       <button
                         type="button"
@@ -143,6 +163,19 @@ export function Agents() {
                       >
                         {a.enabled ? 'Disable' : 'Enable'}
                       </button>
+                      {a.triggers && a.triggers.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => void save({ ...a, autoMode: !a.autoMode })}
+                          className={`border-2 border-ink px-2.5 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors ${
+                            a.autoMode
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-cream text-ink hover:bg-brand-pale'
+                          }`}
+                        >
+                          {a.autoMode ? 'AUTO ON' : 'AUTO OFF'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </li>

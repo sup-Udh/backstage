@@ -52,11 +52,11 @@ export function CommandCenter({ theme, engine }: Props) {
   const agents = useSyncExternalStore(engine.subscribeViews, engine.getViews)
   const pushUserMessage = useBackstage((s) => s.pushUserMessage)
   const pushSystemMessage = useBackstage((s) => s.pushSystemMessage)
-  const messages = useBackstage((s) => s.messages)
-  const task = useBackstage((s) => s.task)
+  const target = useBackstage((s) => s.chatTarget)
+  const messages = useBackstage((s) => s.agentMessages[s.chatTarget] || [])
+  const task = useBackstage((s) => s.agentTasks[s.chatTarget] || null)
   const mode = useBackstage((s) => s.mode)
   const setPage = useBackstage((s) => s.setPage)
-  const target = useBackstage((s) => s.chatTarget)
 
   const tab = useBackstage((s) => s.tab)
   const setTab = useBackstage((s) => s.setTab)
@@ -88,6 +88,13 @@ export function CommandCenter({ theme, engine }: Props) {
   useEffect(() => {
     if (tab === 'terminal') markTerminalOpened()
   }, [tab, markTerminalOpened])
+
+  const loadConversation = useBackstage((s) => s.loadConversation)
+  useEffect(() => {
+    if (workspace?.root) {
+      void loadConversation(workspace.root, target)
+    }
+  }, [workspace?.root, target, loadConversation])
 
   /* A tab change starts a fresh query; carrying one over only confuses. */
   useEffect(() => {
@@ -152,6 +159,19 @@ export function CommandCenter({ theme, engine }: Props) {
 
   const submit = (text: string) => {
     pushUserMessage(text)
+    const currentWorkspaceId = workspace?.root || 'default'
+
+    // The runtime resolves 'all' to the enabled team. Do the same here to persist.
+    const assigned = target === 'all' ? configs.filter((a) => a.enabled) : configs.filter((a) => a.id === target)
+    for (const agent of assigned) {
+      void window.backstage.agents.appendChat(currentWorkspaceId, agent.id, {
+        id: Date.now().toString(),
+        role: 'user',
+        agentId: agent.id,
+        text,
+        timestamp: Date.now()
+      })
+    }
 
     if (!live) {
       teamRuntime.submitTask(text)
@@ -220,8 +240,8 @@ export function CommandCenter({ theme, engine }: Props) {
   } = {
     messages: {
       mode: 'send' as const,
-      placeholder: busy ? `${targetName} is working…` : `Ask ${targetName}…`,
-      disabled: busy,
+      placeholder: `Ask ${targetName}…`,
+      disabled: false,
       onSend: submit
     },
     terminal: {
