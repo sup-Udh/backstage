@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import { FakeAgentRuntime } from '../../agents/fakeAgentRuntime'
-import { roster } from '../../agents/roster'
-import { getTheme } from '../../themes'
-import { useTheme } from '../../themes/useTheme'
-import { WorldEngine } from '../../world/engine/WorldEngine'
+import { useSyncExternalStore } from 'react'
+import { useBackstage } from '../../stores/backstageStore'
+import { useWorldEngine } from '../../world/useWorldEngine'
 import { Header } from '../../components/Header/Header'
 import { PixelButton } from '../../components/Button/PixelButton'
 import { Hero } from './Hero'
@@ -12,25 +9,11 @@ import { WorkSection } from './WorkSection'
 import { ThemesSection } from './ThemesSection'
 
 export function Landing() {
-  const { themeId, switching, switchTo } = useTheme()
-  const theme = useMemo(() => getTheme(themeId), [themeId])
-
-  /*
-   * The agent runtime is created once and deliberately outlives every theme
-   * change. That is the whole point of the feature: agent-1 keeps its model,
-   * its status, its current task and its place in the schedule when the world
-   * changes around it. Only the character portraying it differs.
-   */
-  const runtime = useMemo(() => new FakeAgentRuntime(roster), [])
-
-  /*
-   * The engine, by contrast, is per-world: it bakes that theme's sprite
-   * sheets and props once at construction, which is what keeps the render
-   * loop down to blits. Rebuilding it is the cheapest correct way to swap.
-   */
-  const engine = useMemo(() => new WorldEngine(theme, runtime), [theme, runtime])
-
-  useEffect(() => () => engine.stop(), [engine])
+  const themeId = useBackstage((s) => s.themeId)
+  const switching = useBackstage((s) => s.switching)
+  const switchTo = useBackstage((s) => s.switchTheme)
+  const enterApp = useBackstage((s) => s.enterApp)
+  const { theme, engine } = useWorldEngine(themeId)
 
   const agents = useSyncExternalStore(engine.subscribeViews, engine.getViews)
 
@@ -61,7 +44,9 @@ export function Landing() {
             <p className="max-w-[520px] font-ui text-[17px] leading-[1.6] text-ink-3">
               Walk backstage and find your team already working without you.
             </p>
-            <PixelButton className="mt-2">Get Started</PixelButton>
+            <PixelButton className="mt-2" onClick={enterApp}>
+              Get Started
+            </PixelButton>
           </div>
         </section>
       </main>

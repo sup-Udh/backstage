@@ -66,6 +66,12 @@ body,
   margin: 0;
 }
 
+/* The workspace is a full-height split, so the root must not scroll itself. */
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
 body {
   background: var(--color-cream);
   color: var(--color-ink);

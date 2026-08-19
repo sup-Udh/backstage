@@ -1,29 +1,6 @@
 import { PixelButton } from '../Button/PixelButton'
-
-/**
- * The wordmark. Drawn as SVG rects with crispEdges so it stays on the pixel
- * grid at every zoom level, matching the canvas art rather than approximating
- * it with a font glyph or an icon set.
- */
-function PixelMark({ size = 28 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 12 12"
-      shapeRendering="crispEdges"
-      aria-hidden
-    >
-      <rect x="0" y="1" width="12" height="9" fill="var(--color-ink)" />
-      <rect x="1" y="2" width="10" height="7" fill="var(--color-brand)" />
-      <rect x="2" y="3" width="6" height="1" fill="var(--color-ink)" />
-      <rect x="2" y="5" width="4" height="1" fill="var(--color-ink)" />
-      <rect x="2" y="7" width="7" height="1" fill="var(--color-ink)" />
-      <rect x="5" y="10" width="2" height="1" fill="var(--color-ink)" />
-      <rect x="3" y="11" width="6" height="1" fill="var(--color-ink)" />
-    </svg>
-  )
-}
+import { PixelMark } from './PixelMark'
+import { useBackstage } from '../../stores/backstageStore'
 
 const NAV = [
   { label: 'About', href: '#work' },
@@ -32,6 +9,8 @@ const NAV = [
 ]
 
 export function Header() {
+  const enterApp = useBackstage((s) => s.enterApp)
+
   return (
     <header className="sticky top-0 z-40 border-b-[3px] border-ink bg-cream/95 backdrop-blur-none">
       <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-6">
@@ -52,7 +31,7 @@ export function Header() {
               {item.label}
             </a>
           ))}
-          <PixelButton size="sm" className="ml-3">
+          <PixelButton size="sm" className="ml-3" onClick={enterApp}>
             Get Started
           </PixelButton>
         </nav>

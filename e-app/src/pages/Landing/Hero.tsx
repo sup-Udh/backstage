@@ -3,6 +3,7 @@ import type { WorldEngine } from '../../world/engine/WorldEngine'
 import { World } from '../../world/World'
 import { PixelButton } from '../../components/Button/PixelButton'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher/ThemeSwitcher'
+import { useBackstage } from '../../stores/backstageStore'
 
 interface Props {
   theme: Theme
@@ -24,6 +25,8 @@ export function Hero({
   switching,
   onSelectTheme
 }: Props) {
+  const enterApp = useBackstage((s) => s.enterApp)
+
   return (
     <section id="top" className="px-6 pb-20 pt-10">
       <div className="mx-auto max-w-[1400px]">
@@ -71,7 +74,7 @@ export function Hero({
             <br />
             <span className="text-brand-deep">Start watching your AI work.</span>
           </p>
-          <PixelButton>Get Started</PixelButton>
+          <PixelButton onClick={enterApp}>Get Started</PixelButton>
         </div>
       </div>
     </section>

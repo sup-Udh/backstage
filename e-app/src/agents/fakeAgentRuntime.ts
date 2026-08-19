@@ -1,5 +1,7 @@
 import type { Agent, AgentListener, AgentRuntime, AgentStatus } from './agent.types'
 import { makeRng } from '../world/pixel/ops'
+import { EventBus } from './agentEvents'
+import { buildTaskScript, type Beat } from './taskScript'
 
 /**
  * A stand-in for the real agent event stream.
@@ -78,6 +80,20 @@ export class FakeAgentRuntime implements AgentRuntime {
   private conversation: [number, number] | null = null
   /** Scripted first transition per agent, so the opening beats land. */
   private forced: (AgentStatus | null)[] = []
+
+  /** Events the world and the command centre both listen to. */
+  readonly events = new EventBus()
+
+  /*
+   * While a task is running the ambient scheduler stands down and the
+   * timeline below drives every agent instead. That is what makes a
+   * submitted prompt produce a legible sequence rather than more of the
+   * same random office noise.
+   */
+  private script: Beat[] = []
+  private scriptClock = 0
+  private scriptCursor = 0
+  private taskActive = false
 
   constructor(specs: FakeAgentSpec[], seed = 20260818) {
     this.rng = makeRng(seed)
@@ -162,7 +178,75 @@ export class FakeAgentRuntime implements AgentRuntime {
     this.remaining[i] = this.duration(status)
   }
 
+  /** True while a submitted task is playing out. */
+  isBusy(): boolean {
+    return this.taskActive
+  }
+
+  /**
+   * Accept a task from the user and play its timeline. Ignored while another
+   * task is still running, so the office can never be driven by two scripts.
+   */
+  submitTask(prompt: string): boolean {
+    if (this.taskActive) return false
+    this.script = buildTaskScript(prompt, this.agents)
+    this.scriptClock = 0
+    this.scriptCursor = 0
+    this.taskActive = true
+    return true
+  }
+
+  /** Advance the scripted timeline. Returns true if any agent changed. */
+  private tickScript(dt: number): boolean {
+    this.scriptClock += dt
+    let changed = false
+
+    while (
+      this.scriptCursor < this.script.length &&
+      this.script[this.scriptCursor].at <= this.scriptClock
+    ) {
+      const beat = this.script[this.scriptCursor++]
+
+      if (beat.agentId && beat.status) {
+        const agent = this.get(beat.agentId)
+        if (agent) {
+          agent.status = beat.status
+          agent.task = beat.agentTask ?? agent.task
+          // Hold the agent here until the next beat moves it.
+          const idx = this.agents.indexOf(agent)
+          this.remaining[idx] = Number.POSITIVE_INFINITY
+          changed = true
+        }
+      }
+
+      this.events.emit({
+        type: beat.type,
+        agentId: beat.agentId,
+        activity: beat.activity,
+        message: beat.message,
+        task: beat.task
+      })
+    }
+
+    if (this.scriptCursor >= this.script.length && this.taskActive) {
+      // Timeline done: hand the office back to the ambient scheduler, which
+      // settles everyone into normal work rather than freezing them.
+      this.taskActive = false
+      this.script = []
+      for (let i = 0; i < this.agents.length; i++) {
+        this.assign(i, i % 2 === 0 ? 'working' : 'idle')
+      }
+      changed = true
+    }
+    return changed
+  }
+
   tick(dt: number): void {
+    if (this.taskActive) {
+      if (this.tickScript(dt)) this.emit()
+      return
+    }
+
     let changed = false
 
     for (let i = 0; i < this.agents.length; i++) {
