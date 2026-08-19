@@ -2,7 +2,7 @@ import type { AgentRuntime } from '../../agents/agent.types'
 import { ANIMATIONS, characterStateForAgent } from '../../characters/character.states'
 import type { Theme } from '../../themes/types'
 import { makeRng } from '../pixel/ops'
-import { SPRITE_H, SPRITE_W } from '../pixel/characterSprite'
+import { WORLD_SPRITE_H, WORLD_SPRITE_W } from './spriteCache'
 import type { AgentView, CharacterRuntime } from '../world.types'
 import { Director } from './behavior'
 import type { CharacterDef } from '../../characters/character.types'
@@ -392,19 +392,35 @@ export class WorldEngine {
   /**
    * Hit-test in scene pixels. Front-most character wins, so an overlapping
    * pair resolves the way the user expects.
+   *
+   * The target is deliberately larger than the sprite. Characters stand at
+   * world scale — small, and smaller still when the camera is zoomed out — and
+   * a target that shrank with them would make clicking an agent a test of aim.
+   * The padding keeps the reachable area at roughly the size it was before the
+   * cast was scaled down, which is comfortable at every zoom.
    */
   hitTest(sx: number, sy: number): { id: string; x: number; y: number } | null {
     const ordered = [...this.chars].sort((a, b) => b.y - a.y)
     for (const c of ordered) {
-      const left = Math.round(c.x) - (SPRITE_W >> 1)
-      const top = Math.round(c.y) - SPRITE_H
-      if (sx >= left && sx < left + SPRITE_W && sy >= top && sy < top + SPRITE_H) {
-        return { id: c.agentId, x: c.x, y: top }
+      const left = Math.round(c.x) - (HIT_W >> 1)
+      const top = Math.round(c.y) - WORLD_SPRITE_H - HIT_PAD
+      if (sx >= left && sx < left + HIT_W && sy >= top && sy < top + HIT_H) {
+        // The tooltip and the card anchor to the sprite, not to the padding.
+        return { id: c.agentId, x: c.x, y: Math.round(c.y) - WORLD_SPRITE_H }
       }
     }
     return null
   }
 }
+
+/**
+ * Slack around the sprite that still counts as clicking the character, in
+ * scene pixels. Applied on every side, and below the feet as well, so the
+ * shadow and the floor ring are part of the target rather than a dead zone.
+ */
+const HIT_PAD = 3
+const HIT_W = WORLD_SPRITE_W + HIT_PAD * 2
+const HIT_H = WORLD_SPRITE_H + HIT_PAD * 2
 
 /** Which of a theme's characters portrays the agent in this slot. */
 function castFor(theme: Theme, slot: number): CharacterDef {

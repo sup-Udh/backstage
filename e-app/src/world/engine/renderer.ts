@@ -1,32 +1,56 @@
 import type { Theme, ThemePalette } from '../../themes/types'
 import { STATUS_LABEL } from '../../characters/character.states'
 import type { AgentStatus } from '../../agents/agent.types'
-import { paint } from '../pixel/ops'
+import { createPixelCanvas, paint } from '../pixel/ops'
 import { text, textWidth } from '../pixel/shapes'
-import { MARK_SIZE, markForModel } from '../pixel/logos'
-import { SPRITE_H, SPRITE_W } from '../pixel/characterSprite'
 import type { CharacterRuntime } from '../world.types'
 import {
   bakeOps,
-  buildCharacterSheet,
-  frameRect,
+  buildWorldSheet,
+  worldFrameRect,
+  WORLD_SPRITE_H,
+  WORLD_SPRITE_W,
   type BakedProp,
   type CharacterSheet
 } from './spriteCache'
 
 /**
- * Status tag metrics, in scene pixels.
+ * Tag metrics, in scene pixels.
  *
- * Deliberately smaller than the character it labels. The tag says what an
+ * Deliberately smaller than the character they label. The tag says what an
  * agent is *doing*; the sprite says *who they are*, and the sprite has to win
  * that contest — a bright plate wider than the person reverses the hierarchy.
+ *
+ * Both plates are the glyph height plus a one-pixel edge and nothing else. The
+ * previous two pixels of interior padding read as generous at UI scale, but at
+ * world scale they were a fifth of the character's height spent on whitespace.
  */
-const LABEL_H = 9
+const LABEL_H = 7
 const LABEL_PAD = 2
 const LABEL_GAP = 2
 
 /** Height of the name plate that sits above the status tag. */
-const NAME_H = 9
+const NAME_H = 7
+
+/**
+ * The state pip: a small brand square ahead of the status word.
+ *
+ * This used to be the 7x7 provider mark. At world scale a logo that tall
+ * forced the plate two pixels taller than the text needed and cost nine
+ * pixels of width on every character, which made the busiest thing on screen
+ * the labels rather than the office. Which model is behind an agent is still
+ * one hover away, and is spelled out in the inspector.
+ */
+const PIP_W = 2
+const PIP_H = 3
+
+/** The four neighbours a 1px outline is stamped into. */
+const AROUND = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1]
+] as const
 
 /** Statuses that read as "this agent is doing something". */
 const ACTIVE_STATUSES: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
@@ -64,6 +88,8 @@ export class WorldRenderer {
   private background: BakedProp | null
   private props: BakedProp[]
   private sheets = new Map<string, CharacterSheet>()
+  /** Rasterised status tags, keyed by label and state. */
+  private tags = new Map<string, HTMLCanvasElement>()
   private motes: Mote[] = []
 
   constructor(private theme: Theme) {
@@ -76,7 +102,7 @@ export class WorldRenderer {
       .filter((p): p is BakedProp => p !== null)
 
     for (const c of theme.characters) {
-      this.sheets.set(c.id, buildCharacterSheet(c.appearance, this.pal.brand))
+      this.sheets.set(c.id, buildWorldSheet(c.appearance, this.pal.brand))
     }
 
     // Dust drifting in the two window light shafts.
@@ -191,14 +217,16 @@ export class WorldRenderer {
   ): void {
     if (c.bubble === 'none' || c.settled < 0.45) return
     const cx = Math.round(c.x)
-    const top = Math.round(c.y) - SPRITE_H
+    const top = Math.round(c.y) - WORLD_SPRITE_H
 
     if (c.bubble === 'spark') {
       // A short burst of pixel sparkles.
       const life = Math.min(1, c.settled / 1.4)
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * Math.PI * 2 + t * 2
-        const rad = 6 + life * 5
+        // Sized off the character, so the flourish punctuates the moment
+        // rather than becoming the largest thing in the room.
+        const rad = 4 + life * 3.5
         const sx = cx + Math.cos(a) * rad
         const sy = top + 2 + Math.sin(a) * rad * 0.6
         ctx.fillStyle = i % 2 === 0 ? this.pal.brand : this.pal.brandLite
@@ -258,7 +286,8 @@ export class WorldRenderer {
    * the scene and stay on the pixel grid.
    */
   private labelWidth(c: CharacterRuntime): number {
-    return LABEL_PAD * 2 + MARK_SIZE + LABEL_GAP + textWidth(this.labelText(c))
+    // One pixel of outline either side, rather than a plate's worth of padding.
+    return 2 + PIP_W + LABEL_GAP + textWidth(this.labelText(c))
   }
 
   private labelText(c: CharacterRuntime): string {
@@ -292,18 +321,77 @@ export class WorldRenderer {
     const w = this.nameWidth(c)
     const x = Math.round(c.x) - (w >> 1)
 
+    /*
+     * Quiet by default, bright when chosen.
+     *
+     * A cream plate on every head made the labels the brightest thing in the
+     * room, so the eye landed on a row of signs before it found anybody. The
+     * resting state is now a dark plate with light lettering — still perfectly
+     * readable, but it sits behind the character rather than in front of them.
+     *
+     * That frees the brand fill to mean something: the agent the user is
+     * talking to is the one wearing yellow. Selection is marked by emphasis,
+     * never by making a character larger.
+     */
     ctx.fillStyle = this.pal.ink
     ctx.fillRect(x, y, w, NAME_H)
-    ctx.fillStyle = selected ? this.pal.brand : this.pal.cream2
-    ctx.fillRect(x + 1, y + 1, w - 2, NAME_H - 2)
+    if (selected) {
+      ctx.fillStyle = this.pal.brand
+      ctx.fillRect(x + 1, y + 1, w - 2, NAME_H - 2)
+    }
 
+    // The glyph is 5 tall in a 7 tall plate, so one pixel of edge either side.
     paint(
       ctx,
-      text(label, 0, 0, this.pal.ink),
+      text(label, 0, 0, selected ? this.pal.ink : this.pal.cream),
       undefined,
       x + LABEL_PAD,
-      y + 2
+      y + 1
     )
+  }
+
+  /**
+   * The status tag, baked once per label.
+   *
+   * Deliberately not a plate. A filled bar two and a half times wider than the
+   * person standing under it is the loudest shape on screen, and it was being
+   * drawn once per character — so the room read as a row of labels with some
+   * pixel art behind them.
+   *
+   * Outlined text instead: the same words, legible over any furniture, but as
+   * a floating identifier rather than a sign. There are only a handful of
+   * status words and two states, so each is rasterised once and the frame loop
+   * blits it.
+   */
+  private statusTag(label: string, active: boolean): HTMLCanvasElement {
+    const key = `${label}|${active}`
+    const cached = this.tags.get(key)
+    if (cached) return cached
+
+    const tx = 1 + PIP_W + LABEL_GAP
+    const { canvas, ctx } = createPixelCanvas(tx + textWidth(label) + 1, LABEL_H)
+
+    /*
+     * Idle agents are muted and active ones are warm, so a quiet office stays
+     * quiet and the one agent actually working is what the eye finds. State is
+     * carried by colour and by the pip — never by making anything bigger.
+     */
+    const accent = active ? this.pal.brand : this.pal.steel
+    const ink = active ? this.pal.cream : this.pal.steel
+
+    // Outline first, so the glyphs sit on top of their own shadow.
+    const halo = text(label, 0, 0, this.pal.ink)
+    for (const [ox, oy] of AROUND) paint(ctx, halo, undefined, tx + ox, 1 + oy)
+    paint(ctx, text(label, 0, 0, ink), undefined, tx, 1)
+
+    // The pip, outlined the same way and centred against the 5px glyphs.
+    ctx.fillStyle = this.pal.ink
+    ctx.fillRect(0, 1, PIP_W + 2, PIP_H + 2)
+    ctx.fillStyle = accent
+    ctx.fillRect(1, 2, PIP_W, PIP_H)
+
+    this.tags.set(key, canvas)
+    return canvas
   }
 
   private drawStatusTag(
@@ -313,41 +401,8 @@ export class WorldRenderer {
   ): void {
     const status = (c.lastStatus ?? 'idle') as AgentStatus
     const active = ACTIVE_STATUSES.includes(status)
-    const w = this.labelWidth(c)
-    const cx = Math.round(c.x)
-    const x = cx - (w >> 1)
-
-    /*
-     * Active agents get the brand edge; idle ones get a plain dark plate, so
-     * a room full of idle characters is quiet and the one actually working
-     * draws the eye.
-     */
-    const edge = active ? this.pal.brand : this.pal.ink3
-    const ink = active ? this.pal.cream : this.pal.steel
-
-    // Stem down to the head, drawn first so the plate caps it.
-    ctx.fillStyle = edge
-    ctx.fillRect(cx, y + LABEL_H - 1, 1, 3)
-
-    ctx.fillStyle = edge
-    ctx.fillRect(x, y, w, LABEL_H)
-    ctx.fillStyle = this.pal.ink
-    ctx.fillRect(x + 1, y + 1, w - 2, LABEL_H - 2)
-
-    paint(
-      ctx,
-      markForModel(c.model),
-      { mark: active ? this.pal.brand : this.pal.steel },
-      x + LABEL_PAD,
-      y + 1
-    )
-    paint(
-      ctx,
-      text(this.labelText(c), 0, 0, ink),
-      undefined,
-      x + LABEL_PAD + MARK_SIZE + LABEL_GAP,
-      y + 2
-    )
+    const tag = this.statusTag(this.labelText(c), active)
+    ctx.drawImage(tag, Math.round(c.x) - (tag.width >> 1), y)
   }
 
   /**
@@ -364,7 +419,7 @@ export class WorldRenderer {
       const x0 = Math.round(c.x) - (w >> 1)
       const x1 = x0 + w
       // Room for the name plate above the status tag.
-      let y = Math.round(c.y) - SPRITE_H - LABEL_H - NAME_H - 2
+      let y = Math.round(c.y) - WORLD_SPRITE_H - LABEL_H - NAME_H - 2
       let moved = true
       while (moved) {
         moved = false
@@ -391,51 +446,62 @@ export class WorldRenderer {
     const art = this.sheets.get(c.def.id)
     if (!art) return
 
-    const { sx, sy } = frameRect(c.state, c.facing, c.frame)
-    const dx = Math.round(c.x) - (SPRITE_W >> 1)
-    const dy = Math.round(c.y) - SPRITE_H
+    const { sx, sy } = worldFrameRect(c.state, c.facing, c.frame)
+    const dx = Math.round(c.x) - (WORLD_SPRITE_W >> 1)
+    const dy = Math.round(c.y) - WORLD_SPRITE_H
+    const feet = Math.round(c.y)
+    const W = WORLD_SPRITE_W
 
-    // Contact shadow, so nobody floats.
+    // Contact shadow, so nobody floats. Sized off the sprite rather than
+    // hard-coded, so it stays under the feet at any character scale.
     ctx.save()
     ctx.globalAlpha = 0.18
     ctx.fillStyle = this.pal.ink
-    ctx.fillRect(dx + 3, Math.round(c.y) - 1, 10, 1)
-    ctx.fillRect(dx + 4, Math.round(c.y), 8, 1)
+    ctx.fillRect(dx + 2, feet - 1, W - 4, 1)
+    ctx.fillRect(dx + 3, feet, W - 6, 1)
     ctx.restore()
 
     if (selected) {
       // A ring on the floor, so a selected agent stays findable in a crowd
-      // even while another character is standing in front of them.
+      // even while another character is standing in front of them. Selection
+      // is marked around the character, never by growing them.
       ctx.fillStyle = this.pal.brand
-      ctx.fillRect(dx + 1, Math.round(c.y) - 1, 14, 1)
-      ctx.fillRect(dx + 2, Math.round(c.y) + 1, 12, 1)
-      ctx.fillRect(dx, Math.round(c.y), 2, 1)
-      ctx.fillRect(dx + 14, Math.round(c.y), 2, 1)
+      ctx.fillRect(dx + 1, feet - 1, W - 2, 1)
+      ctx.fillRect(dx + 2, feet + 1, W - 4, 1)
+      ctx.fillRect(dx - 1, feet, 2, 1)
+      ctx.fillRect(dx + W - 1, feet, 2, 1)
     }
 
     if (hovered) {
       // 1px brand outline, drawn by stamping the silhouette around the sprite.
-      for (const [ox, oy] of [
-        [-1, 0],
-        [1, 0],
-        [0, -1],
-        [0, 1]
-      ]) {
+      for (const [ox, oy] of AROUND) {
         ctx.drawImage(
           art.silhouette,
           sx,
           sy,
-          SPRITE_W,
-          SPRITE_H,
+          WORLD_SPRITE_W,
+          WORLD_SPRITE_H,
           dx + ox,
           dy + oy,
-          SPRITE_W,
-          SPRITE_H
+          WORLD_SPRITE_W,
+          WORLD_SPRITE_H
         )
       }
     }
 
-    ctx.drawImage(art.sheet, sx, sy, SPRITE_W, SPRITE_H, dx, dy, SPRITE_W, SPRITE_H)
+    // 1:1 blit from a sheet already baked at world scale, so the loop never
+    // resamples and the sprite can never land between device pixels.
+    ctx.drawImage(
+      art.sheet,
+      sx,
+      sy,
+      WORLD_SPRITE_W,
+      WORLD_SPRITE_H,
+      dx,
+      dy,
+      WORLD_SPRITE_W,
+      WORLD_SPRITE_H
+    )
   }
 
   /* -------------------------------------------------------------- frame -- */
@@ -492,11 +558,19 @@ export class WorldRenderer {
     items.push({ baseY: 0.5, draw: () => this.drawClock(ctx) })
 
     for (const c of chars) {
-      const hovered = hoveredId === c.def.id || selectedId === c.def.id
+      /*
+       * Both ids are agent ids. `def.id` is the *character* being worn, which
+       * is re-cast whenever the theme changes — matching on it meant the
+       * outline and the floor ring only appeared in worlds where a character
+       * happened to be named after an agent, while the name plate beside them
+       * highlighted correctly. Selection has to look the same in every world.
+       */
+      const focused = selectedId === c.agentId
+      const hovered = hoveredId === c.agentId || focused
       items.push({
         baseY: c.y,
         draw: () => {
-          this.drawCharacter(ctx, c, hovered, selectedId === c.def.id)
+          this.drawCharacter(ctx, c, hovered, focused)
           this.drawBubble(ctx, c, t)
         }
       })

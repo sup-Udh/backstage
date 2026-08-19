@@ -33,6 +33,30 @@ const FACINGS: Facing[] = ['down', 'up', 'left', 'right']
 
 const MAX_FRAMES = 4
 
+/**
+ * How large a character stands in the world, relative to its source art.
+ *
+ * The office is the setting and the agents are people working in it, so the
+ * cast has to read as inhabitants rather than as the subject of the picture.
+ * At full size a character was taller than the desk it sat at and wider than
+ * the monitor on it, which reversed that.
+ *
+ * Expressed as a ratio rather than a pixel size on purpose. Characters are
+ * drawn in scene pixels and the camera scales the whole scene by a whole
+ * number, so this one figure holds the same character-to-furniture proportion
+ * at every zoom level and every window size — there is no size that is only
+ * correct at one viewport.
+ *
+ * 0.8 rather than an arbitrary fraction because 20x30 x 0.8 is exactly 16x24:
+ * both axes land on whole pixels and the 2:3 proportion is preserved exactly,
+ * so nothing is stretched and no pixel is ever sampled between two others.
+ */
+export const CHARACTER_SCALE = 0.8
+
+/** The character's footprint in the world, in scene pixels. */
+export const WORLD_SPRITE_W = Math.round(SPRITE_W * CHARACTER_SCALE)
+export const WORLD_SPRITE_H = Math.round(SPRITE_H * CHARACTER_SCALE)
+
 export interface CharacterSheet {
   /** Full-colour frames. */
   sheet: HTMLCanvasElement
@@ -115,6 +139,61 @@ export function frameRect(
   return {
     sx: (frame % MAX_FRAMES) * SPRITE_W,
     sy: rowIndex(state, facing) * SPRITE_H
+  }
+}
+
+/* ------------------------------------------------------- world-scale art -- */
+
+/**
+ * The same sheet at the size characters actually stand in the office.
+ *
+ * Resampled once at startup rather than scaled on every blit: the render loop
+ * keeps doing plain 1:1 draws, and the resampling decision is made in exactly
+ * one place instead of being repeated per frame with whatever the context's
+ * smoothing flag happened to be.
+ *
+ * The art itself is untouched — same ops, same palette, same proportions. Only
+ * how many screen pixels it occupies changes. `createPixelCanvas` leaves image
+ * smoothing off, so this is a nearest-neighbour resample: edges stay hard and
+ * nothing is blended, which is the only kind of scaling pixel art survives.
+ *
+ * The whole sheet is resampled in one draw, which is what keeps the frame grid
+ * intact: both the sheet width and its height are exact multiples of the cell
+ * size, so every cell boundary still lands on a whole pixel afterwards.
+ */
+function shrink(source: HTMLCanvasElement): HTMLCanvasElement {
+  const { canvas, ctx } = createPixelCanvas(
+    Math.round(source.width * CHARACTER_SCALE),
+    Math.round(source.height * CHARACTER_SCALE)
+  )
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height)
+  return canvas
+}
+
+/**
+ * A character sheet at world scale.
+ *
+ * Deliberately separate from `buildCharacterSheet`, which stays at full size:
+ * the team cards and the inspector show a character as a portrait, and those
+ * want the original art. Only the office shrinks.
+ */
+export function buildWorldSheet(
+  appearance: CharacterAppearance,
+  outlineColour: string
+): CharacterSheet {
+  const full = buildCharacterSheet(appearance, outlineColour)
+  return { sheet: shrink(full.sheet), silhouette: shrink(full.silhouette) }
+}
+
+/** Source rectangle for one frame within a world-scale sheet. */
+export function worldFrameRect(
+  state: CharacterState,
+  facing: Facing,
+  frame: number
+): { sx: number; sy: number } {
+  return {
+    sx: (frame % MAX_FRAMES) * WORLD_SPRITE_W,
+    sy: rowIndex(state, facing) * WORLD_SPRITE_H
   }
 }
 
