@@ -62,6 +62,7 @@ function assign(target: string | undefined): AgentConfig[] {
 
 import { systemBus } from '../agents/EventBus'
 import { initTriggerEngine } from '../agents/TriggerEngine'
+import { conversationStore } from '../agents/conversationStore'
 
 export function registerAgentHandlers(): void {
   runtime = new AgentRuntime((event) => systemBus.emitEvent(event))
@@ -91,15 +92,15 @@ export function registerAgentHandlers(): void {
   )
 
   ipcMain.handle('agents:loadChat', (_e, workspaceId: string, agentId: string) => {
-    return require('../agents/conversationStore').conversationStore.load(workspaceId, agentId)
+    return conversationStore.load(workspaceId, agentId)
   })
 
   ipcMain.handle('agents:appendChat', (_e, workspaceId: string, agentId: string, message: any) => {
-    require('../agents/conversationStore').conversationStore.append(workspaceId, agentId, message)
+    conversationStore.append(workspaceId, agentId, message)
   })
 
   ipcMain.handle('agents:clearChat', (_e, workspaceId: string, agentId: string) => {
-    require('../agents/conversationStore').conversationStore.clear(workspaceId, agentId)
+    conversationStore.clear(workspaceId, agentId)
   })
 
   ipcMain.handle('agents:run', async (_e, params: RunTaskParams): Promise<RunTaskAck> => {

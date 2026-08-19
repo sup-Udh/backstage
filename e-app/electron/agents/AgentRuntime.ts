@@ -6,6 +6,7 @@ import { getTool, toolsForFamilies } from '../tools/registry'
 import { getWorkspace, getWorkspaceRoot } from '../workspace/WorkspaceManager'
 import { systemPromptFor } from './prompts'
 import { BudgetTracker, budgetFor } from './execution'
+import { conversationStore } from './conversationStore'
 
 /**
  * The agent runtime: one task, one or more agents, a tool loop each.
@@ -102,7 +103,7 @@ export class AgentRuntime {
 
         // Persist message to ConversationStore
         const workspaceRoot = getWorkspaceRoot() || 'default'
-        require('./conversationStore').conversationStore.append(workspaceRoot, agent.id, {
+        conversationStore.append(workspaceRoot, agent.id, {
           id: Date.now().toString(),
           role: 'agent',
           agentId: agent.id,

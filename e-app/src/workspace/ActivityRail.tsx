@@ -37,7 +37,9 @@ function pathIn(text: string): string | null {
 }
 
 export function ActivityRail({ limit = 6, agentId, label }: Props) {
-  const activity = useBackstage((s) => s.activity)
+  const chatTarget = useBackstage((s) => s.chatTarget)
+  const targetId = agentId || chatTarget
+  const activity = useBackstage((s) => s.agentActivity[targetId]) || []
   const setOpenFile = useBackstage((s) => s.setOpenFile)
   const setTab = useBackstage((s) => s.setTab)
   const endRef = useRef<HTMLDivElement>(null)

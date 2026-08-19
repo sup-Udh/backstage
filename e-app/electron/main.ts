@@ -21,6 +21,9 @@ function createWindow() {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+  
+  // Always open DevTools for debugging
+  win.webContents.openDevTools()
 }
 
 app.whenReady().then(() => {

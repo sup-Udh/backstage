@@ -53,8 +53,8 @@ export function CommandCenter({ theme, engine }: Props) {
   const pushUserMessage = useBackstage((s) => s.pushUserMessage)
   const pushSystemMessage = useBackstage((s) => s.pushSystemMessage)
   const target = useBackstage((s) => s.chatTarget)
-  const messages = useBackstage((s) => s.agentMessages[s.chatTarget] || [])
-  const task = useBackstage((s) => s.agentTasks[s.chatTarget] || null)
+  const messages = useBackstage((s) => s.agentMessages[s.chatTarget]) || []
+  const task = useBackstage((s) => s.agentTasks[s.chatTarget]) || null
   const mode = useBackstage((s) => s.mode)
   const setPage = useBackstage((s) => s.setPage)
 

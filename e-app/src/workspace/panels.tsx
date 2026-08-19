@@ -424,7 +424,8 @@ export function TasksPanel({
 }: {
   onFocus: (session: { terminalSessionId: string; agentId: string }) => void
 }) {
-  const task = useBackstage((s) => s.task)
+  const chatTarget = useBackstage((s) => s.chatTarget)
+  const task = useBackstage((s) => s.agentTasks[chatTarget])
   const sessions = useBackstage((s) => s.agentSessions)
 
   const running = sessions.filter((s) => s.status !== 'exited' && s.status !== 'error')
