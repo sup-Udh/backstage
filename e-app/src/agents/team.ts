@@ -1,17 +1,17 @@
 import { FakeAgentRuntime } from './fakeAgentRuntime'
-import { roster } from './roster'
 import { useBackstage } from '../stores/backstageStore'
 
 /**
  * The team.
  *
- * A single runtime for the whole application: the landing page and the
- * workspace look into the same office, and the agents keep working while the
- * user moves between them. It also means the runtime survives every theme
- * change, which is what lets an agent keep its model and its current task
- * while the world around it is replaced.
+ * One runtime for the whole application, holding what each agent is *doing*.
+ * Who each agent *is* lives in the main process and is persisted; this side is
+ * told about them at startup and whenever the roster changes.
+ *
+ * It starts empty on purpose: the office fills up as agents are given work,
+ * and they stay once they have arrived.
  */
-export const teamRuntime = new FakeAgentRuntime(roster)
+export const teamRuntime = new FakeAgentRuntime([])
 
 /**
  * Wire the runtime's events into the store exactly once. Every event lands in

@@ -35,6 +35,7 @@ export interface ChatMessage {
 export interface ActivityEntry {
   id: number
   agentId?: string
+  agentName?: string
   text: string
   at: number
 }
@@ -83,6 +84,8 @@ interface BackstageState {
   /** Mirror of the main process's provider state. Never holds a key. */
   provider: ProviderStatus | null
   mode: ExecutionMode
+  /** Which agent the chat is addressed to, or 'all' for the team. */
+  chatTarget: string
 
   enterApp: () => void
   exitToLanding: () => void
@@ -90,6 +93,7 @@ interface BackstageState {
   switchTheme: (id: string) => void
 
   setProvider: (status: ProviderStatus | null) => void
+  setChatTarget: (target: string) => void
   setMode: (mode: ExecutionMode) => void
   pushUserMessage: (text: string) => void
   pushSystemMessage: (text: string) => void
@@ -111,6 +115,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   task: null,
   provider: null,
   mode: loadMode(),
+  chatTarget: 'jane',
 
   enterApp: () => set({ view: 'app', page: 'home' }),
   exitToLanding: () => set({ view: 'landing' }),
@@ -135,6 +140,8 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   },
 
   setProvider: (provider) => set({ provider }),
+
+  setChatTarget: (chatTarget) => set({ chatTarget }),
 
   setMode: (mode) => {
     try {
@@ -171,6 +178,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
           {
             id: event.id,
             agentId: event.agentId,
+            agentName: event.agentName,
             text: event.activity,
             at: event.at
           }

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { useBackstage } from '../../stores/backstageStore'
 import { useWorldEngine } from '../../world/useWorldEngine'
+import { showcaseRuntime } from '../../agents/showcase'
 import { Header } from '../../components/Header/Header'
 import { PixelButton } from '../../components/Button/PixelButton'
 import { Hero } from './Hero'
@@ -13,7 +14,9 @@ export function Landing() {
   const switching = useBackstage((s) => s.switching)
   const switchTo = useBackstage((s) => s.switchTheme)
   const enterApp = useBackstage((s) => s.enterApp)
-  const { theme, engine } = useWorldEngine(themeId)
+  // The landing office is a showcase, not the real team: always populated,
+  // always busy, never calling a provider.
+  const { theme, engine } = useWorldEngine(themeId, showcaseRuntime)
 
   const agents = useSyncExternalStore(engine.subscribeViews, engine.getViews)
 

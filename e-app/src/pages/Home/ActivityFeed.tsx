@@ -28,8 +28,9 @@ export function ActivityFeed({ activity, theme }: Props) {
 
   if (activity.length === 0) return null
 
-  const nameFor = (agentId?: string) =>
-    theme.characters.find((c) => c.agentId === agentId)?.name
+  const nameFor = (entry: ActivityEntry) =>
+    entry.agentName ??
+    theme.characters.find((c) => c.agentId === entry.agentId)?.name
 
   return (
     <div className="border-t-[3px] border-ink">
@@ -39,7 +40,7 @@ export function ActivityFeed({ activity, theme }: Props) {
 
       <ol className="max-h-44 overflow-y-auto px-4 py-3">
         {activity.map((entry) => {
-          const who = nameFor(entry.agentId)
+          const who = nameFor(entry)
           return (
             <li key={entry.id} className="flex gap-3 py-1">
               <span className="shrink-0 pt-px font-mono text-[10px] font-medium tabular-nums text-ink-3">

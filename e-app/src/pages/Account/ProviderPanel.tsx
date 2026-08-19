@@ -1,30 +1,50 @@
 import { useState } from 'react'
-import { useProvider } from '../../providers/useProvider'
-import { useBackstage } from '../../stores/backstageStore'
+import type {
+  ConnectionResult,
+  ProviderDescriptor,
+  ProviderStatus
+} from '../../shared/providerApi'
+
+interface Props {
+  descriptor: ProviderDescriptor
+  provider: ProviderStatus | undefined
+  result: ConnectionResult | undefined
+  busy: string | null
+  onConnect: (providerId: string, apiKey: string) => Promise<ConnectionResult>
+  onTest: (providerId: string) => Promise<ConnectionResult>
+  onDisconnect: (providerId: string) => Promise<void>
+  onSelectModel: (providerId: string, modelId: string) => Promise<void>
+}
 
 /**
- * The OpenAI connection card.
+ * One provider's connection card.
  *
- * The key is typed here and handed straight to the main process; it is never
- * stored in React state beyond the life of the input, never persisted on this
- * side, and never read back. A connected account shows only a masked hint.
+ * Rendered once per entry in the registry, so a new provider appears here with
+ * no change to this file. The key is typed in and handed straight to the main
+ * process: never kept in React state beyond the life of the input, never
+ * persisted on this side, never read back.
  */
-export function OpenAIPanel() {
-  const { provider, busy, result, connect, test, disconnect, selectModel } =
-    useProvider()
-  const mode = useBackstage((s) => s.mode)
-  const setMode = useBackstage((s) => s.setMode)
-
+export function ProviderPanel({
+  descriptor,
+  provider,
+  result,
+  busy,
+  onConnect,
+  onTest,
+  onDisconnect,
+  onSelectModel
+}: Props) {
   const [draft, setDraft] = useState('')
   const [reveal, setReveal] = useState(false)
 
+  const id = descriptor.id
   const connected = provider?.connected ?? false
   const hasKey = provider?.hasKey ?? false
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!draft.trim()) return
-    const res = await connect(draft)
+    const res = await onConnect(id, draft)
     // Clear the field either way: it should not linger in the DOM.
     if (res.success) setDraft('')
   }
@@ -34,9 +54,9 @@ export function OpenAIPanel() {
       <header className="flex items-start justify-between gap-4 border-b-[3px] border-ink px-4 py-3">
         <div>
           <h2 className="font-pixel text-lg font-bold uppercase tracking-[0.04em] text-ink">
-            OpenAI
+            {descriptor.name}
           </h2>
-          <p className="mt-1 font-ui text-xs text-ink-3">GPT models</p>
+          <p className="mt-1 font-ui text-xs text-ink-3">{descriptor.blurb}</p>
         </div>
 
         <span
@@ -54,7 +74,7 @@ export function OpenAIPanel() {
         {!connected && (
           <form onSubmit={submit}>
             <label
-              htmlFor="openai-key"
+              htmlFor={`key-${id}`}
               className="font-pixel text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-3"
             >
               API key
@@ -62,7 +82,7 @@ export function OpenAIPanel() {
 
             <div className="mt-2 flex items-stretch gap-2">
               <input
-                id="openai-key"
+                {...{ id: `key-${id}` }}
                 type={reveal ? 'text' : 'password'}
                 value={draft}
                 autoComplete="off"
@@ -90,7 +110,7 @@ export function OpenAIPanel() {
               disabled={busy !== null || draft.trim().length === 0}
               className="mt-4 border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-45"
             >
-              {busy === 'connect' ? 'Connecting…' : 'Connect OpenAI'}
+              {busy === `connect:${id}` ? 'Connecting…' : `Connect ${descriptor.name}`}
             </button>
           </form>
         )}
@@ -104,15 +124,15 @@ export function OpenAIPanel() {
 
             <div className="mt-4">
               <label
-                htmlFor="openai-model"
+                htmlFor={`model-${id}`}
                 className="font-pixel text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-3"
               >
                 Default model
               </label>
               <select
-                id="openai-model"
+                {...{ id: `model-${id}` }}
                 value={provider?.selectedModel ?? ''}
-                onChange={(e) => void selectModel(e.target.value)}
+                onChange={(e) => void onSelectModel(id, e.target.value)}
                 className="mt-2 w-full border-[3px] border-ink bg-cream px-3 py-2 font-mono text-sm text-ink outline-none focus:border-brand-deep"
               >
                 {(provider?.models ?? []).map((m) => (
@@ -130,15 +150,15 @@ export function OpenAIPanel() {
             <div className="mt-5 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => void test()}
+                onClick={() => void onTest(id)}
                 disabled={busy !== null}
                 className="border-[3px] border-ink bg-cream px-4 py-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-y-px enabled:hover:bg-brand-pale disabled:opacity-45"
               >
-                {busy === 'test' ? 'Testing…' : 'Test connection'}
+                {busy === `test:${id}` ? 'Testing…' : 'Test connection'}
               </button>
               <button
                 type="button"
-                onClick={() => void disconnect()}
+                onClick={() => void onDisconnect(id)}
                 disabled={busy !== null}
                 className="border-[3px] border-ink bg-cream px-4 py-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 shadow-[3px_3px_0_0_var(--color-ink)] transition-colors hover:text-ink disabled:opacity-45"
               >
@@ -165,35 +185,6 @@ export function OpenAIPanel() {
           </p>
         )}
 
-        {/* Execution mode. Kept here so the API-spending switch is beside the
-            credential it spends against. */}
-        <div className="mt-6 border-t-2 border-rule pt-4">
-          <p className="font-pixel text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-3">
-            Agent execution
-          </p>
-          <div className="mt-2 flex gap-2">
-            {(['real', 'fake'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
-                aria-pressed={mode === m}
-                className={`border-2 px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors ${
-                  mode === m
-                    ? 'border-ink bg-brand text-ink'
-                    : 'border-rule text-ink-3 hover:border-ink hover:text-ink'
-                }`}
-              >
-                {m === 'real' ? 'Real' : 'Simulated'}
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 font-ui text-xs leading-snug text-ink-3">
-            {mode === 'real'
-              ? 'Tasks call OpenAI and spend credit.'
-              : 'Tasks replay a scripted timeline. No API calls, no cost.'}
-          </p>
-        </div>
       </div>
     </article>
   )

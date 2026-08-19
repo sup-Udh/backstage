@@ -5,6 +5,7 @@ import { makeRng } from '../pixel/ops'
 import { SPRITE_H, SPRITE_W } from '../pixel/characterSprite'
 import type { AgentView, CharacterRuntime } from '../world.types'
 import { Director } from './behavior'
+import type { CharacterDef } from '../../characters/character.types'
 import { WorldRenderer, type Camera } from './renderer'
 
 /**
@@ -46,29 +47,31 @@ export class WorldEngine {
     this.director = new Director(theme.scene, rng)
 
     this.rng = rng
-    // Reserves have no character until the runtime calls them in.
-    this.chars = theme.characters
-      .filter((def) => runtime.get(def.agentId)?.active)
-      .map((def): CharacterRuntime => ({
-      def,
-      model: runtime.get(def.agentId)?.model ?? 'Unknown',
-      x: theme.scene.desks[def.homeDesk % theme.scene.desks.length].x,
-      y: theme.scene.desks[def.homeDesk % theme.scene.desks.length].y,
-      facing: 'down',
-      state: 'idle',
-      path: [],
-      destFacing: 'down',
-      desk: null,
-      spotKey: null,
-      animTime: rng() * 2,
-      frame: 0,
-      lastStatus: null,
-      bubble: 'none',
-      settled: 3,
+    // A character exists only while its agent is present in the world.
+    this.chars = runtime
+      .getAgents()
+      .filter((a) => a.visible)
+      .map((a): CharacterRuntime => ({
+        agentId: a.id,
+        def: castFor(theme, a.slot),
+        model: a.model,
+        x: theme.scene.desks[a.slot % theme.scene.desks.length].x,
+        y: theme.scene.desks[a.slot % theme.scene.desks.length].y,
+        facing: 'down',
+        state: 'idle',
+        path: [],
+        destFacing: 'down',
+        desk: null,
+        spotKey: null,
+        animTime: rng() * 2,
+        frame: 0,
+        lastStatus: null,
+        bubble: 'none',
+        settled: 3,
         // A little variance so the cast never moves in lockstep.
         speed: 19 + rng() * 5
       }))
-    for (const c of this.chars) this.placed.add(c.def.id)
+    for (const c of this.chars) this.placed.add(c.agentId)
 
     this.placeOpeningCast()
     this.rebuildViews()
@@ -121,13 +124,12 @@ export class WorldEngine {
    * room visibly fills up over a session.
    */
   private spawnArrivals(): void {
-    for (const def of this.theme.characters) {
-      if (this.placed.has(def.id)) continue
-      const agent = this.runtime.get(def.agentId)
-      if (!agent?.active) continue
+    for (const agent of this.runtime.getAgents()) {
+      if (!agent.visible || this.placed.has(agent.id)) continue
 
       const c: CharacterRuntime = {
-        def,
+        agentId: agent.id,
+        def: castFor(this.theme, agent.slot),
         model: agent.model,
         // Just off the left edge, so the walk in is visible.
         x: -10,
@@ -146,7 +148,7 @@ export class WorldEngine {
         speed: 19 + this.rng() * 5
       }
       this.chars.push(c)
-      this.placed.add(def.id)
+      this.placed.add(agent.id)
       this.director.onStatusChange(c, agent.status, this.chars)
       c.lastStatus = agent.status
       this.rebuildViews()
@@ -297,7 +299,7 @@ export class WorldEngine {
     this.spawnArrivals()
 
     for (const c of this.chars) {
-      const agent = this.runtime.get(c.def.agentId)
+      const agent = this.runtime.get(c.agentId)
       if (!agent) continue
 
       if (agent.status !== c.lastStatus) {
@@ -335,11 +337,13 @@ export class WorldEngine {
 
   private rebuildViews(): void {
     this.views = this.chars.map((c) => {
-      const agent = this.runtime.get(c.def.agentId)
+      const agent = this.runtime.get(c.agentId)
       return {
-        characterId: c.def.id,
-        name: c.def.name,
-        role: c.def.role,
+        characterId: c.agentId,
+        // The configured name wins: this is the user's agent, wearing
+        // whichever costume the active world provides.
+        name: agent?.name ?? c.def.name,
+        role: agent?.role ?? c.def.role,
         model: agent?.model ?? 'Unknown',
         status: agent?.status ?? 'idle',
         task: agent?.task ?? null
@@ -377,9 +381,15 @@ export class WorldEngine {
       const left = Math.round(c.x) - (SPRITE_W >> 1)
       const top = Math.round(c.y) - SPRITE_H
       if (sx >= left && sx < left + SPRITE_W && sy >= top && sy < top + SPRITE_H) {
-        return { id: c.def.id, x: c.x, y: top }
+        return { id: c.agentId, x: c.x, y: top }
       }
     }
     return null
   }
+}
+
+/** Which of a theme's characters portrays the agent in this slot. */
+function castFor(theme: Theme, slot: number): CharacterDef {
+  const cast = theme.characters
+  return cast[((slot % cast.length) + cast.length) % cast.length]
 }

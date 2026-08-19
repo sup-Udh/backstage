@@ -25,6 +25,16 @@ export type AgentEventType =
   | 'agent.failed'
   | 'message.sent'
   | 'message.received'
+  // Emitted by the main-process runtime.
+  | 'agent.activated'
+  | 'agent.deactivated'
+  | 'agent.tool.started'
+  | 'agent.tool.completed'
+  | 'agent.tool.failed'
+  | 'agent.message'
+  | 'file.created'
+  | 'file.modified'
+  | 'file.deleted'
 
 export interface AgentEvent {
   id: number
@@ -32,6 +42,8 @@ export interface AgentEvent {
   /** Wall-clock time, so the feed can show a real timestamp. */
   at: number
   agentId?: string
+  /** The agent's configured display name, when the emitter knows it. */
+  agentName?: string
   /** Human-readable line for the activity feed. */
   activity?: string
   /** Spoken line for the transcript, when the agent is saying something. */

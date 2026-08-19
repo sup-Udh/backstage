@@ -21,8 +21,13 @@ import { join } from 'node:path'
  * renderer only ever learns whether a key exists and its last four characters.
  */
 
-const KEY_FILE = 'openai.key'
-const CONFIG_FILE = 'openai.config.json'
+/** Keys and config are namespaced per provider id. */
+function keyFile(providerId: string): string {
+  return `${providerId}.key`
+}
+function configFile(providerId: string): string {
+  return `${providerId}.config.json`
+}
 
 interface ProviderConfig {
   selectedModel: string | null
@@ -36,21 +41,21 @@ function dir(): string {
   return d
 }
 
-function keyPath(): string {
-  return join(dir(), KEY_FILE)
+function keyPath(providerId: string): string {
+  return join(dir(), keyFile(providerId))
 }
 
-function configPath(): string {
-  return join(dir(), CONFIG_FILE)
+function configPath(providerId: string): string {
+  return join(dir(), configFile(providerId))
 }
 
 /* ------------------------------------------------------------ the key ---- */
 
-export function hasApiKey(): boolean {
-  return existsSync(keyPath())
+export function hasApiKey(providerId: string): boolean {
+  return existsSync(keyPath(providerId))
 }
 
-export function saveApiKey(apiKey: string): void {
+export function saveApiKey(providerId: string, apiKey: string): void {
   const trimmed = apiKey.trim()
   if (!trimmed) throw new Error('Empty API key')
 
@@ -60,42 +65,42 @@ export function saveApiKey(apiKey: string): void {
     throw new Error('OS secure storage is unavailable on this machine')
   }
 
-  writeFileSync(keyPath(), safeStorage.encryptString(trimmed))
-  const config = readConfig()
-  config.keyHint = `sk-…${trimmed.slice(-4)}`
-  writeConfig(config)
+  writeFileSync(keyPath(providerId), safeStorage.encryptString(trimmed))
+  const config = readConfig(providerId)
+  config.keyHint = `…${trimmed.slice(-4)}`
+  writeConfig(providerId, config)
 }
 
 /**
  * Decrypt the stored key. Main process only — the return value must never be
  * put on an IPC reply, logged, or included in an error message.
  */
-export function getApiKey(): string | null {
-  if (!hasApiKey()) return null
+export function getApiKey(providerId: string): string | null {
+  if (!hasApiKey(providerId)) return null
   try {
-    return safeStorage.decryptString(readFileSync(keyPath()))
+    return safeStorage.decryptString(readFileSync(keyPath(providerId)))
   } catch {
     // A key encrypted under a different OS user or profile cannot be read.
     return null
   }
 }
 
-export function deleteApiKey(): void {
+export function deleteApiKey(providerId: string): void {
   try {
-    rmSync(keyPath(), { force: true })
+    rmSync(keyPath(providerId), { force: true })
   } catch {
     // Already gone is the desired end state.
   }
-  const config = readConfig()
+  const config = readConfig(providerId)
   config.keyHint = null
-  writeConfig(config)
+  writeConfig(providerId, config)
 }
 
 /* --------------------------------------------------------- the config ---- */
 
-export function readConfig(): ProviderConfig {
+export function readConfig(providerId: string): ProviderConfig {
   try {
-    const raw = readFileSync(configPath(), 'utf8')
+    const raw = readFileSync(configPath(providerId), 'utf8')
     const parsed = JSON.parse(raw) as Partial<ProviderConfig>
     return {
       selectedModel: parsed.selectedModel ?? null,
@@ -106,12 +111,12 @@ export function readConfig(): ProviderConfig {
   }
 }
 
-export function writeConfig(config: ProviderConfig): void {
-  writeFileSync(configPath(), JSON.stringify(config, null, 2), 'utf8')
+export function writeConfig(providerId: string, config: ProviderConfig): void {
+  writeFileSync(configPath(providerId), JSON.stringify(config, null, 2), 'utf8')
 }
 
-export function setSelectedModel(modelId: string | null): void {
-  const config = readConfig()
+export function setSelectedModel(providerId: string, modelId: string | null): void {
+  const config = readConfig(providerId)
   config.selectedModel = modelId
-  writeConfig(config)
+  writeConfig(providerId, config)
 }

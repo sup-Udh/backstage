@@ -13,76 +13,90 @@ import type { ProviderModel } from '../../../src/shared/providerApi'
  * we have no note for still appears, just without a description.
  */
 
-/** Families we can describe, best-known first. Prefix match on the model id. */
-interface FamilyNote {
-  /** Matched against the start of the model id. */
-  prefix: string
-  label: (id: string) => string
-  description: string
-  /** Lower sorts earlier. Cheap and fast families rank above large ones. */
-  rank: number
-  /** Eligible to be chosen automatically as the default. */
-  defaultable: boolean
-}
+/**
+ * How to describe and rank a model.
+ *
+ * Matching is on tier keywords rather than rigid id prefixes: a plain prefix
+ * table gets `gpt-5.4-mini` wrong, because it starts with `gpt-5` and would be
+ * labelled as the large model. Tier is read from the suffix, family from the
+ * version, so new releases are described correctly without an update here.
+ */
+type Tier = 'nano' | 'mini' | 'lite' | 'pro' | 'standard'
 
-const FAMILIES: FamilyNote[] = [
-  {
-    prefix: 'gpt-5-mini',
-    label: () => 'GPT-5 Mini',
-    description: 'Fast and cost-conscious. A good default.',
+const TIER_NOTE: Record<Tier, { suffix: string; description: string; rank: number; defaultable: boolean }> = {
+  nano: {
+    suffix: 'Nano',
+    description: 'Smallest and cheapest.',
     rank: 0,
     defaultable: true
   },
-  {
-    prefix: 'gpt-5-nano',
-    label: () => 'GPT-5 Nano',
-    description: 'Smallest and cheapest.',
+  mini: {
+    suffix: 'Mini',
+    description: 'Fast and cost-conscious. A good default.',
     rank: 1,
     defaultable: true
   },
-  {
-    prefix: 'gpt-5',
-    label: () => 'GPT-5',
-    description: 'Most capable. Slower and more expensive.',
+  lite: {
+    suffix: 'Lite',
+    description: 'Fast and inexpensive.',
     rank: 2,
-    defaultable: false
-  },
-  {
-    prefix: 'gpt-4.1-mini',
-    label: () => 'GPT-4.1 Mini',
-    description: 'Fast, inexpensive, widely available.',
-    rank: 3,
     defaultable: true
   },
-  {
-    prefix: 'gpt-4.1',
-    label: () => 'GPT-4.1',
-    description: 'Strong general model.',
+  standard: {
+    suffix: '',
+    description: 'Balanced capability and cost.',
+    rank: 3,
+    defaultable: false
+  },
+  pro: {
+    suffix: 'Pro',
+    description: 'Most capable. Slower and more expensive.',
     rank: 4,
     defaultable: false
-  },
-  {
-    prefix: 'gpt-4o-mini',
-    label: () => 'GPT-4o Mini',
-    description: 'Fast and inexpensive.',
-    rank: 5,
-    defaultable: true
-  },
-  {
-    prefix: 'gpt-4o',
-    label: () => 'GPT-4o',
-    description: 'General purpose.',
-    rank: 6,
-    defaultable: false
   }
-]
+}
+
+function tierOf(id: string): Tier {
+  if (/(^|[-.])nano\b/.test(id)) return 'nano'
+  if (/(^|[-.])mini\b/.test(id)) return 'mini'
+  if (/(^|[-.])lite\b/.test(id)) return 'lite'
+  if (/(^|[-.])pro\b/.test(id)) return 'pro'
+  return 'standard'
+}
+
+/** "gpt-5.6-luna" -> "GPT-5.6 Luna"; "gpt-4o" -> "GPT-4o". */
+function labelFor(id: string): string {
+  const tier = tierOf(id)
+  const words = id
+    // Drop a trailing release date, which is noise in a picker.
+    .replace(/-\d{4}-\d{2}-\d{2}$/, '')
+    .split('-')
+    .filter(Boolean)
+
+  const parts = words.map((w) => {
+    if (w === 'gpt') return 'GPT'
+    if (/^\d/.test(w)) return w
+    if (w === 'chat' || w === 'latest') return w
+    return w.charAt(0).toUpperCase() + w.slice(1)
+  })
+
+  // "gpt" and the version read as one token: GPT-5.6.
+  const head = parts.length >= 2 && parts[0] === 'GPT' ? `GPT-${parts[1]}` : parts[0]
+  const rest = parts.slice(head === parts[0] ? 1 : 2)
+  const name = [head, ...rest].join(' ').trim()
+  void tier
+  return name
+}
+
+/** Newer version families rank above older ones at the same tier. */
+function versionOf(id: string): number {
+  const m = /^gpt-(\d+)(?:\.(\d+))?/.exec(id)
+  if (!m) return 0
+  return Number(m[1]) * 100 + Number(m[2] ?? 0)
+}
 
 /** Models that are not conversational, so they never belong in the picker. */
 const EXCLUDED = /(embedding|whisper|tts|audio|realtime|image|dall-e|moderation|transcribe|search|codex|davinci|babbage)/i
-
-function noteFor(id: string): FamilyNote | undefined {
-  return FAMILIES.find((f) => id.startsWith(f.prefix))
-}
 
 /** Turn raw ids from the API into ranked, described entries for the UI. */
 export function describeModels(ids: string[]): ProviderModel[] {
@@ -90,18 +104,28 @@ export function describeModels(ids: string[]): ProviderModel[] {
 
   return usable
     .map((id) => {
-      const note = noteFor(id)
+      const note = TIER_NOTE[tierOf(id)]
       return {
         id,
-        name: note ? note.label(id) : id,
-        description: note?.description ?? 'Available on your account.',
+        name: labelFor(id),
+        description: note.description,
         verified: true,
-        _rank: note?.rank ?? 90
+        _rank: note.rank,
+        _version: versionOf(id)
       }
     })
-    .sort((a, b) => (a._rank === b._rank ? a.id.localeCompare(b.id) : a._rank - b._rank))
-    .map(({ _rank, ...m }) => {
+    // Cheapest tier first, and within a tier the newest family first, so the
+    // automatic default is never the most expensive model available.
+    .sort(
+      (a, b) =>
+        a._rank - b._rank ||
+        b._version - a._version ||
+        a.id.length - b.id.length ||
+        a.id.localeCompare(b.id)
+    )
+    .map(({ _rank, _version, ...m }) => {
       void _rank
+      void _version
       return m
     })
 }
@@ -113,9 +137,6 @@ export function describeModels(ids: string[]): ProviderModel[] {
  */
 export function pickDefaultModel(models: ProviderModel[]): string | null {
   if (models.length === 0) return null
-  const cheap = models.find((m) => {
-    const note = noteFor(m.id)
-    return note?.defaultable === true
-  })
+  const cheap = models.find((m) => TIER_NOTE[tierOf(m.id)].defaultable)
   return (cheap ?? models[0]).id
 }

@@ -1,32 +1,38 @@
 /**
  * The contract between the renderer and the main process.
  *
- * Types only — this file is erased at compile time, so both the preload
- * bundle and the React bundle can import it without either pulling the
- * other's runtime in. Nothing here carries a credential: the renderer is
- * never told the API key, only whether one exists.
+ * Types only — this file is erased at compile time, so both the preload bundle
+ * and the React bundle import it without either pulling the other's runtime in.
+ * Nothing here carries a credential: the renderer is never told an API key,
+ * only whether one exists and its last four characters.
  */
 
 export interface ProviderModel {
   id: string
   name: string
   description: string
-  /** True when the id came back from the provider rather than our catalogue. */
   verified: boolean
 }
 
+/** Static facts about a provider, for rendering its card. */
+export interface ProviderDescriptor {
+  id: string
+  name: string
+  blurb: string
+  keyUrl: string
+}
+
 export interface ProviderStatus {
-  /** A key is stored and the last check succeeded. */
+  id: string
+  name: string
   connected: boolean
-  /** A key is stored, whether or not it currently works. */
   hasKey: boolean
-  /** Masked for display, e.g. "sk-…4f2a". Never the whole key. */
+  /** Masked, e.g. "…4f2a". Never the whole key. */
   keyHint: string | null
   selectedModel: string | null
   models: ProviderModel[]
 }
 
-/** Normalised failure kinds, so the UI can offer the right next step. */
 export type ProviderErrorKind =
   | 'auth'
   | 'rate_limit'
@@ -38,46 +44,108 @@ export type ProviderErrorKind =
 
 export interface ConnectionResult {
   success: boolean
-  /** Safe, user-facing text. Never contains the key or a raw API payload. */
   error?: string
   errorKind?: ProviderErrorKind
   status?: ProviderStatus
 }
+
+/* ------------------------------------------------------------- workspace -- */
+
+export interface WorkspaceInfo {
+  root: string | null
+  name: string | null
+  exists: boolean
+}
+
+/* ----------------------------------------------------------------- tasks -- */
 
 export interface GenerationTurn {
   role: 'user' | 'assistant'
   content: string
 }
 
-export interface GenerateParams {
-  input: string
-  /** Prior turns for this session. The main process trims them. */
+export interface RunTaskParams {
+  prompt: string
   history?: GenerationTurn[]
-  /** Which agent is asking, so the right system prompt is used. */
-  agentRole?: string
+  /** A specific agent id, or 'all' to involve the whole enabled team. */
+  target?: string
 }
 
-export interface GenerationResult {
-  success: boolean
-  text?: string
-  responseId?: string
-  model?: string
+export interface RunTaskAck {
+  accepted: boolean
+  taskId?: string
   error?: string
-  errorKind?: ProviderErrorKind
 }
 
-export interface OpenAIApi {
-  connect(apiKey: string): Promise<ConnectionResult>
-  disconnect(): Promise<ProviderStatus>
-  getStatus(): Promise<ProviderStatus>
-  testConnection(): Promise<ConnectionResult>
-  selectModel(modelId: string): Promise<ProviderStatus>
-  generate(params: GenerateParams): Promise<GenerationResult>
+/** Mirrors the main process's RuntimeEvent. */
+export interface AgentRuntimeEvent {
+  type: string
+  taskId?: string
+  agentId?: string
+  agentName?: string
+  activity?: string
+  message?: string
+  task?: string
+  /** What the agent is doing right now, e.g. "Reading package.json". */
+  action?: string
+  tool?: string
+  target?: string
+  path?: string
+  model?: string
+  at: number
 }
+
+export type ExecutionProfile = 'quick' | 'normal' | 'deep'
+
+/** An agent's persisted configuration. Never carries runtime state. */
+export interface AgentConfig {
+  id: string
+  name: string
+  role: string
+  characterSlot: number
+  providerId: string
+  modelId: string | null
+  instructions: string
+  tools: string[]
+  profile: ExecutionProfile
+  enabled: boolean
+}
+
+export interface ToolFamilyInfo {
+  id: string
+  label: string
+  blurb: string
+}
+
+/* ------------------------------------------------------------------- api -- */
 
 export interface BackstageApi {
   platform: string
-  openai: OpenAIApi
+
+  providers: {
+    list(): Promise<ProviderDescriptor[]>
+    status(): Promise<ProviderStatus[]>
+    connect(providerId: string, apiKey: string): Promise<ConnectionResult>
+    disconnect(providerId: string): Promise<ProviderStatus>
+    test(providerId: string): Promise<ConnectionResult>
+    selectModel(providerId: string, modelId: string): Promise<ProviderStatus>
+  }
+
+  workspace: {
+    get(): Promise<WorkspaceInfo>
+    choose(): Promise<WorkspaceInfo>
+    clear(): Promise<WorkspaceInfo>
+  }
+
+  agents: {
+    list(): Promise<AgentConfig[]>
+    save(agent: Partial<AgentConfig>): Promise<AgentConfig[]>
+    remove(agentId: string): Promise<AgentConfig[]>
+    toolFamilies(): Promise<ToolFamilyInfo[]>
+    run(params: RunTaskParams): Promise<RunTaskAck>
+    /** Subscribe to runtime events. Returns an unsubscribe function. */
+    onEvent(handler: (event: AgentRuntimeEvent) => void): () => void
+  }
 }
 
 declare global {

@@ -7,7 +7,9 @@ import { STATUS_GLYPH } from '../../characters/character.states'
 import type { AgentStatus } from '../../agents/agent.types'
 import { ActivityFeed } from './ActivityFeed'
 import { PromptBox } from './PromptBox'
-import { useProvider } from '../../providers/useProvider'
+import { useProviders } from '../../providers/useProviders'
+import { useAgentConfigs } from '../../agents/useAgentConfigs'
+import { useRuntimeEvents } from '../../agents/useRuntimeEvents'
 import type { GenerationTurn } from '../../shared/providerApi'
 
 interface Props {
@@ -47,10 +49,17 @@ export function CommandCenter({ theme, engine }: Props) {
   const pushSystemMessage = useBackstage((s) => s.pushSystemMessage)
   const mode = useBackstage((s) => s.mode)
   const setPage = useBackstage((s) => s.setPage)
-  const { provider } = useProvider()
+  const { statuses, workspace, anyConnected } = useProviders()
+  const { agents: configs } = useAgentConfigs()
+  const target = useBackstage((s) => s.chatTarget)
+  const setTarget = useBackstage((s) => s.setChatTarget)
 
-  const connected = provider?.connected ?? false
+  // Runtime events drive both the world and this panel.
+  useRuntimeEvents()
+
+  const connected = anyConnected
   const live = mode === 'real'
+  const activeProvider = statuses.find((p) => p.connected)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -63,6 +72,14 @@ export function CommandCenter({ theme, engine }: Props) {
     acc[k] = (acc[k] ?? 0) + 1
     return acc
   }, {})
+
+  const modelFor = (agentId?: string) => {
+    const cfg = configs.find((a) => a.id === agentId)
+    if (!cfg) return ''
+    const provider = statuses.find((p) => p.id === cfg.providerId)
+    const model = cfg.modelId ?? provider?.selectedModel
+    return [provider?.name, model].filter(Boolean).join(' · ')
+  }
 
   const busy = task?.status === 'running'
   const failed = task?.status === 'failed'
@@ -78,13 +95,13 @@ export function CommandCenter({ theme, engine }: Props) {
     if (!connected) {
       // Never make a network call we know will fail.
       pushSystemMessage(
-        'OpenAI is not connected. Connect an OpenAI account to start working.'
+        'No AI provider is connected. Connect one in Account to start working.'
       )
       return
     }
 
     /*
-     * Prior turns for continuity. The transcript is the source of truth, and
+     * Prior turns for continuity. The transcript is the source of truth here;
      * the main process trims it again before it goes out, so a long session
      * cannot quietly grow the request.
      */
@@ -96,23 +113,31 @@ export function CommandCenter({ theme, engine }: Props) {
         content: m.text
       }))
 
-    void teamRuntime.runLiveTask(text, async (input) => {
-      const res = await window.backstage.openai.generate({
-        input,
-        history,
-        agentRole: theme.characters[0]?.role
-      })
-      if (!res.success || !res.text) {
-        throw new Error(
-          res.error ?? 'Something went wrong while contacting OpenAI.'
-        )
+    /*
+     * Fire and forget: the task runs in the main process and reports back as
+     * events, which is what lets the world animate while it works rather than
+     * freezing until a promise resolves.
+     */
+    void window.backstage.agents.run({ prompt: text, history, target }).then((ack) => {
+      if (!ack.accepted) {
+        pushSystemMessage(ack.error ?? 'Could not start that task.')
       }
-      return { text: res.text, model: res.model }
     })
   }
 
+  /*
+   * The configured name wins over the character's own: this is the user's
+   * agent, wearing whichever costume the active world provides.
+   */
   const nameFor = (agentId?: string) =>
-    theme.characters.find((c) => c.agentId === agentId)?.name ?? 'Agent'
+    configs.find((a) => a.id === agentId)?.name ??
+    agents.find((v) => v.characterId === agentId)?.name ??
+    'Agent'
+
+  const targetName =
+    target === 'all'
+      ? 'The team'
+      : (configs.find((a) => a.id === target)?.name ?? 'your team')
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col border-l-[3px] border-ink bg-cream">
@@ -143,6 +168,31 @@ export function CommandCenter({ theme, engine }: Props) {
             )
           })}
         </ul>
+        {/* Who the user is talking to. The runtime routes to that agent's
+            provider, model, instructions and tools. */}
+        <div className="mt-3 flex items-center gap-2">
+          <label
+            htmlFor="chat-target"
+            className="font-pixel text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3"
+          >
+            Talk to
+          </label>
+          <select
+            id="chat-target"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            className="min-w-0 flex-1 border-2 border-ink bg-paper px-2 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink outline-none focus:border-brand-deep"
+          >
+            {configs
+              .filter((a) => a.enabled)
+              .map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} — {a.role}
+                </option>
+              ))}
+            <option value="all">All agents</option>
+          </select>
+        </div>
       </header>
 
       {/* Current case. */}
@@ -216,8 +266,13 @@ export function CommandCenter({ theme, engine }: Props) {
                 </li>
               ) : (
                 <li key={m.id}>
-                  <p className="font-pixel text-xs font-semibold uppercase tracking-[0.06em] text-ink">
-                    {nameFor(m.agentId)}
+                  <p className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-pixel text-xs font-semibold uppercase tracking-[0.06em] text-ink">
+                      {nameFor(m.agentId)}
+                    </span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                      {modelFor(m.agentId)}
+                    </span>
                   </p>
                   <p className="mt-1 font-ui text-[13px] leading-[1.6] text-ink-3">
                     {m.text}
@@ -243,20 +298,22 @@ export function CommandCenter({ theme, engine }: Props) {
       <ActivityFeed activity={activity} theme={theme} />
 
       <div className="shrink-0 border-t-[3px] border-ink p-4">
-        {live && !connected && (
+        {live && (!connected || !workspace?.root) && (
           <div className="mb-3 border-[3px] border-ink bg-brand-pale px-3 py-2.5">
             <p className="font-pixel text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
-              OpenAI isn&apos;t connected
+              {!connected ? 'No provider connected' : 'No project open'}
             </p>
             <p className="mt-1 font-ui text-xs leading-snug text-ink-3">
-              Connect an OpenAI account to start working.
+              {!connected
+                ? 'Connect a provider in Account to start working.'
+                : 'Agents can inspect your code once you open a project folder.'}
             </p>
             <button
               type="button"
               onClick={() => setPage('account')}
               className="mt-2 border-2 border-ink bg-brand px-2.5 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px"
             >
-              Connect OpenAI
+              {!connected ? 'Open Account' : 'Open a folder'}
             </button>
           </div>
         )}
@@ -264,7 +321,13 @@ export function CommandCenter({ theme, engine }: Props) {
         <PromptBox
           onSubmit={submit}
           disabled={busy}
-          placeholder={busy ? 'Your team is working…' : 'Ask your team…'}
+          placeholder={
+            busy
+              ? `${targetName} is working…`
+              : target === 'all'
+                ? 'Ask your team…'
+                : `Ask ${targetName}…`
+          }
         />
         <p className="mt-2 flex flex-wrap items-center gap-x-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
           <span>
@@ -275,10 +338,18 @@ export function CommandCenter({ theme, engine }: Props) {
           <span className={live && connected ? 'text-brand-deep' : undefined}>
             {live
               ? connected
-                ? provider?.selectedModel ?? 'openai'
+                ? activeProvider?.selectedModel ?? activeProvider?.name ?? 'connected'
                 : 'not connected'
               : 'simulated'}
           </span>
+          {live && (
+            <>
+              <span aria-hidden>·</span>
+              <span title={workspace?.root ?? undefined}>
+                {workspace?.root ? workspace.name : 'no workspace'}
+              </span>
+            </>
+          )}
         </p>
       </div>
     </section>

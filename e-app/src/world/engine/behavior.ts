@@ -12,6 +12,14 @@ import type { Bubble, CharacterRuntime, PathNode } from '../world.types'
 export class Director {
   /** spot key -> character id holding it. */
   private reserved = new Map<string, string>()
+  /**
+   * character id -> the desk it has claimed as its own.
+   *
+   * A character keeps the same desk for the life of the session, so the office
+   * has stable geography: when an agent finishes and later picks up new work,
+   * it walks back to where it sat before rather than to a new random seat.
+   */
+  private homes = new Map<string, number>()
 
   constructor(
     private scene: SceneDef,
@@ -23,7 +31,8 @@ export class Director {
     return holder === undefined || holder === self
   }
 
-  private release(c: CharacterRuntime): void {
+  /** Give up any spot this character holds, so a later arrival can use it. */
+  release(c: CharacterRuntime): void {
     if (c.spotKey && this.reserved.get(c.spotKey) === c.def.id) {
       this.reserved.delete(c.spotKey)
     }
@@ -89,14 +98,19 @@ export class Director {
 
     switch (status) {
       case 'working': {
+        // Its own desk first, then its theme-preferred one, then any free one.
+        const claimed = this.homes.get(c.def.id)
         const order = [
+          ...(claimed !== undefined ? [claimed] : []),
           c.def.homeDesk,
-          ...this.scene.desks.map((_, i) => i).filter((i) => i !== c.def.homeDesk)
-        ]
+          ...this.scene.desks.map((_, i) => i)
+        ].filter((v, i, arr) => arr.indexOf(v) === i)
+
         for (const i of order) {
           const key = `desk:${i}`
           if (this.isFree(key, c.def.id)) {
             c.desk = i
+            this.homes.set(c.def.id, i)
             this.take(c, key, this.scene.desks[i])
             return
           }
@@ -114,8 +128,23 @@ export class Director {
         this.sendToConversation(c, all)
         return
 
-      case 'idle':
-        // Occasionally the coffee machine, otherwise somewhere to loiter.
+      case 'idle': {
+        /*
+         * An agent that has finished settles back at its own desk. That is
+         * what makes the office read as a workplace with assigned seats rather
+         * than a room people drift around in.
+         */
+        const claimed = this.homes.get(c.def.id)
+        if (claimed !== undefined && this.rng() < 0.7) {
+          const key = `desk:${claimed}`
+          if (this.isFree(key, c.def.id)) {
+            c.desk = claimed
+            this.take(c, key, this.scene.desks[claimed])
+            return
+          }
+        }
+
+        // Otherwise the coffee machine, or somewhere to loiter.
         if (this.rng() < 0.35) {
           const free = this.scene.coffeeSpots
             .map((s, i) => ({ s, key: `coffee:${i}` }))
@@ -128,6 +157,7 @@ export class Director {
         }
         this.sendToWander(c)
         return
+      }
 
       default:
         this.sendToWander(c)

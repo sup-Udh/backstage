@@ -19,6 +19,8 @@ export type Bubble = 'none' | 'think' | 'talk' | 'spark'
  * React state: it changes every frame and must never trigger a re-render.
  */
 export interface CharacterRuntime {
+  /** Which agent this body belongs to. The definition is only its look. */
+  agentId: string
   def: CharacterDef
   /** Which model drives this character, for the provider badge. */
   model: string

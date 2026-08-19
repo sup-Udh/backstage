@@ -18,18 +18,34 @@ export type AgentStatus =
   | 'error'
 
 export interface Agent {
-  /** Stable id. Themes bind their characters to this. */
+  /** Stable id, matching the persisted configuration. */
   id: string
+  /** The configured name. Authoritative over the character's own name. */
+  name: string
+  role: string
+  /**
+   * Which of the active theme's characters portrays this agent. A slot
+   * rather than a character id, because the cast changes with the world.
+   */
+  slot: number
   /** Which model powers this agent, e.g. "Claude Opus". */
   model: string
   status: AgentStatus
   /** Human readable current task, shown in tooltips. */
   task: string | null
   /**
-   * Whether this agent is in the office yet. Reserves start inactive and are
-   * called in as the workload grows, which is what makes the room fill up.
+   * Whether this agent is configured and available at all.
    */
   active: boolean
+  /**
+   * Whether the agent is physically present in the world right now.
+   *
+   * Deliberately separate from `status`: an agent can be idle and visible
+   * (mid-task, between steps) or idle and hidden (not on a task at all). The
+   * world renders exactly the agents assigned to live work, so a big roster
+   * does not permanently crowd the office.
+   */
+  visible: boolean
 }
 
 export type AgentListener = (agents: Agent[]) => void

@@ -6,15 +6,15 @@ import type {
 /**
  * What every AI provider must offer.
  *
- * Nothing above this interface knows about the OpenAI SDK, the Responses API,
- * or OpenAI's error shapes. Adding Anthropic or Gemini later means writing a
- * second class here — the agent layer, the chat panel, the world and the
- * character system stay untouched.
+ * Nothing above this interface knows about a specific SDK, a specific request
+ * shape, or a specific error format. Adding a provider means writing one class
+ * that satisfies this — the agent runtime, the tools, the chat panel, the
+ * world and the character system stay untouched.
  */
 
 export interface ProviderFailure {
   kind: ProviderErrorKind
-  /** Safe to show a user. Never contains the key or a raw payload. */
+  /** Safe to show a user. Never contains a key or a raw payload. */
   message: string
 }
 
@@ -25,17 +25,52 @@ export interface TestResult {
   models?: ProviderModel[]
 }
 
-export interface GenerateRequest {
-  model: string
-  input: string
-  system?: string
-  history?: { role: 'user' | 'assistant'; content: string }[]
+/** A tool as the model should see it. Provider-neutral. */
+export interface ToolSpec {
+  name: string
+  description: string
+  parameters: {
+    type: 'object'
+    properties: Record<string, unknown>
+    required?: string[]
+  }
 }
 
-export interface GenerateSuccess {
-  text: string
-  responseId?: string
+export interface ToolCall {
+  /** Provider-issued id, echoed back with the result. */
+  id: string
+  name: string
+  arguments: Record<string, unknown>
+}
+
+/**
+ * One turn of the conversation, in a shape every provider can express.
+ * `tool` turns carry the output of a call the model asked for.
+ */
+export type TurnRole = 'user' | 'assistant' | 'tool'
+
+export interface Turn {
+  role: TurnRole
+  content?: string
+  /** On an assistant turn: calls the model wants run. */
+  toolCalls?: ToolCall[]
+  /** On a tool turn: which call this answers. */
+  toolCallId?: string
+  toolName?: string
+}
+
+export interface GenerateTurnRequest {
   model: string
+  system: string
+  turns: Turn[]
+  tools: ToolSpec[]
+}
+
+export interface GenerateTurnResult {
+  /** Final prose, when the model is done. */
+  text?: string
+  /** Tools the model wants run before it can continue. */
+  toolCalls?: ToolCall[]
 }
 
 export interface AIProvider {
@@ -44,5 +79,10 @@ export interface AIProvider {
 
   testConnection(): Promise<TestResult>
   listModels(): Promise<ProviderModel[]>
-  generateResponse(req: GenerateRequest): Promise<GenerateSuccess>
+
+  /**
+   * One round trip. The runtime owns the loop: it calls this, runs any tools
+   * the model asked for, appends the results and calls again.
+   */
+  generateTurn(req: GenerateTurnRequest): Promise<GenerateTurnResult>
 }

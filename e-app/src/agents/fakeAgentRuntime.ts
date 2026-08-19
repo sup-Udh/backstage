@@ -2,7 +2,6 @@ import type { Agent, AgentListener, AgentRuntime, AgentStatus } from './agent.ty
 import { makeRng } from '../world/pixel/ops'
 import { EventBus } from './agentEvents'
 import { buildTaskScript, type Beat } from './taskScript'
-import { INITIAL_ACTIVE } from './roster'
 
 /**
  * A stand-in for the real agent event stream.
@@ -70,6 +69,9 @@ const DURATIONS: Record<AgentStatus, [number, number]> = {
 export interface FakeAgentSpec {
   id: string
   model: string
+  name?: string
+  role?: string
+  slot?: number
 }
 
 export class FakeAgentRuntime implements AgentRuntime {
@@ -102,10 +104,14 @@ export class FakeAgentRuntime implements AgentRuntime {
     this.rng = makeRng(seed)
     this.agents = specs.map((s, i) => ({
       id: s.id,
+      name: s.name ?? s.id,
+      role: s.role ?? 'Agent',
+      slot: s.slot ?? i,
       model: s.model,
       status: 'idle',
       task: null,
-      active: i < INITIAL_ACTIVE
+      active: true,
+      visible: false
     }))
     this.remaining = specs.map(() => 0)
     this.openingBeats()
@@ -124,7 +130,7 @@ export class FakeAgentRuntime implements AgentRuntime {
       { status: 'working', duration: 21, task: 'Writing migration 0042' }
     ]
     this.agents.forEach((a, i) => {
-      if (!a.active) return
+      if (!a.visible) return
       const b = beats[i % beats.length]
       a.status = b.status
       a.task = b.task
@@ -143,9 +149,9 @@ export class FakeAgentRuntime implements AgentRuntime {
     return this.agents
   }
 
-  /** Only the agents currently in the office. */
+  /** Agents physically present in the world right now. */
   getActive(): Agent[] {
-    return this.agents.filter((a) => a.active)
+    return this.agents.filter((a) => a.visible)
   }
 
   /**
@@ -154,14 +160,89 @@ export class FakeAgentRuntime implements AgentRuntime {
    * walks them in from the door.
    */
   activateNext(): Agent | null {
-    const next = this.agents.find((a) => !a.active)
+    const next = this.agents.find((a) => !a.visible)
     if (!next) return null
-    next.active = true
-    next.status = 'idle'
-    next.task = null
-    this.remaining[this.agents.indexOf(next)] = 1.5
+    return this.show(next.id)
+  }
+
+  /**
+   * Add an agent the runtime has not seen before. Configuration lives in
+   * the main process, so the roster here is filled in as agents appear.
+   */
+  register(spec: FakeAgentSpec): Agent {
+    const existing = this.get(spec.id)
+    if (existing) {
+      // Configuration can change while an agent is standing in the room.
+      existing.model = spec.model
+      if (spec.name) existing.name = spec.name
+      if (spec.role) existing.role = spec.role
+      if (spec.slot !== undefined) existing.slot = spec.slot
+      return existing
+    }
+    const agent: Agent = {
+      id: spec.id,
+      name: spec.name ?? spec.id,
+      role: spec.role ?? 'Agent',
+      slot: spec.slot ?? this.agents.length,
+      model: spec.model,
+      status: 'idle',
+      task: null,
+      active: true,
+      visible: false
+    }
+    this.agents.push(agent)
+    this.remaining.push(0)
     this.emit()
-    return next
+    return agent
+  }
+
+  /**
+   * Bring an agent into the world. Called when it is assigned to a task,
+   * by whichever path is running — simulated or real. This is the single
+   * place a character comes into existence.
+   */
+  show(agentId: string): Agent | null {
+    const agent = this.get(agentId)
+    if (!agent) return null
+    if (!agent.visible) {
+      agent.visible = true
+      agent.status = 'idle'
+      agent.task = null
+      this.remaining[this.agents.indexOf(agent)] = Number.POSITIVE_INFINITY
+      this.emit()
+    }
+    return agent
+  }
+
+  /**
+   * Bring the whole roster into the world and start them working.
+   *
+   * Only for the landing page's showcase office. The workspace deliberately
+   * does the opposite: there, presence is earned by being assigned to a task.
+   */
+  populate(): void {
+    for (const agent of this.agents) {
+      agent.visible = true
+    }
+    this.openingBeats()
+    this.emit()
+  }
+
+  /** True while any visible agent is still held mid-task. */
+  private anyBusy(): boolean {
+    return this.agents.some(
+      (a) => a.visible && this.remaining[this.agents.indexOf(a)] === Number.POSITIVE_INFINITY
+    )
+  }
+
+  /** Send an agent home. The definition survives; only the body leaves. */
+  hide(agentId: string): void {
+    const agent = this.get(agentId)
+    if (!agent || !agent.visible) return
+    agent.visible = false
+    agent.status = 'idle'
+    agent.task = null
+    this.emit()
   }
 
   get(id: string): Agent | undefined {
@@ -220,101 +301,26 @@ export class FakeAgentRuntime implements AgentRuntime {
   }
 
   /**
-   * Run a task against a real provider.
+   * Run a task as a scripted simulation.
    *
-   * The agent state machine and the events are exactly the ones the scripted
-   * path emits, so the world, the activity feed and the transcript cannot tell
-   * a real request from a simulated one. The only difference is that the
-   * middle of the sequence is an awaited network call rather than a timer.
-   */
-  async runLiveTask(
-    prompt: string,
-    execute: (input: string) => Promise<{ text: string; model?: string }>
-  ): Promise<void> {
-    if (this.isBusy()) return
-
-    const lead = this.getActive()[0]
-    if (!lead) return
-
-    this.liveActive = true
-    const title = prompt.trim().replace(/\s+/g, ' ').slice(0, 46)
-
-    this.events.emit({
-      type: 'task.created',
-      task: title,
-      activity: `Task received: ${title}`
-    })
-
-    this.hold(lead.id, 'thinking', 'Reading the brief')
-    this.events.emit({
-      type: 'agent.thinking',
-      agentId: lead.id,
-      activity: 'Started reading the brief.'
-    })
-
-    // A beat of thinking before the walk to a desk, so the sequence reads.
-    await new Promise((r) => setTimeout(r, 600))
-
-    this.hold(lead.id, 'working', title)
-
-    try {
-      const result = await execute(prompt)
-
-      this.events.emit({
-        type: 'agent.working',
-        agentId: lead.id,
-        activity: result.model
-          ? `Working with ${result.model}.`
-          : 'Working on the task.'
-      })
-
-      this.hold(lead.id, 'success', 'Done')
-      this.events.emit({
-        type: 'agent.completed',
-        agentId: lead.id,
-        activity: 'Completed the task.',
-        message: result.text
-      })
-      this.events.emit({ type: 'task.completed', task: title, activity: 'Task closed.' })
-    } catch (err) {
-      // The character must never be left stuck in `working`.
-      this.hold(lead.id, 'error', 'Blocked')
-      this.events.emit({
-        type: 'agent.failed',
-        agentId: lead.id,
-        activity: 'Could not finish the task.',
-        message:
-          err instanceof Error
-            ? err.message
-            : 'Something went wrong while contacting the provider.'
-      })
-      this.events.emit({ type: 'task.failed', task: title, activity: 'Task failed.' })
-    } finally {
-      // Let the result register, then hand the office back to the scheduler.
-      await new Promise((r) => setTimeout(r, 1800))
-      this.liveActive = false
-      for (let i = 0; i < this.agents.length; i++) {
-        if (this.agents[i].active) this.assign(i, i % 2 === 0 ? 'working' : 'idle')
-      }
-      this.emit()
-    }
-  }
-
-  /**
-   * Accept a task from the user and play its timeline. Ignored while another
-   * task is still running, so the office can never be driven by two scripts.
+   * Deliberately goes through the same show()/hide() lifecycle as a real task:
+   * assignment brings characters into the world, and the end of the task takes
+   * them out. Only the execution backend differs.
    */
   submitTask(prompt: string): boolean {
-    if (this.taskActive) return false
+    if (this.isBusy()) return false
 
-    // Every new task brings one more pair of hands into the office.
-    const joined = this.activateNext()
-    if (joined) {
-      this.events.emit({
-        type: 'agent.started',
-        agentId: joined.id,
-        activity: 'Joined the team.'
-      })
+    const cast = this.agents.slice(0, 3)
+    for (const agent of cast) {
+      const joining = !agent.visible
+      this.show(agent.id)
+      if (joining) {
+        this.events.emit({
+          type: 'agent.started',
+          agentId: agent.id,
+          activity: 'Joined the task.'
+        })
+      }
     }
 
     this.script = buildTaskScript(prompt, this.getActive())
@@ -322,6 +328,89 @@ export class FakeAgentRuntime implements AgentRuntime {
     this.scriptCursor = 0
     this.taskActive = true
     return true
+  }
+
+  /**
+   * Apply an event from the main-process agent runtime.
+   *
+   * This is the whole real-mode path. The runtime up there owns the provider
+   * and the tool loop; this side owns bodies in a room. Because activation and
+   * deactivation arrive as events, the character lifecycle is identical
+   * whether the task was run by OpenAI, by Gemini or by the scripted
+   * simulation — there is no provider-specific spawning logic left.
+   */
+  applyRuntimeEvent(event: {
+    type: string
+    agentId?: string
+    activity?: string
+    message?: string
+    task?: string
+    action?: string
+    tool?: string
+    model?: string
+  }): void {
+    const id = event.agentId
+
+    switch (event.type) {
+      case 'agent.activated':
+        if (id) {
+          this.liveActive = true
+          this.show(id)
+          this.hold(id, 'thinking', event.action ?? 'Picking up the task')
+        }
+        break
+
+      case 'agent.thinking':
+        if (id) this.hold(id, 'thinking', event.action ?? 'Working out what to look at')
+        break
+
+      case 'agent.working':
+      case 'agent.tool.started':
+        /*
+         * The specific action - "Reading package.json" - becomes the agent's
+         * task line, so the hover card and the world tag say what is actually
+         * happening rather than a generic "working".
+         */
+        if (id) this.hold(id, 'working', event.action ?? 'Working')
+        break
+
+      case 'agent.message':
+        if (id) this.hold(id, 'talking', 'Reporting back')
+        break
+
+      case 'agent.completed':
+        if (id) this.hold(id, 'success', 'Done')
+        break
+
+      case 'agent.failed':
+        if (id) this.hold(id, 'error', 'Blocked')
+        break
+
+      case 'agent.idle':
+        /*
+         * Back to idle at the same desk - never removed. Once an agent has
+         * been in the office it stays, so the room accumulates the user's team
+         * instead of emptying after every task. The delay lets the success or
+         * error state register first.
+         */
+        if (id) {
+          const agentId = id
+          window.setTimeout(() => {
+            const agent = this.get(agentId)
+            if (!agent || !agent.visible) return
+            agent.status = 'idle'
+            agent.task = null
+            // Hand it back to the ambient scheduler so it settles naturally.
+            this.remaining[this.agents.indexOf(agent)] = 2 + this.rng() * 3
+            if (!this.anyBusy()) this.liveActive = false
+            this.emit()
+          }, 2200)
+        }
+        break
+
+      default:
+        break
+    }
   }
 
   /** Advance the scripted timeline. Returns true if any agent changed. */
@@ -361,8 +450,9 @@ export class FakeAgentRuntime implements AgentRuntime {
       // settles everyone into normal work rather than freezing them.
       this.taskActive = false
       this.script = []
+      // Same exit as a real task: everyone returns to idle, and stays.
       for (let i = 0; i < this.agents.length; i++) {
-        if (this.agents[i].active) this.assign(i, i % 2 === 0 ? 'working' : 'idle')
+        if (this.agents[i].visible) this.assign(i, 'idle')
       }
       changed = true
     }
@@ -381,7 +471,7 @@ export class FakeAgentRuntime implements AgentRuntime {
     let changed = false
 
     for (let i = 0; i < this.agents.length; i++) {
-      if (!this.agents[i].active) continue
+      if (!this.agents[i].visible) continue
       this.remaining[i] -= dt
       if (this.remaining[i] > 0) continue
 
@@ -429,7 +519,7 @@ export class FakeAgentRuntime implements AgentRuntime {
     const free: number[] = []
     for (let i = 0; i < this.agents.length; i++) {
       if (i === self) continue
-      if (!this.agents[i].active) continue
+      if (!this.agents[i].visible) continue
       if (this.agents[i].status === 'talking') continue
       if (this.agents[i].status === 'success') continue
       free.push(i)

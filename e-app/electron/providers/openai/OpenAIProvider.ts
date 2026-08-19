@@ -2,10 +2,11 @@ import OpenAI from 'openai'
 import type { ProviderModel } from '../../../src/shared/providerApi'
 import type {
   AIProvider,
-  GenerateRequest,
-  GenerateSuccess,
+  GenerateTurnRequest,
+  GenerateTurnResult,
   ProviderFailure,
-  TestResult
+  TestResult,
+  ToolCall
 } from '../provider.types'
 import { describeModels } from './models'
 
@@ -104,33 +105,71 @@ export class OpenAIProvider implements AIProvider {
     return describeModels(ids)
   }
 
-  async generateResponse(req: GenerateRequest): Promise<GenerateSuccess> {
-    /*
-     * The Responses API takes either a plain string or a list of turns. We
-     * send turns so the model has the session's context, with the system
-     * prompt as a leading `developer` message.
-     */
+  /**
+   * One round trip against the Responses API.
+   *
+   * Tool calls come back as `function_call` items in `output`; results go back
+   * as `function_call_output` items keyed by the same `call_id`. That mapping
+   * is the only OpenAI-shaped thing in the whole tool loop.
+   */
+  async generateTurn(req: GenerateTurnRequest): Promise<GenerateTurnResult> {
     const input: OpenAI.Responses.ResponseInput = []
 
-    if (req.system) {
-      input.push({ role: 'developer', content: req.system })
+    for (const turn of req.turns) {
+      if (turn.role === 'tool') {
+        input.push({
+          type: 'function_call_output',
+          call_id: turn.toolCallId ?? '',
+          output: turn.content ?? ''
+        })
+        continue
+      }
+
+      if (turn.role === 'assistant' && turn.toolCalls?.length) {
+        // Replay the calls the model made, so it can see its own history.
+        for (const call of turn.toolCalls) {
+          input.push({
+            type: 'function_call',
+            call_id: call.id,
+            name: call.name,
+            arguments: JSON.stringify(call.arguments)
+          })
+        }
+        if (turn.content) input.push({ role: 'assistant', content: turn.content })
+        continue
+      }
+
+      if (turn.content) {
+        input.push({ role: turn.role, content: turn.content })
+      }
     }
-    for (const turn of req.history ?? []) {
-      input.push({ role: turn.role, content: turn.content })
-    }
-    input.push({ role: 'user', content: req.input })
 
     const response = await this.client.responses.create({
       model: req.model,
-      input
+      instructions: req.system,
+      input,
+      tools: req.tools.map((t) => ({
+        type: 'function' as const,
+        name: t.name,
+        description: t.description,
+        parameters: { ...t.parameters, additionalProperties: false },
+        strict: false
+      }))
     })
 
-    const text = (response.output_text ?? '').trim()
-    if (!text) {
-      throw Object.assign(new Error('Empty response'), { status: 502 })
+    const toolCalls: ToolCall[] = []
+    for (const item of response.output ?? []) {
+      if (item.type !== 'function_call') continue
+      toolCalls.push({
+        id: item.call_id,
+        name: item.name,
+        arguments: safeParse(item.arguments)
+      })
     }
 
-    return { text, responseId: response.id, model: req.model }
+    const text = (response.output_text ?? '').trim()
+    if (toolCalls.length > 0) return { text: text || undefined, toolCalls }
+    return { text }
   }
 }
 
@@ -144,4 +183,15 @@ export function logProviderError(where: string, err: unknown): void {
   const code = (err as { code?: string })?.code ?? '-'
   const name = (err as { name?: string })?.name ?? 'Error'
   console.error(`[openai] ${where} failed: ${name} status=${status} code=${code}`)
+}
+
+/** Model-authored JSON. Malformed arguments become an empty object so the
+ *  tool can reject them with a useful message rather than crashing the loop. */
+function safeParse(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw || '{}')
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
 }
