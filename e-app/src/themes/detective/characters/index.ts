@@ -1,12 +1,22 @@
-import { defineCast } from '../../../characters/defineCast'
 import type { CharacterDef } from '../../../characters/character.types'
 
 /**
- * The detective-office cast: pixel-art interpretations of the role
- * archetypes, not portraits. All four are generated from the same sprite
- * skeleton, so they differ by silhouette and palette only.
+ * The detective-office cast.
  *
- * `agentId` is the only link back to the runtime. Another theme can bind a
+ * Pixel-art interpretations of role archetypes, not portraits. Each one is
+ * specified deliberately rather than recoloured, and the test is whether you
+ * can tell them apart as black silhouettes before colour is considered:
+ *
+ *   Jane        swept fair hair, three-piece, notebook   slim, relaxed
+ *   Lisbon      dark bun, blazer, badge                  regular, upright
+ *   Cho         buzz cut, plain dark suit, nothing else  regular, rigid
+ *   Van Pelt    long auburn hair, cardigan, tablet       slim, upright
+ *   Rigsby      short hair, shirt and tie, coffee mug    broad, slouched
+ *   Wainwright  slicked hair, long coat, briefcase       regular, rigid
+ *   Hightower   ponytail, blazer, earpiece               regular, upright
+ *   Bertram     grey messy hair, cardigan, glasses, pen  slim, forward
+ *
+ * `agentId` is the only link back to the runtime. Another theme binds a
  * completely different character to the same agent.
  */
 export const detectiveCharacters: CharacterDef[] = [
@@ -17,21 +27,23 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Consultant',
     homeDesk: 0,
     appearance: {
-      skin: '#F3C9A0',
-      skinShade: '#D6A377',
-      hair: '#D9B26A',
-      hairShade: '#B48C45',
+      // Warm fair hair swept to one side; the only three-piece in the room.
+      skin: '#F0C9A4',
+      hair: '#D8B26A',
       hairStyle: 'swept',
-      // Three-piece: the most relaxed, least police-like of the four.
-      outfit: '#48536E',
-      outfitShade: '#353F58',
-      shirt: '#FFFFFF',
-      accent: '#B4553F',
-      vest: '#5D6A88',
-      trousers: '#3C4560',
-      shoes: '#2A3145',
+      outfit: '#4C577A',
+      outfitStyle: 'vest',
+      shirt: '#FBF7EE',
+      accent: '#A8442F',
+      vest: '#6A749A',
+      trousers: '#3B4462',
+      shoes: '#2A2F45',
       glasses: false,
-      mouth: 'smirk'
+      build: 'slim',
+      posture: 'relaxed',
+      accessory: 'notebook',
+      accessoryColor: '#FFC94F',
+      expression: 'smirk'
     }
   },
   {
@@ -41,21 +53,23 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Team Lead',
     homeDesk: 0,
     appearance: {
-      skin: '#EFC49F',
-      skinShade: '#D0A075',
-      hair: '#3A2A24',
-      hairShade: '#261B17',
+      // Dark hair up, restrained charcoal, badge at the chest.
+      skin: '#EDC49E',
+      hair: '#33241E',
       hairStyle: 'bun',
-      // Restrained charcoal. Reads as authority next to Jane's blue-grey.
-      outfit: '#3D4257',
-      outfitShade: '#2B2F3F',
-      shirt: '#F2F2F6',
+      outfit: '#333A4E',
+      outfitStyle: 'blazer',
+      shirt: '#F2F3F7',
       accent: null,
       vest: null,
-      trousers: '#272A38',
+      trousers: '#272C3C',
       shoes: '#1B1B2A',
       glasses: false,
-      mouth: 'neutral'
+      build: 'regular',
+      posture: 'upright',
+      accessory: 'badge',
+      accessoryColor: '#FFC94F',
+      expression: 'serious'
     }
   },
   {
@@ -65,21 +79,23 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Technical Investigator',
     homeDesk: 1,
     appearance: {
-      skin: '#E8B98D',
-      skinShade: '#C4935F',
-      hair: '#231C1A',
-      hairShade: '#151011',
-      hairStyle: 'short',
-      // No tie, softer collar: the developer of the group.
-      outfit: '#474D5E',
-      outfitShade: '#343948',
-      shirt: '#C7CDD8',
-      accent: null,
+      // Buzz cut, plain suit, no accessory. Deliberately the most austere
+      // silhouette on the team.
+      skin: '#E4B489',
+      hair: '#1E1917',
+      hairStyle: 'buzz',
+      outfit: '#3E4454',
+      outfitStyle: 'suit',
+      shirt: '#C9D0DA',
+      accent: '#2C3242',
       vest: null,
-      trousers: '#2E323D',
+      trousers: '#2F3441',
       shoes: '#1B1B2A',
-      glasses: true,
-      mouth: 'neutral'
+      glasses: false,
+      build: 'regular',
+      posture: 'rigid',
+      accessory: 'none',
+      expression: 'serious'
     }
   },
   {
@@ -89,42 +105,127 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Research Specialist',
     homeDesk: 2,
     appearance: {
-      skin: '#F6D2AE',
-      skinShade: '#DBAC84',
-      hair: '#A75B33',
-      hairShade: '#7E4223',
+      // Long auburn hair past the shoulders: the tallest outline.
+      skin: '#F4D0AB',
+      hair: '#A85B33',
       hairStyle: 'long',
-      // Warm brown, tying her to the room's wood tones.
-      outfit: '#4E4436',
-      outfitShade: '#3A3228',
+      outfit: '#5E6E5A',
+      outfitStyle: 'cardigan',
       shirt: '#FFF6E4',
       accent: null,
       vest: null,
-      trousers: '#3A3228',
+      trousers: '#3C4438',
       shoes: '#1B1B2A',
       glasses: false,
-      mouth: 'neutral'
+      build: 'slim',
+      posture: 'upright',
+      accessory: 'tablet',
+      accessoryColor: '#FFC94F',
+      expression: 'focused'
+    }
+  },
+  {
+    id: 'rigsby',
+    agentId: 'agent-5',
+    name: 'Rigsby',
+    role: 'Field Agent',
+    homeDesk: 1,
+    appearance: {
+      // Broadest shoulders in the office, no jacket, coffee always in hand.
+      skin: '#EABB91',
+      hair: '#4A3524',
+      hairStyle: 'short',
+      outfit: '#7E8EA6',
+      outfitStyle: 'shirt',
+      shirt: '#E8EDF3',
+      accent: '#3A4557',
+      vest: null,
+      trousers: '#39424F',
+      shoes: '#1B1B2A',
+      glasses: false,
+      build: 'broad',
+      posture: 'slouched',
+      accessory: 'mug',
+      accessoryColor: '#FFFFFF',
+      expression: 'friendly'
+    }
+  },
+  {
+    id: 'wainwright',
+    agentId: 'agent-6',
+    name: 'Wainwright',
+    role: 'Supervisor',
+    homeDesk: 2,
+    appearance: {
+      // Slicked hair and a long coat: the outline reads as management.
+      skin: '#EFC6A0',
+      hair: '#6E5334',
+      hairStyle: 'slick',
+      outfit: '#2F3A4A',
+      outfitStyle: 'coat',
+      shirt: '#FFFFFF',
+      accent: '#7A2E2E',
+      vest: '#445063',
+      trousers: '#28313E',
+      shoes: '#1B1B2A',
+      glasses: false,
+      build: 'regular',
+      posture: 'rigid',
+      accessory: 'briefcase',
+      accessoryColor: '#8A6236',
+      expression: 'skeptical'
+    }
+  },
+  {
+    id: 'hightower',
+    agentId: 'agent-7',
+    name: 'Hightower',
+    role: 'Director',
+    homeDesk: 0,
+    appearance: {
+      // Ponytail off to one side and an earpiece: senior, always on a call.
+      skin: '#8A5F3C',
+      hair: '#2A1D16',
+      hairStyle: 'ponytail',
+      outfit: '#4A3B58',
+      outfitStyle: 'blazer',
+      shirt: '#F2EDE2',
+      accent: null,
+      vest: null,
+      trousers: '#332A3C',
+      shoes: '#1B1B2A',
+      glasses: false,
+      build: 'regular',
+      posture: 'upright',
+      accessory: 'earpiece',
+      accessoryColor: '#FFC94F',
+      expression: 'calm'
+    }
+  },
+  {
+    id: 'bertram',
+    agentId: 'agent-8',
+    name: 'Bertram',
+    role: 'Liaison',
+    homeDesk: 1,
+    appearance: {
+      // Grey untidy hair and glasses: the oldest silhouette in the room.
+      skin: '#EDC4A0',
+      hair: '#9A9A94',
+      hairStyle: 'messy',
+      outfit: '#5A5A66',
+      outfitStyle: 'cardigan',
+      shirt: '#FFFFFF',
+      accent: null,
+      vest: null,
+      trousers: '#3A3A44',
+      shoes: '#1B1B2A',
+      glasses: true,
+      build: 'slim',
+      posture: 'forward',
+      accessory: 'pen',
+      accessoryColor: '#FFC94F',
+      expression: 'tired'
     }
   }
 ]
-
-/**
- * The reserves. They join the office one at a time as the user gives the team
- * more work, so a busy day visibly fills the room.
- */
-const detectiveReserves = defineCast([
-  { id: 'rigsby', agentId: 'agent-5', name: 'Rigsby', role: 'Field Agent', homeDesk: 1,
-    skin: '#EDBE93', hair: '#4A3524', hairStyle: 'short', outfit: '#4A5568',
-    shirt: '#E8EDF3', accent: '#3A4557', trousers: '#39424F' },
-  { id: 'wainwright', agentId: 'agent-6', name: 'Wainwright', role: 'Supervisor', homeDesk: 2,
-    skin: '#F0C6A0', hair: '#8A6A3A', hairStyle: 'swept', outfit: '#2F3A4A',
-    shirt: '#FFFFFF', accent: '#7A2E2E', vest: '#445063', trousers: '#28313E' },
-  { id: 'hightower', agentId: 'agent-7', name: 'Hightower', role: 'Director', homeDesk: 0,
-    skin: '#8A5F3C', hair: '#2A1D16', hairStyle: 'bun', outfit: '#3E3348',
-    shirt: '#F2EDE2', trousers: '#332A3C' },
-  { id: 'bertram', agentId: 'agent-8', name: 'Bertram', role: 'Liaison', homeDesk: 1,
-    skin: '#EFC49F', hair: '#9A9A94', hairStyle: 'short', outfit: '#4A4A55',
-    shirt: '#FFFFFF', accent: '#5C6B8A', trousers: '#3A3A44', glasses: true }
-])
-
-detectiveCharacters.push(...detectiveReserves)

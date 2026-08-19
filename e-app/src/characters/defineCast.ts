@@ -1,4 +1,12 @@
-import type { CharacterDef, HairStyle } from './character.types'
+import type {
+  Accessory,
+  Build,
+  CharacterDef,
+  Expression,
+  HairStyle,
+  Outfit,
+  Posture
+} from './character.types'
 
 /**
  * A compact way to declare cast members.
@@ -37,6 +45,14 @@ export interface CastSpec {
   glasses?: boolean
   smirk?: boolean
   shoes?: string
+
+  /** Silhouette and personality. Defaults keep older casts working. */
+  build?: Build
+  posture?: Posture
+  outfitStyle?: Outfit
+  accessory?: Accessory
+  accessoryColor?: string
+  expression?: Expression
 }
 
 export function defineCast(specs: CastSpec[]): CharacterDef[] {
@@ -60,7 +76,13 @@ export function defineCast(specs: CastSpec[]): CharacterDef[] {
       trousers: s.trousers,
       shoes: s.shoes ?? '#1B1B2A',
       glasses: s.glasses ?? false,
-      mouth: s.smirk ? 'smirk' : 'neutral'
+      mouth: s.smirk ? 'smirk' : 'neutral',
+      build: s.build ?? 'regular',
+      posture: s.posture ?? 'upright',
+      outfitStyle: s.outfitStyle ?? (s.vest ? 'vest' : s.accent ? 'suit' : 'blazer'),
+      accessory: s.accessory ?? 'none',
+      accessoryColor: s.accessoryColor,
+      expression: s.expression ?? (s.smirk ? 'smirk' : 'calm')
     }
   }))
 }
