@@ -27,7 +27,7 @@ export function StatusChip({ status, dark = false, className = '' }: Props) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 font-pixel text-xs font-bold uppercase tracking-[0.14em] ${colour} ${className}`}
+      className={`inline-flex items-center gap-1.5 font-pixel text-xs font-semibold uppercase tracking-[0.08em] ${colour} ${className}`}
     >
       <span aria-hidden className={active ? 'blink' : ''}>
         {STATUS_GLYPH[status]}

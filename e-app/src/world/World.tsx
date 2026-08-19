@@ -166,13 +166,13 @@ export function World({ theme, engine, switching = false }: Props) {
             className="flex flex-wrap items-center justify-between gap-3 border-t-[3px] border-ink-3 bg-ink px-3 py-2"
             style={{ width: sceneW * scale }}
           >
-            <span className="border-2 border-brand-shadow bg-brand px-2 py-0.5 font-pixel text-[10px] font-bold uppercase tracking-[0.16em] text-ink">
+            <span className="border-2 border-brand-shadow bg-brand px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
               {theme.name}
             </span>
 
             <AgentStatus agents={agents} />
 
-            <span className="font-pixel text-[10px] font-bold uppercase tracking-[0.16em] text-dim">
+            <span className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-dim">
               Hover a character
             </span>
           </div>

@@ -29,21 +29,22 @@ export function CharacterTooltip({ agent, left, top }: Props) {
         <span className="absolute bottom-0 left-0 h-[3px] w-[3px] bg-brand" />
         <span className="absolute bottom-0 right-0 h-[3px] w-[3px] bg-brand" />
 
-        <p className="font-pixel text-base font-bold uppercase leading-none tracking-[0.1em] text-brand">
+        <p className="font-pixel text-base font-bold uppercase leading-none tracking-[0.06em] text-brand">
           {agent.name}
         </p>
-        <p className="mt-1 font-pixel text-xs leading-none text-cream-2">
+        <p className="mt-1.5 font-ui text-xs leading-none text-cream-2">
           {agent.role}
         </p>
 
         <div className="my-2 h-px bg-ink-3" />
 
-        <p className="font-pixel text-[11px] leading-none text-dim">
-          Powered by <span className="text-cream">{agent.model}</span>
+        <p className="font-mono text-[11px] leading-none text-dim">
+          <span className="uppercase tracking-[0.08em]">Model</span>{' '}
+          <span className="font-medium text-cream">{agent.model}</span>
         </p>
 
         <p
-          className={`mt-1.5 flex items-center gap-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.12em] ${
+          className={`mt-2 flex items-center gap-1.5 font-pixel text-xs font-semibold uppercase tracking-[0.08em] ${
             active ? 'text-brand' : 'text-dim'
           }`}
         >
@@ -54,7 +55,7 @@ export function CharacterTooltip({ agent, left, top }: Props) {
         </p>
 
         {agent.task && (
-          <p className="mt-1 max-w-[190px] font-pixel text-[11px] leading-tight text-dim">
+          <p className="mt-1.5 max-w-[190px] font-ui text-[11px] leading-snug text-dim">
             {agent.task}
           </p>
         )}

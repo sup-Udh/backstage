@@ -1,7 +1,20 @@
-/* Both faces bundled locally, so the app has no network dependency. */
+/*
+ * All three faces bundled locally, so the app never waits on a network and
+ * never silently falls back to a system font.
+ *
+ *   Inter          product language  - headings, body, navigation
+ *   Pixelify Sans  brand and world   - logo, world labels, status, CTA
+ *   JetBrains Mono technical language - models, counts, system metadata
+ */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
 @import '@fontsource/inter/latin-600.css';
 @import '@fontsource/inter/latin-700.css';
 @import '@fontsource/inter/latin-800.css';
+@import '@fontsource/jetbrains-mono/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+@import '@fontsource/jetbrains-mono/latin-600.css';
+@import '@fontsource/jetbrains-mono/latin-700.css';
 @import '@fontsource/pixelify-sans/latin-400.css';
 @import '@fontsource/pixelify-sans/latin-500.css';
 @import '@fontsource/pixelify-sans/latin-600.css';
@@ -32,10 +45,18 @@
      near-invisible on dark, so dark plates use this instead. */
   --color-dim: #7a7a96;
 
-  /* Headings only. */
-  --font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  /* Everything else: names, body, nav, buttons, labels, HUD, tooltips. */
+  /*
+   * The three type tiers. Components pick a tier, never a family, so the
+   * system can be retuned in one place.
+   *
+   *   ui     Inter          - the product speaking: headings, prose, nav
+   *   pixel  Pixelify Sans  - the brand and the game world: logo, worlds,
+   *                           status labels, the CTA
+   *   mono   JetBrains Mono - the machine speaking: models, counts, IDs
+   */
+  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-pixel: 'Pixelify Sans', ui-monospace, 'Courier New', monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Courier New', monospace;
 }
 
 html,
@@ -48,8 +69,8 @@ body,
 body {
   background: var(--color-cream);
   color: var(--color-ink);
-  font-family: var(--font-pixel);
-  font-weight: 500;
+  font-family: var(--font-ui);
+  font-weight: 400;
   /* Pixel type is crisper without synthetic smoothing tweaks. */
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;

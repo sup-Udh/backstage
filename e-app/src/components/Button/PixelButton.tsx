@@ -25,8 +25,8 @@ export function PixelButton({
 }: Props) {
   const sizing =
     size === 'lg'
-      ? 'px-8 py-3 text-lg tracking-[0.12em]'
-      : 'px-4 py-2 text-sm tracking-[0.1em]'
+      ? 'px-8 py-3.5 text-lg tracking-[0.04em]'
+      : 'px-4 py-2 text-sm tracking-[0.04em]'
 
   const skin =
     variant === 'primary'

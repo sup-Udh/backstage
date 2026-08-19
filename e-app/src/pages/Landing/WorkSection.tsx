@@ -72,10 +72,10 @@ export function WorkSection({ theme }: Props) {
     <section id="work" className="border-t-[3px] border-ink px-6 py-20">
       <div className="mx-auto max-w-[1400px]">
         <header className="mb-12 max-w-2xl">
-          <h2 className="font-heading text-4xl font-extrabold uppercase leading-none tracking-[-0.02em] text-ink sm:text-5xl">
+          <h2 className="font-ui text-4xl font-extrabold uppercase leading-[1.02] tracking-[-0.04em] text-ink sm:text-5xl">
             They don&apos;t just answer.
           </h2>
-          <p className="mt-4 font-pixel text-lg leading-relaxed text-ink-3">
+          <p className="mt-4 max-w-[520px] font-ui text-[17px] leading-[1.6] text-ink-3">
             They investigate. They code. They research. They collaborate.
           </p>
         </header>
@@ -93,10 +93,10 @@ export function WorkSection({ theme }: Props) {
                   scale={3}
                   className="mb-3"
                 />
-                <p className="font-pixel text-lg font-bold uppercase leading-none tracking-[0.08em] text-ink">
+                <p className="font-pixel text-lg font-bold uppercase leading-none tracking-[0.04em] text-ink">
                   {step.label}
                 </p>
-                <p className="mt-1.5 font-pixel text-xs leading-tight text-ink-3">
+                <p className="mt-2 font-ui text-xs leading-snug text-ink-3">
                   {step.note}
                 </p>
               </div>
@@ -104,7 +104,7 @@ export function WorkSection({ theme }: Props) {
               {i < STEPS.length - 1 && (
                 <span
                   aria-hidden
-                  className="hidden items-center px-3 font-pixel text-2xl font-bold text-brand-deep lg:flex"
+                  className="hidden items-center px-3 font-mono text-2xl font-bold text-brand-deep lg:flex"
                 >
                   &gt;
                 </span>
@@ -116,20 +116,20 @@ export function WorkSection({ theme }: Props) {
         {/* The contrast: what you stop looking at, and what replaces it. */}
         <div className="grid items-stretch gap-6 lg:grid-cols-2">
           <div className="border-[3px] border-ink bg-ink p-6 shadow-[4px_4px_0_0_var(--color-ink-3)]">
-            <p className="mb-4 font-pixel text-[11px] font-bold uppercase tracking-[0.18em] text-dim">
+            <p className="mb-4 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-dim">
               No more staring at
             </p>
             <div className="space-y-2">
               {TERMINAL_LINES.map((line) => (
                 <p
                   key={line}
-                  className="font-pixel text-base leading-none text-dim"
+                  className="font-mono text-sm leading-none text-dim"
                 >
                   <span className="mr-2 text-dim">&gt;</span>
                   {line}
                 </p>
               ))}
-              <p className="font-pixel text-base leading-none text-dim">
+              <p className="font-mono text-sm leading-none text-dim">
                 <span className="mr-2">&gt;</span>
                 <span className="blink text-brand">_</span>
               </p>
@@ -144,7 +144,7 @@ export function WorkSection({ theme }: Props) {
               scale={4}
               className="relative shrink-0"
             />
-            <p className="relative font-pixel text-3xl font-bold uppercase leading-tight tracking-[0.02em] text-ink sm:text-4xl">
+            <p className="relative font-ui text-3xl font-extrabold uppercase leading-[1.1] tracking-[-0.03em] text-ink sm:text-4xl">
               Watch them
               <br />
               work.

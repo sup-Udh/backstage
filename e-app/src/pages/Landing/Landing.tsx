@@ -55,10 +55,10 @@ export function Landing() {
 
         <section className="border-t-[3px] border-ink px-6 py-20">
           <div className="mx-auto flex max-w-[1400px] flex-col items-center gap-6 text-center">
-            <h2 className="max-w-3xl font-heading text-4xl font-extrabold uppercase leading-[1.05] tracking-[-0.02em] text-ink sm:text-5xl">
+            <h2 className="max-w-[760px] font-ui text-4xl font-extrabold uppercase leading-[1.02] tracking-[-0.04em] text-ink sm:text-5xl">
               Give your AI agents a place to work.
             </h2>
-            <p className="max-w-xl font-pixel text-lg leading-relaxed text-ink-3">
+            <p className="max-w-[520px] font-ui text-[17px] leading-[1.6] text-ink-3">
               Walk backstage and find your team already working without you.
             </p>
             <PixelButton className="mt-2">Get Started</PixelButton>
@@ -71,8 +71,8 @@ export function Landing() {
           <p className="font-pixel text-xl font-bold uppercase tracking-[-0.01em] text-brand">
             Backstage
           </p>
-          <p className="font-pixel text-xs uppercase tracking-[0.16em] text-dim">
-            {theme.name} — {theme.characters.length} agents — Simulated
+          <p className="font-mono text-xs font-medium uppercase tracking-[0.08em] text-dim">
+            {theme.name} · {theme.characters.length} AGENTS · SIMULATED
           </p>
         </div>
       </footer>

@@ -47,18 +47,18 @@ export function CharacterCard({ character, agent }: Props) {
       </div>
 
       <div className="px-4 py-3">
-        <h3 className="font-pixel text-xl font-bold uppercase leading-none tracking-[0.06em] text-ink">
+        <h3 className="font-pixel text-xl font-bold uppercase leading-none tracking-[0.04em] text-ink">
           {character.name}
         </h3>
-        <p className="mt-1.5 font-pixel text-sm leading-none text-ink-3">
+        <p className="mt-2 font-ui text-sm leading-none text-ink-3">
           {character.role}
         </p>
 
         <div className="pixel-rule my-3" />
 
-        <p className="font-pixel text-xs leading-none text-ink-3">
-          <span className="uppercase tracking-[0.12em]">Model</span>{' '}
-          <span className="ml-1 text-ink">{agent?.model ?? '--'}</span>
+        <p className="flex items-baseline gap-2 font-mono text-xs leading-none">
+          <span className="uppercase tracking-[0.08em] text-ink-3">Model</span>
+          <span className="font-medium text-ink">{agent?.model ?? '--'}</span>
         </p>
 
         <div className="mt-2">

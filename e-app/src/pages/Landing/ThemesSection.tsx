@@ -23,10 +23,10 @@ export function ThemesSection({ activeThemeId, switching, onSelectTheme }: Props
     >
       <div className="mx-auto max-w-[1400px]">
         <header className="mb-10 max-w-2xl">
-          <h2 className="font-heading text-4xl font-extrabold uppercase leading-none tracking-[-0.02em] text-ink sm:text-5xl">
+          <h2 className="font-ui text-4xl font-extrabold uppercase leading-[1.02] tracking-[-0.04em] text-ink sm:text-5xl">
             Choose your world
           </h2>
-          <p className="mt-4 font-pixel text-lg leading-relaxed text-ink-3">
+          <p className="mt-4 max-w-[520px] font-ui text-[17px] leading-[1.6] text-ink-3">
             The office is a theme, not the product. Your agents keep their
             model, their task and their status when the set changes.
           </p>
@@ -68,11 +68,11 @@ export function ThemesSection({ activeThemeId, switching, onSelectTheme }: Props
 
                 <div className="px-4 py-3">
                   <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="font-pixel text-base font-bold uppercase leading-none tracking-[0.06em] text-ink">
+                    <h3 className="font-pixel text-base font-bold uppercase leading-none tracking-[0.04em] text-ink">
                       {t.name}
                     </h3>
                     <span
-                      className={`shrink-0 border-2 px-2 py-0.5 font-pixel text-[10px] font-bold uppercase tracking-[0.16em] ${
+                      className={`shrink-0 border-2 px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] ${
                         active
                           ? 'border-ink bg-brand text-ink'
                           : 'border-rule text-ink-3 group-hover:border-ink group-hover:text-ink'
@@ -81,10 +81,10 @@ export function ThemesSection({ activeThemeId, switching, onSelectTheme }: Props
                       {active ? 'Active' : 'Enter'}
                     </span>
                   </div>
-                  <p className="mt-2 min-h-[32px] font-pixel text-xs leading-tight text-ink-3">
+                  <p className="mt-2.5 min-h-[36px] font-ui text-sm leading-[1.5] text-ink-3">
                     {t.tagline}
                   </p>
-                  <p className="mt-2 font-pixel text-[10px] uppercase tracking-[0.16em] text-ink-3">
+                  <p className="mt-3 font-mono text-[10px] font-medium uppercase tracking-[0.06em] text-ink-3">
                     {t.characters.map((c) => c.name).join(' · ')}
                   </p>
                 </div>

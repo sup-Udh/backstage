@@ -23,7 +23,7 @@ export function ThemeSwitcher({
 }: Props) {
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      <span className="mr-1 font-pixel text-[11px] font-bold uppercase tracking-[0.2em] text-ink-3">
+      <span className="mr-1 font-pixel text-xs font-semibold uppercase tracking-[0.12em] text-ink-3">
         World
       </span>
 
@@ -38,8 +38,8 @@ export function ThemeSwitcher({
             onClick={() => onSelect(t.id)}
             title={t.tagline}
             className={[
-              'inline-flex items-center gap-1.5 border-2 px-2.5 py-1',
-              'font-pixel text-[11px] font-bold uppercase tracking-[0.1em]',
+              'inline-flex items-center gap-1.5 border-2 px-3 py-1.5',
+              'font-pixel text-xs font-semibold uppercase tracking-[0.06em]',
               'transition-transform duration-75 ease-linear',
               'disabled:cursor-default',
               active

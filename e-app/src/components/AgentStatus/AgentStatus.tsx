@@ -37,10 +37,10 @@ export function AgentStatus({ agents, className = '' }: Props) {
   return (
     <div className={`flex items-center gap-4 ${className}`}>
       <span className="flex items-baseline gap-1.5">
-        <span className="font-pixel text-lg font-bold leading-none text-brand">
+        <span className="font-mono text-lg font-bold leading-none text-brand">
           {agents.length}
         </span>
-        <span className="font-pixel text-[10px] font-bold uppercase tracking-[0.18em] text-cream-2">
+        <span className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-cream-2">
           Agents
         </span>
       </span>
@@ -54,7 +54,7 @@ export function AgentStatus({ agents, className = '' }: Props) {
           return (
             <li
               key={row.key}
-              className="flex items-center gap-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.12em]"
+              className="flex items-center gap-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.06em]"
             >
               <span aria-hidden className={on ? 'text-brand' : 'text-dim'}>
                 {STATUS_GLYPH[row.status]}
