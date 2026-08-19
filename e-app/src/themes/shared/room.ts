@@ -154,7 +154,7 @@ export interface LayoutSpec {
 export function standardLayout(spec: LayoutSpec): SceneLayout {
   const stationY = spec.stationY ?? 80
   const focusY = spec.focusY ?? 86
-  const [fx1, fx2] = spec.focus ?? [126, 154]
+  const [fx1, fx2] = spec.focus ?? [122, 158]
   const bx = spec.breakX ?? 268
 
   return {
@@ -165,46 +165,53 @@ export function standardLayout(spec: LayoutSpec): SceneLayout {
     })),
     deskBaseY: stationY + DESK_BASE,
 
+    // Far enough apart that two people at the board do not overlap.
     boardSpots: [
       { x: fx1, y: focusY, facing: 'up' },
       { x: fx2, y: focusY, facing: 'up' }
     ],
 
+    /*
+     * Conversation pairs stand 24px apart. The sprite is 20 wide, so the old
+     * 16px spacing overlapped once the characters gained shoulders.
+     */
     talkSpots: [
       [
-        { x: 140, y: 118, facing: 'right' },
-        { x: 156, y: 118, facing: 'left' }
+        { x: 136, y: 118, facing: 'right' },
+        { x: 160, y: 118, facing: 'left' }
       ],
       [
-        { x: 72, y: 150, facing: 'right' },
-        { x: 88, y: 150, facing: 'left' }
+        { x: 66, y: 150, facing: 'right' },
+        { x: 90, y: 150, facing: 'left' }
       ],
       [
-        { x: 206, y: 146, facing: 'right' },
-        { x: 222, y: 146, facing: 'left' }
+        { x: 202, y: 146, facing: 'right' },
+        { x: 226, y: 146, facing: 'left' }
       ]
     ],
 
     coffeeSpots: [
-      { x: bx - 6, y: 106, facing: 'up' },
-      { x: bx + 20, y: 106, facing: 'up' }
+      { x: bx - 10, y: 106, facing: 'up' },
+      { x: bx + 16, y: 106, facing: 'up' }
     ],
 
-    // Enough loitering room for a full roster; the director falls back here
-    // whenever the desks and the board are taken.
+    /*
+     * Loitering room for a full roster, kept clear of the board and desks so
+     * a busy office does not pile characters on top of one another.
+     */
     wanderSpots: [
-      { x: 100, y: 118, facing: 'down' },
-      { x: 186, y: 116, facing: 'down' },
-      { x: 52, y: 124, facing: 'right' },
-      { x: 236, y: 120, facing: 'left' },
-      { x: 170, y: 148, facing: 'up' },
-      { x: 110, y: 146, facing: 'right' },
-      { x: 128, y: 100, facing: 'down' },
-      { x: 28, y: 148, facing: 'right' },
-      { x: 262, y: 150, facing: 'left' },
-      { x: 200, y: 132, facing: 'down' },
-      { x: 76, y: 112, facing: 'down' },
-      { x: 296, y: 136, facing: 'left' }
+      { x: 96, y: 120, facing: 'down' },
+      { x: 186, y: 118, facing: 'down' },
+      { x: 48, y: 126, facing: 'right' },
+      { x: 240, y: 122, facing: 'left' },
+      { x: 168, y: 150, facing: 'up' },
+      { x: 116, y: 148, facing: 'right' },
+      { x: 24, y: 150, facing: 'right' },
+      { x: 264, y: 152, facing: 'left' },
+      { x: 208, y: 134, facing: 'down' },
+      { x: 70, y: 108, facing: 'down' },
+      { x: 296, y: 138, facing: 'left' },
+      { x: 144, y: 134, facing: 'down' }
     ],
 
     laneY: 118
