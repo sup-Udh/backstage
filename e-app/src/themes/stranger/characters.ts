@@ -1,3 +1,4 @@
+import { defineCast } from '../../characters/defineCast'
 import type { CharacterDef } from '../../characters/character.types'
 
 /** A basement crew running an investigation after school. */
@@ -95,3 +96,21 @@ export const strangerCharacters: CharacterDef[] = [
     }
   }
 ]
+
+/** The rest of the party, showing up as the investigation widens. */
+const strangerReserves = defineCast([
+  { id: 'lucas', agentId: 'agent-5', name: 'Lucas', role: 'Scout', homeDesk: 1,
+    skin: '#8A5F3C', hair: '#241A16', hairStyle: 'short', outfit: '#4A6E4A',
+    shirt: '#E2DCCC', trousers: '#3A4A58' },
+  { id: 'will', agentId: 'agent-6', name: 'Will', role: 'Cartographer', homeDesk: 2,
+    skin: '#F0C6A0', hair: '#3A2A22', hairStyle: 'short', outfit: '#6A5A8A',
+    shirt: '#EDE7D6', trousers: '#3A4258' },
+  { id: 'steve', agentId: 'agent-7', name: 'Steve', role: 'Logistics', homeDesk: 0,
+    skin: '#EDBE93', hair: '#4A3524', hairStyle: 'swept', outfit: '#8A6A4A',
+    shirt: '#F2EEE2', trousers: '#3E4A5E', smirk: true },
+  { id: 'robin', agentId: 'agent-8', name: 'Robin', role: 'Translator', homeDesk: 1,
+    skin: '#F3CBA4', hair: '#C7A45E', hairStyle: 'short', outfit: '#5A8A9A',
+    shirt: '#FFFFFF', trousers: '#3A5260' }
+])
+
+strangerCharacters.push(...strangerReserves)

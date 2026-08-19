@@ -25,6 +25,11 @@ export interface Agent {
   status: AgentStatus
   /** Human readable current task, shown in tooltips. */
   task: string | null
+  /**
+   * Whether this agent is in the office yet. Reserves start inactive and are
+   * called in as the workload grows, which is what makes the room fill up.
+   */
+  active: boolean
 }
 
 export type AgentListener = (agents: Agent[]) => void

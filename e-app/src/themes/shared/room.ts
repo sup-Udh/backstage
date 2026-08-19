@@ -190,6 +190,8 @@ export function standardLayout(spec: LayoutSpec): SceneLayout {
       { x: bx + 20, y: 106, facing: 'up' }
     ],
 
+    // Enough loitering room for a full roster; the director falls back here
+    // whenever the desks and the board are taken.
     wanderSpots: [
       { x: 100, y: 118, facing: 'down' },
       { x: 186, y: 116, facing: 'down' },
@@ -197,7 +199,12 @@ export function standardLayout(spec: LayoutSpec): SceneLayout {
       { x: 236, y: 120, facing: 'left' },
       { x: 170, y: 148, facing: 'up' },
       { x: 110, y: 146, facing: 'right' },
-      { x: 128, y: 100, facing: 'down' }
+      { x: 128, y: 100, facing: 'down' },
+      { x: 28, y: 148, facing: 'right' },
+      { x: 262, y: 150, facing: 'left' },
+      { x: 200, y: 132, facing: 'down' },
+      { x: 76, y: 112, facing: 'down' },
+      { x: 296, y: 136, facing: 'left' }
     ],
 
     laneY: 118

@@ -2,6 +2,7 @@ import type { Agent, AgentListener, AgentRuntime, AgentStatus } from './agent.ty
 import { makeRng } from '../world/pixel/ops'
 import { EventBus } from './agentEvents'
 import { buildTaskScript, type Beat } from './taskScript'
+import { INITIAL_ACTIVE } from './roster'
 
 /**
  * A stand-in for the real agent event stream.
@@ -97,11 +98,12 @@ export class FakeAgentRuntime implements AgentRuntime {
 
   constructor(specs: FakeAgentSpec[], seed = 20260818) {
     this.rng = makeRng(seed)
-    this.agents = specs.map((s) => ({
+    this.agents = specs.map((s, i) => ({
       id: s.id,
       model: s.model,
       status: 'idle',
-      task: null
+      task: null,
+      active: i < INITIAL_ACTIVE
     }))
     this.remaining = specs.map(() => 0)
     this.openingBeats()
@@ -120,6 +122,7 @@ export class FakeAgentRuntime implements AgentRuntime {
       { status: 'working', duration: 21, task: 'Writing migration 0042' }
     ]
     this.agents.forEach((a, i) => {
+      if (!a.active) return
       const b = beats[i % beats.length]
       a.status = b.status
       a.task = b.task
@@ -136,6 +139,27 @@ export class FakeAgentRuntime implements AgentRuntime {
 
   getAgents(): Agent[] {
     return this.agents
+  }
+
+  /** Only the agents currently in the office. */
+  getActive(): Agent[] {
+    return this.agents.filter((a) => a.active)
+  }
+
+  /**
+   * Call in the next reserve. Returns the agent, or null if everyone is
+   * already here. The world notices the new active agent on its next tick and
+   * walks them in from the door.
+   */
+  activateNext(): Agent | null {
+    const next = this.agents.find((a) => !a.active)
+    if (!next) return null
+    next.active = true
+    next.status = 'idle'
+    next.task = null
+    this.remaining[this.agents.indexOf(next)] = 1.5
+    this.emit()
+    return next
   }
 
   get(id: string): Agent | undefined {
@@ -189,7 +213,18 @@ export class FakeAgentRuntime implements AgentRuntime {
    */
   submitTask(prompt: string): boolean {
     if (this.taskActive) return false
-    this.script = buildTaskScript(prompt, this.agents)
+
+    // Every new task brings one more pair of hands into the office.
+    const joined = this.activateNext()
+    if (joined) {
+      this.events.emit({
+        type: 'agent.started',
+        agentId: joined.id,
+        activity: 'Joined the team.'
+      })
+    }
+
+    this.script = buildTaskScript(prompt, this.getActive())
     this.scriptClock = 0
     this.scriptCursor = 0
     this.taskActive = true
@@ -234,7 +269,7 @@ export class FakeAgentRuntime implements AgentRuntime {
       this.taskActive = false
       this.script = []
       for (let i = 0; i < this.agents.length; i++) {
-        this.assign(i, i % 2 === 0 ? 'working' : 'idle')
+        if (this.agents[i].active) this.assign(i, i % 2 === 0 ? 'working' : 'idle')
       }
       changed = true
     }
@@ -250,6 +285,7 @@ export class FakeAgentRuntime implements AgentRuntime {
     let changed = false
 
     for (let i = 0; i < this.agents.length; i++) {
+      if (!this.agents[i].active) continue
       this.remaining[i] -= dt
       if (this.remaining[i] > 0) continue
 
@@ -297,6 +333,7 @@ export class FakeAgentRuntime implements AgentRuntime {
     const free: number[] = []
     for (let i = 0; i < this.agents.length; i++) {
       if (i === self) continue
+      if (!this.agents[i].active) continue
       if (this.agents[i].status === 'talking') continue
       if (this.agents[i].status === 'success') continue
       free.push(i)

@@ -1,3 +1,4 @@
+import { defineCast } from '../../characters/defineCast'
 import type { CharacterDef } from '../../characters/character.types'
 
 /** A lab crew. Same four agents, in aprons and respirator straps. */
@@ -95,3 +96,21 @@ export const labCharacters: CharacterDef[] = [
     }
   }
 ]
+
+/** Extra hands on the bench, brought in as the workload grows. */
+const labReserves = defineCast([
+  { id: 'mike', agentId: 'agent-5', name: 'Mike', role: 'Security', homeDesk: 1,
+    skin: '#EFC49F', hair: '#9A9A94', hairStyle: 'short', outfit: '#4A4A48',
+    shirt: '#E4E6DA', trousers: '#3A3A38' },
+  { id: 'skyler', agentId: 'agent-6', name: 'Skyler', role: 'Bookkeeping', homeDesk: 2,
+    skin: '#F6D2AE', hair: '#D7B96A', hairStyle: 'long', outfit: '#5A7A9A',
+    shirt: '#FBFBF2', trousers: '#3E5266' },
+  { id: 'hank', agentId: 'agent-7', name: 'Hank', role: 'Compliance', homeDesk: 0,
+    skin: '#EDBE93', hair: '#7A6A54', hairStyle: 'short', outfit: '#7A6A4A',
+    shirt: '#EFEEE0', trousers: '#4A4234' },
+  { id: 'todd', agentId: 'agent-8', name: 'Todd', role: 'Assistant', homeDesk: 1,
+    skin: '#F0C6A0', hair: '#8A6A3A', hairStyle: 'short', outfit: '#9AA08A',
+    shirt: '#FBFBF2', trousers: '#4A5248' }
+])
+
+labCharacters.push(...labReserves)

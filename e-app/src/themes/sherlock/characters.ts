@@ -1,3 +1,4 @@
+import { defineCast } from '../../characters/defineCast'
 import type { CharacterDef } from '../../characters/character.types'
 
 /** A consulting practice in a dark London flat. */
@@ -95,3 +96,21 @@ export const sherlockCharacters: CharacterDef[] = [
     }
   }
 ]
+
+/** The wider circle, arriving as the case load grows. */
+const sherlockReserves = defineCast([
+  { id: 'mycroft', agentId: 'agent-5', name: 'Mycroft', role: 'Strategist', homeDesk: 1,
+    skin: '#EBC49E', hair: '#4A3A2A', hairStyle: 'swept', outfit: '#2A2E38',
+    shirt: '#E9E2D2', accent: '#6A2E2E', vest: '#3E4450', trousers: '#22262E' },
+  { id: 'hudson', agentId: 'agent-6', name: 'Hudson', role: 'Housekeeper', homeDesk: 2,
+    skin: '#F0C6A0', hair: '#B4B0A6', hairStyle: 'bun', outfit: '#6A4A5A',
+    shirt: '#F0EADA', trousers: '#4A3440' },
+  { id: 'donovan', agentId: 'agent-7', name: 'Donovan', role: 'Sergeant', homeDesk: 0,
+    skin: '#7A5236', hair: '#241A16', hairStyle: 'long', outfit: '#3A4A57',
+    shirt: '#D9DEE4', trousers: '#2E3A45' },
+  { id: 'anderson', agentId: 'agent-8', name: 'Anderson', role: 'Forensics', homeDesk: 1,
+    skin: '#DDAE84', hair: '#3A2A20', hairStyle: 'short', outfit: '#C8CBC4',
+    shirt: '#F6F1E4', trousers: '#4A5058', glasses: true }
+])
+
+sherlockCharacters.push(...sherlockReserves)

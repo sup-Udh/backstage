@@ -1,3 +1,4 @@
+import { defineCast } from '../../characters/defineCast'
 import type { CharacterDef } from '../../characters/character.types'
 
 /**
@@ -98,3 +99,21 @@ export const friendsCharacters: CharacterDef[] = [
     }
   }
 ]
+
+/** The reserves: more of the building, arriving as the workload grows. */
+const friendsReserves = defineCast([
+  { id: 'ross', agentId: 'agent-5', name: 'Ross', role: 'Researcher', homeDesk: 1,
+    skin: '#EDBE93', hair: '#2F211C', hairStyle: 'short', outfit: '#5A4A7A',
+    shirt: '#FFF3E2', accent: '#3E3358', trousers: '#3E3358' },
+  { id: 'joey', agentId: 'agent-6', name: 'Joey', role: 'Frontman', homeDesk: 2,
+    skin: '#E8B98D', hair: '#241A16', hairStyle: 'swept', outfit: '#7A4A3A',
+    shirt: '#F2EEE2', trousers: '#3A3242', smirk: true },
+  { id: 'gunther', agentId: 'agent-7', name: 'Gunther', role: 'Support', homeDesk: 0,
+    skin: '#F6D2AE', hair: '#E8DCA8', hairStyle: 'short', outfit: '#4A6E6A',
+    shirt: '#FFFFFF', trousers: '#38504E' },
+  { id: 'janice', agentId: 'agent-8', name: 'Janice', role: 'Escalations', homeDesk: 1,
+    skin: '#F0C6A0', hair: '#3A2A24', hairStyle: 'long', outfit: '#A8467A',
+    shirt: '#FFF3E2', trousers: '#5A2E48' }
+])
+
+friendsCharacters.push(...friendsReserves)

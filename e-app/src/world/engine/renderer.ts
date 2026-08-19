@@ -28,6 +28,14 @@ interface Drawable {
   draw: () => void
 }
 
+/** Where the viewport is looking, in scene coordinates. */
+export interface Camera {
+  x: number
+  y: number
+  /** Whole-number zoom only. */
+  scale: number
+}
+
 interface Mote {
   x: number
   y: number
@@ -321,7 +329,8 @@ export class WorldRenderer {
   private drawCharacter(
     ctx: CanvasRenderingContext2D,
     c: CharacterRuntime,
-    hovered: boolean
+    hovered: boolean,
+    selected = false
   ): void {
     const art = this.sheets.get(c.def.id)
     if (!art) return
@@ -337,6 +346,16 @@ export class WorldRenderer {
     ctx.fillRect(dx + 3, Math.round(c.y) - 1, 10, 1)
     ctx.fillRect(dx + 4, Math.round(c.y), 8, 1)
     ctx.restore()
+
+    if (selected) {
+      // A ring on the floor, so a selected agent stays findable in a crowd
+      // even while another character is standing in front of them.
+      ctx.fillStyle = this.pal.brand
+      ctx.fillRect(dx + 1, Math.round(c.y) - 1, 14, 1)
+      ctx.fillRect(dx + 2, Math.round(c.y) + 1, 12, 1)
+      ctx.fillRect(dx, Math.round(c.y), 2, 1)
+      ctx.fillRect(dx + 14, Math.round(c.y), 2, 1)
+    }
 
     if (hovered) {
       // 1px brand outline, drawn by stamping the silhouette around the sprite.
@@ -369,10 +388,32 @@ export class WorldRenderer {
     ctx: CanvasRenderingContext2D,
     chars: CharacterRuntime[],
     t: number,
-    hoveredId: string | null
+    hoveredId: string | null,
+    selectedId: string | null,
+    cam: Camera,
+    viewW: number,
+    viewH: number
   ): void {
     const scene = this.theme.scene
-    ctx.clearRect(0, 0, scene.width, scene.height)
+
+    /*
+     * The canvas is the size of the viewport now, not of the room, so the
+     * camera is a transform rather than a CSS scale. Both the scale and the
+     * translation are whole numbers, which is what keeps a scene pixel an
+     * exact block of screen pixels however far the user has panned.
+     */
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.fillStyle = this.pal.ink
+    ctx.fillRect(0, 0, viewW, viewH)
+    ctx.setTransform(
+      cam.scale,
+      0,
+      0,
+      cam.scale,
+      -Math.round(cam.x * cam.scale),
+      -Math.round(cam.y * cam.scale)
+    )
+
     if (this.background) this.blit(ctx, this.background)
 
     const items: Drawable[] = []
@@ -395,11 +436,11 @@ export class WorldRenderer {
     items.push({ baseY: 0.5, draw: () => this.drawClock(ctx) })
 
     for (const c of chars) {
-      const hovered = hoveredId === c.def.id
+      const hovered = hoveredId === c.def.id || selectedId === c.def.id
       items.push({
         baseY: c.y,
         draw: () => {
-          this.drawCharacter(ctx, c, hovered)
+          this.drawCharacter(ctx, c, hovered, selectedId === c.def.id)
           this.drawBubble(ctx, c, t)
         }
       })
@@ -417,5 +458,6 @@ export class WorldRenderer {
     }
 
     this.drawMotes(ctx, t)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
   }
 }

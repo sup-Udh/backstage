@@ -66,7 +66,7 @@ export function CommandCenter({ theme, engine }: Props) {
     theme.characters.find((c) => c.agentId === agentId)?.name ?? 'Agent'
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-col border-l-[3px] border-ink bg-cream">
+    <section className="flex h-full min-h-0 min-w-0 flex-col border-l-[3px] border-ink bg-cream">
       {/* Header: who is on the team, and what they are doing. */}
       <header className="shrink-0 border-b-[3px] border-ink px-5 py-4">
         <h1 className="font-pixel text-lg font-bold uppercase tracking-[0.04em] text-ink">

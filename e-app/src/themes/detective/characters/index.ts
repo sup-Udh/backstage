@@ -1,3 +1,4 @@
+import { defineCast } from '../../../characters/defineCast'
 import type { CharacterDef } from '../../../characters/character.types'
 
 /**
@@ -106,3 +107,24 @@ export const detectiveCharacters: CharacterDef[] = [
     }
   }
 ]
+
+/**
+ * The reserves. They join the office one at a time as the user gives the team
+ * more work, so a busy day visibly fills the room.
+ */
+const detectiveReserves = defineCast([
+  { id: 'rigsby', agentId: 'agent-5', name: 'Rigsby', role: 'Field Agent', homeDesk: 1,
+    skin: '#EDBE93', hair: '#4A3524', hairStyle: 'short', outfit: '#4A5568',
+    shirt: '#E8EDF3', accent: '#3A4557', trousers: '#39424F' },
+  { id: 'wainwright', agentId: 'agent-6', name: 'Wainwright', role: 'Supervisor', homeDesk: 2,
+    skin: '#F0C6A0', hair: '#8A6A3A', hairStyle: 'swept', outfit: '#2F3A4A',
+    shirt: '#FFFFFF', accent: '#7A2E2E', vest: '#445063', trousers: '#28313E' },
+  { id: 'hightower', agentId: 'agent-7', name: 'Hightower', role: 'Director', homeDesk: 0,
+    skin: '#8A5F3C', hair: '#2A1D16', hairStyle: 'bun', outfit: '#3E3348',
+    shirt: '#F2EDE2', trousers: '#332A3C' },
+  { id: 'bertram', agentId: 'agent-8', name: 'Bertram', role: 'Liaison', homeDesk: 1,
+    skin: '#EFC49F', hair: '#9A9A94', hairStyle: 'short', outfit: '#4A4A55',
+    shirt: '#FFFFFF', accent: '#5C6B8A', trousers: '#3A3A44', glasses: true }
+])
+
+detectiveCharacters.push(...detectiveReserves)

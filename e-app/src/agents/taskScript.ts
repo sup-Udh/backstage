@@ -42,7 +42,9 @@ function toTitle(prompt: string): string {
  */
 export function buildTaskScript(prompt: string, agents: Agent[]): Beat[] {
   const lead = agents[0]?.id
-  const second = agents[2]?.id ?? agents[1]?.id
+  // The newest arrival takes the second seat, so the agent who just walked in
+  // is the one the user sees joining the case.
+  const second = agents.length > 1 ? agents[agents.length - 1].id : undefined
   const title = toTitle(prompt)
 
   const beats: Beat[] = [
