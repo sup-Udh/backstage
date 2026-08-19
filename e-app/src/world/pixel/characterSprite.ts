@@ -138,17 +138,21 @@ function hairBack(a: CharacterAppearance, dy: number): Op[] {
         [14, y + 2, 2, 8, 'hairDeep']
       ]
     case 'ponytail':
+      // A long tail well clear of the shoulder line.
       return [
-        [14, y + 2, 4, 3, 'ink'],
-        [15, y + 3, 3, 8, 'ink'],
-        [15, y + 3, 2, 2, 'hair'],
-        [16, y + 5, 2, 6, 'hairShade']
+        [13, y + 1, 5, 4, 'ink'],
+        [15, y + 3, 4, 11, 'ink'],
+        [14, y + 2, 3, 3, 'hair'],
+        [16, y + 4, 2, 9, 'hairShade'],
+        [16, y + 11, 2, 2, 'hairDeep']
       ]
     case 'bun':
+      // Sits proud of the head so the outline has a bump only she has.
       return [
-        [8, y - 3, 5, 4, 'ink'],
-        [9, y - 2, 3, 2, 'hair'],
-        [11, y - 2, 1, 2, 'hairShade']
+        [7, y - 5, 7, 6, 'ink'],
+        [8, y - 4, 5, 4, 'hair'],
+        [8, y - 4, 5, 1, 'hairLit'],
+        [11, y - 4, 2, 4, 'hairShade']
       ]
     case 'curly':
       return [
@@ -354,12 +358,13 @@ function head(
   ops.push([HEAD_X, y, HEAD_W, 1, 'skinLit'])
   // Cheek and jaw, lit from the upper left.
   ops.push([HEAD_X + HEAD_W - 1, y + 1, 1, HEAD_H - 1, 'skinShade'])
-  ops.push([HEAD_X + 1, y + HEAD_H - 1, HEAD_W - 2, 1, 'skinShade'])
+  ops.push([HEAD_X, y + HEAD_H - 1, 2, 1, 'skinShade'])
+  ops.push([HEAD_X + HEAD_W - 2, y + HEAD_H - 1, 2, 1, 'skinShade'])
   // Ears.
   ops.push([HEAD_X - 1, y + 4, 1, 2, 'skin'])
   ops.push([HEAD_X + HEAD_W, y + 4, 1, 2, 'skinShade'])
   // Nose: one pixel of shadow on the centre line.
-  ops.push([HEAD_X + 4, y + 6, 1, 1, 'skinShade'])
+  ops.push([HEAD_X + 4, y + 7, 1, 1, 'skinShade'])
 
   ops.push(...hairFront(a, dy))
   ops.push(...brows(exp, dy))
@@ -389,8 +394,9 @@ interface Frame {
 
 function frameFor(a: CharacterAppearance): Frame {
   const build = a.build ?? 'regular'
-  // Slim 10 wide, regular 12, broad 14 — a visible step in the outline.
-  const half = build === 'slim' ? 5 : build === 'broad' ? 7 : 6
+  // 9 / 12 / 16 wide. The steps are deliberately large: a one-pixel
+  // difference in shoulder width is invisible at sprite size.
+  const half = build === 'slim' ? 4.5 : build === 'broad' ? 7 : 6
   switch (a.posture ?? 'upright') {
     case 'relaxed':
       return { half, lean: 1 }
@@ -413,8 +419,8 @@ function torso(
   const f = frameFor(a)
   const ops: Op[] = []
   const y = TORSO_Y + dy + f.lean
-  const left = 10 - f.half
-  const w = f.half * 2
+  const left = Math.round(10 - f.half)
+  const w = Math.round(f.half * 2)
   const style = a.outfitStyle ?? 'suit'
   // A coat hangs past the hips, which lengthens the silhouette.
   const bodyH = style === 'coat' || style === 'labcoat' ? TORSO_H + 3 : TORSO_H
@@ -520,8 +526,8 @@ function torso(
 function accessory(a: CharacterAppearance, dy: number, arms: ArmPose): Op[] {
   const f = frameFor(a)
   const y = TORSO_Y + dy + f.lean
-  const left = 10 - f.half
-  const w = f.half * 2
+  const left = Math.round(10 - f.half)
+  const w = Math.round(f.half * 2)
   const ops: Op[] = []
   const handY = y + TORSO_H - 3
   const free = arms === 'down' || arms === 'hold'

@@ -79,8 +79,8 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Technical Investigator',
     homeDesk: 1,
     appearance: {
-      // Buzz cut, plain suit, no accessory. Deliberately the most austere
-      // silhouette on the team.
+      // Buzz cut, plain suit, no accessory, narrow frame. Deliberately the
+      // most austere outline on the team — recognisable by being the least.
       skin: '#E4B489',
       hair: '#1E1917',
       hairStyle: 'buzz',
@@ -92,7 +92,7 @@ export const detectiveCharacters: CharacterDef[] = [
       trousers: '#2F3441',
       shoes: '#1B1B2A',
       glasses: false,
-      build: 'regular',
+      build: 'slim',
       posture: 'rigid',
       accessory: 'none',
       expression: 'serious'
@@ -146,7 +146,7 @@ export const detectiveCharacters: CharacterDef[] = [
       build: 'broad',
       posture: 'slouched',
       accessory: 'mug',
-      accessoryColor: '#FFFFFF',
+      accessoryColor: '#E8E4DA',
       expression: 'friendly'
     }
   },
@@ -211,7 +211,7 @@ export const detectiveCharacters: CharacterDef[] = [
     appearance: {
       // Grey untidy hair and glasses: the oldest silhouette in the room.
       skin: '#EDC4A0',
-      hair: '#9A9A94',
+      hair: '#8C8C86',
       hairStyle: 'messy',
       outfit: '#5A5A66',
       outfitStyle: 'cardigan',

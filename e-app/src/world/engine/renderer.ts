@@ -14,9 +14,15 @@ import {
   type CharacterSheet
 } from './spriteCache'
 
-/** Status tag metrics, in scene pixels. */
-const LABEL_H = 11
-const LABEL_PAD = 3
+/**
+ * Status tag metrics, in scene pixels.
+ *
+ * Deliberately smaller than the character it labels. The tag says what an
+ * agent is *doing*; the sprite says *who they are*, and the sprite has to win
+ * that contest — a bright plate wider than the person reverses the hierarchy.
+ */
+const LABEL_H = 9
+const LABEL_PAD = 2
 const LABEL_GAP = 2
 
 /** Statuses that read as "this agent is doing something". */
@@ -267,12 +273,17 @@ export class WorldRenderer {
     const cx = Math.round(c.x)
     const x = cx - (w >> 1)
 
+    /*
+     * Active agents get the brand edge; idle ones get a plain dark plate, so
+     * a room full of idle characters is quiet and the one actually working
+     * draws the eye.
+     */
     const edge = active ? this.pal.brand : this.pal.ink3
     const ink = active ? this.pal.cream : this.pal.steel
 
     // Stem down to the head, drawn first so the plate caps it.
     ctx.fillStyle = edge
-    ctx.fillRect(cx - 1, y + LABEL_H - 1, 2, 3)
+    ctx.fillRect(cx, y + LABEL_H - 1, 1, 3)
 
     ctx.fillStyle = edge
     ctx.fillRect(x, y, w, LABEL_H)
@@ -284,14 +295,14 @@ export class WorldRenderer {
       markForModel(c.model),
       { mark: active ? this.pal.brand : this.pal.steel },
       x + LABEL_PAD,
-      y + 2
+      y + 1
     )
     paint(
       ctx,
       text(this.labelText(c), 0, 0, ink),
       undefined,
       x + LABEL_PAD + MARK_SIZE + LABEL_GAP,
-      y + 3
+      y + 2
     )
   }
 
@@ -308,7 +319,7 @@ export class WorldRenderer {
       const w = this.labelWidth(c)
       const x0 = Math.round(c.x) - (w >> 1)
       const x1 = x0 + w
-      let y = Math.round(c.y) - SPRITE_H - LABEL_H - 3
+      let y = Math.round(c.y) - SPRITE_H - LABEL_H - 1
       let moved = true
       while (moved) {
         moved = false
