@@ -95,6 +95,8 @@ export class FakeAgentRuntime implements AgentRuntime {
   private scriptClock = 0
   private scriptCursor = 0
   private taskActive = false
+  /** Set while a real provider request is in flight. */
+  private liveActive = false
 
   constructor(specs: FakeAgentSpec[], seed = 20260818) {
     this.rng = makeRng(seed)
@@ -202,9 +204,100 @@ export class FakeAgentRuntime implements AgentRuntime {
     this.remaining[i] = this.duration(status)
   }
 
-  /** True while a submitted task is playing out. */
+  /** True while any task - scripted or real - is playing out. */
   isBusy(): boolean {
-    return this.taskActive
+    return this.taskActive || this.liveActive
+  }
+
+  /** Hold an agent where it is until something explicitly moves it on. */
+  private hold(agentId: string, status: AgentStatus, task: string | null): void {
+    const agent = this.get(agentId)
+    if (!agent) return
+    agent.status = status
+    if (task !== null) agent.task = task
+    this.remaining[this.agents.indexOf(agent)] = Number.POSITIVE_INFINITY
+    this.emit()
+  }
+
+  /**
+   * Run a task against a real provider.
+   *
+   * The agent state machine and the events are exactly the ones the scripted
+   * path emits, so the world, the activity feed and the transcript cannot tell
+   * a real request from a simulated one. The only difference is that the
+   * middle of the sequence is an awaited network call rather than a timer.
+   */
+  async runLiveTask(
+    prompt: string,
+    execute: (input: string) => Promise<{ text: string; model?: string }>
+  ): Promise<void> {
+    if (this.isBusy()) return
+
+    const lead = this.getActive()[0]
+    if (!lead) return
+
+    this.liveActive = true
+    const title = prompt.trim().replace(/\s+/g, ' ').slice(0, 46)
+
+    this.events.emit({
+      type: 'task.created',
+      task: title,
+      activity: `Task received: ${title}`
+    })
+
+    this.hold(lead.id, 'thinking', 'Reading the brief')
+    this.events.emit({
+      type: 'agent.thinking',
+      agentId: lead.id,
+      activity: 'Started reading the brief.'
+    })
+
+    // A beat of thinking before the walk to a desk, so the sequence reads.
+    await new Promise((r) => setTimeout(r, 600))
+
+    this.hold(lead.id, 'working', title)
+
+    try {
+      const result = await execute(prompt)
+
+      this.events.emit({
+        type: 'agent.working',
+        agentId: lead.id,
+        activity: result.model
+          ? `Working with ${result.model}.`
+          : 'Working on the task.'
+      })
+
+      this.hold(lead.id, 'success', 'Done')
+      this.events.emit({
+        type: 'agent.completed',
+        agentId: lead.id,
+        activity: 'Completed the task.',
+        message: result.text
+      })
+      this.events.emit({ type: 'task.completed', task: title, activity: 'Task closed.' })
+    } catch (err) {
+      // The character must never be left stuck in `working`.
+      this.hold(lead.id, 'error', 'Blocked')
+      this.events.emit({
+        type: 'agent.failed',
+        agentId: lead.id,
+        activity: 'Could not finish the task.',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Something went wrong while contacting the provider.'
+      })
+      this.events.emit({ type: 'task.failed', task: title, activity: 'Task failed.' })
+    } finally {
+      // Let the result register, then hand the office back to the scheduler.
+      await new Promise((r) => setTimeout(r, 1800))
+      this.liveActive = false
+      for (let i = 0; i < this.agents.length; i++) {
+        if (this.agents[i].active) this.assign(i, i % 2 === 0 ? 'working' : 'idle')
+      }
+      this.emit()
+    }
   }
 
   /**
@@ -277,6 +370,9 @@ export class FakeAgentRuntime implements AgentRuntime {
   }
 
   tick(dt: number): void {
+    // A real request drives the agents directly; the scheduler would fight it.
+    if (this.liveActive) return
+
     if (this.taskActive) {
       if (this.tickScript(dt)) this.emit()
       return

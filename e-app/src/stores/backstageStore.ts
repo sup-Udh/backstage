@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { defaultThemeId, isKnownTheme } from '../themes'
 import type { AgentEvent } from '../agents/agentEvents'
+import type { ProviderStatus } from '../shared/providerApi'
 
 /**
  * The application store.
@@ -14,6 +15,12 @@ import type { AgentEvent } from '../agents/agentEvents'
  */
 
 export type AppView = 'landing' | 'app'
+/**
+ * How tasks are executed. `fake` replays the scripted timeline, which is what
+ * you want while working on the world without spending API credits; `real`
+ * calls the connected provider.
+ */
+export type ExecutionMode = 'real' | 'fake'
 export type PageId = 'home' | 'cases' | 'agents' | 'themes' | 'account'
 
 export interface ChatMessage {
@@ -35,13 +42,22 @@ export interface ActivityEntry {
 export interface TaskState {
   id: number
   title: string
-  status: 'running' | 'complete'
+  status: 'running' | 'complete' | 'failed'
   startedAt: number
   /** The closing summary, once the task finishes. */
   result?: string
 }
 
 const THEME_KEY = 'backstage.theme'
+const MODE_KEY = 'backstage.mode'
+
+function loadMode(): ExecutionMode {
+  try {
+    return window.localStorage.getItem(MODE_KEY) === 'fake' ? 'fake' : 'real'
+  } catch {
+    return 'real'
+  }
+}
 
 function loadThemeId(): string {
   try {
@@ -64,12 +80,19 @@ interface BackstageState {
   activity: ActivityEntry[]
   task: TaskState | null
 
+  /** Mirror of the main process's provider state. Never holds a key. */
+  provider: ProviderStatus | null
+  mode: ExecutionMode
+
   enterApp: () => void
   exitToLanding: () => void
   setPage: (page: PageId) => void
   switchTheme: (id: string) => void
 
+  setProvider: (status: ProviderStatus | null) => void
+  setMode: (mode: ExecutionMode) => void
   pushUserMessage: (text: string) => void
+  pushSystemMessage: (text: string) => void
   /** Fold a runtime event into the transcript, feed and task state. */
   ingestEvent: (event: AgentEvent) => void
   clearConversation: () => void
@@ -86,6 +109,8 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   messages: [],
   activity: [],
   task: null,
+  provider: null,
+  mode: loadMode(),
 
   enterApp: () => set({ view: 'app', page: 'home' }),
   exitToLanding: () => set({ view: 'landing' }),
@@ -108,6 +133,25 @@ export const useBackstage = create<BackstageState>((set, get) => ({
       window.setTimeout(() => set({ switching: false }), 60)
     }, 220)
   },
+
+  setProvider: (provider) => set({ provider }),
+
+  setMode: (mode) => {
+    try {
+      window.localStorage.setItem(MODE_KEY, mode)
+    } catch {
+      // Persisting the preference is a convenience, not a requirement.
+    }
+    set({ mode })
+  },
+
+  pushSystemMessage: (text) =>
+    set((s) => ({
+      messages: [
+        ...s.messages,
+        { id: nextId++, kind: 'system', text, at: Date.now() }
+      ]
+    })),
 
   pushUserMessage: (text) =>
     set((s) => ({
@@ -153,6 +197,10 @@ export const useBackstage = create<BackstageState>((set, get) => ({
           status: 'running',
           startedAt: event.at
         }
+      }
+
+      if (event.type === 'task.failed' && s.task) {
+        next.task = { ...s.task, status: 'failed' }
       }
 
       if (event.type === 'task.completed' && s.task) {

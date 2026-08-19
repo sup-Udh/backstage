@@ -1,8 +1,8 @@
 import { PagePlaceholder } from '../shell/PagePlaceholder'
+import { OpenAIPanel } from './OpenAIPanel'
 
 const SECTIONS = [
   { name: 'Profile', note: 'Who you are inside Backstage.' },
-  { name: 'API Providers', note: 'Connect Anthropic, OpenAI and others.' },
   { name: 'Preferences', note: 'Defaults for new cases and agents.' },
   { name: 'Appearance', note: 'World scale, motion and density.' },
   { name: 'Data', note: 'Local history, export and reset.' }
@@ -14,6 +14,14 @@ export function Account() {
       title="Account"
       lead="Settings for you, and for the providers behind your team."
     >
+      <h2 className="mb-4 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
+        AI Providers
+      </h2>
+      <OpenAIPanel />
+
+      <h2 className="mb-4 mt-10 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
+        Everything else
+      </h2>
       <ul className="max-w-[640px] border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-ink)]">
         {SECTIONS.map((s, i) => (
           <li

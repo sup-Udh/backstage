@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
+import { registerIpcHandlers } from './ipc'
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -23,6 +24,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Handlers must exist before any window can call them.
+  registerIpcHandlers()
   createWindow()
 
   app.on('activate', () => {

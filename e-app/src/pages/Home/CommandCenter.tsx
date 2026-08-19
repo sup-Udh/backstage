@@ -7,6 +7,8 @@ import { STATUS_GLYPH } from '../../characters/character.states'
 import type { AgentStatus } from '../../agents/agent.types'
 import { ActivityFeed } from './ActivityFeed'
 import { PromptBox } from './PromptBox'
+import { useProvider } from '../../providers/useProvider'
+import type { GenerationTurn } from '../../shared/providerApi'
 
 interface Props {
   theme: Theme
@@ -42,6 +44,13 @@ export function CommandCenter({ theme, engine }: Props) {
   const activity = useBackstage((s) => s.activity)
   const task = useBackstage((s) => s.task)
   const pushUserMessage = useBackstage((s) => s.pushUserMessage)
+  const pushSystemMessage = useBackstage((s) => s.pushSystemMessage)
+  const mode = useBackstage((s) => s.mode)
+  const setPage = useBackstage((s) => s.setPage)
+  const { provider } = useProvider()
+
+  const connected = provider?.connected ?? false
+  const live = mode === 'real'
 
   const scrollRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -56,10 +65,50 @@ export function CommandCenter({ theme, engine }: Props) {
   }, {})
 
   const busy = task?.status === 'running'
+  const failed = task?.status === 'failed'
 
   const submit = (text: string) => {
     pushUserMessage(text)
-    teamRuntime.submitTask(text)
+
+    if (!live) {
+      teamRuntime.submitTask(text)
+      return
+    }
+
+    if (!connected) {
+      // Never make a network call we know will fail.
+      pushSystemMessage(
+        'OpenAI is not connected. Connect an OpenAI account to start working.'
+      )
+      return
+    }
+
+    /*
+     * Prior turns for continuity. The transcript is the source of truth, and
+     * the main process trims it again before it goes out, so a long session
+     * cannot quietly grow the request.
+     */
+    const history: GenerationTurn[] = messages
+      .filter((m) => m.kind === 'user' || m.kind === 'agent')
+      .slice(-12)
+      .map((m) => ({
+        role: m.kind === 'user' ? ('user' as const) : ('assistant' as const),
+        content: m.text
+      }))
+
+    void teamRuntime.runLiveTask(text, async (input) => {
+      const res = await window.backstage.openai.generate({
+        input,
+        history,
+        agentRole: theme.characters[0]?.role
+      })
+      if (!res.success || !res.text) {
+        throw new Error(
+          res.error ?? 'Something went wrong while contacting OpenAI.'
+        )
+      }
+      return { text: res.text, model: res.model }
+    })
   }
 
   const nameFor = (agentId?: string) =>
@@ -108,9 +157,13 @@ export function CommandCenter({ theme, engine }: Props) {
               aria-hidden
               className={busy ? 'blink text-brand-deep' : 'text-brand-deep'}
             >
-              {busy ? STATUS_GLYPH.working : STATUS_GLYPH.success}
+              {busy
+                ? STATUS_GLYPH.working
+                : failed
+                  ? STATUS_GLYPH.error
+                  : STATUS_GLYPH.success}
             </span>
-            {busy ? 'Task running' : 'Task complete'}
+            {busy ? 'Task running' : failed ? 'Task failed' : 'Task complete'}
           </p>
           <p className="mt-1 font-ui text-sm font-semibold leading-snug text-ink">
             {task.title}
@@ -149,7 +202,13 @@ export function CommandCenter({ theme, engine }: Props) {
         ) : (
           <ol className="flex flex-col gap-4">
             {messages.map((m) =>
-              m.kind === 'user' ? (
+              m.kind === 'system' ? (
+                <li key={m.id}>
+                  <p className="border-2 border-ink bg-brand-pale px-3 py-2 font-ui text-[13px] leading-[1.5] text-ink">
+                    {m.text}
+                  </p>
+                </li>
+              ) : m.kind === 'user' ? (
                 <li key={m.id} className="flex justify-end">
                   <p className="max-w-[85%] border-2 border-ink bg-brand px-3 py-2 font-ui text-[13px] leading-[1.5] text-ink">
                     {m.text}
@@ -184,14 +243,42 @@ export function CommandCenter({ theme, engine }: Props) {
       <ActivityFeed activity={activity} theme={theme} />
 
       <div className="shrink-0 border-t-[3px] border-ink p-4">
+        {live && !connected && (
+          <div className="mb-3 border-[3px] border-ink bg-brand-pale px-3 py-2.5">
+            <p className="font-pixel text-[11px] font-semibold uppercase tracking-[0.08em] text-ink">
+              OpenAI isn&apos;t connected
+            </p>
+            <p className="mt-1 font-ui text-xs leading-snug text-ink-3">
+              Connect an OpenAI account to start working.
+            </p>
+            <button
+              type="button"
+              onClick={() => setPage('account')}
+              className="mt-2 border-2 border-ink bg-brand px-2.5 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px"
+            >
+              Connect OpenAI
+            </button>
+          </div>
+        )}
+
         <PromptBox
           onSubmit={submit}
           disabled={busy}
           placeholder={busy ? 'Your team is working…' : 'Ask your team…'}
         />
-        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
-          {agents.filter((a) => ACTIVE.includes(a.status)).length} of{' '}
-          {agents.length} active · simulated
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+          <span>
+            {agents.filter((a) => ACTIVE.includes(a.status)).length} of{' '}
+            {agents.length} active
+          </span>
+          <span aria-hidden>·</span>
+          <span className={live && connected ? 'text-brand-deep' : undefined}>
+            {live
+              ? connected
+                ? provider?.selectedModel ?? 'openai'
+                : 'not connected'
+              : 'simulated'}
+          </span>
         </p>
       </div>
     </section>
