@@ -162,12 +162,8 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
           let spot: Rect | null = null
           for (const [dx, dy] of candidates) {
             const rect = {
-              x: Math.round(
-                Math.min(Math.max(baseX + dx, EDGE), Math.max(EDGE, viewW - w - EDGE))
-              ),
-              y: Math.round(
-                Math.min(Math.max(baseY + dy, EDGE), Math.max(EDGE, viewH - h - EDGE))
-              ),
+              x: Math.round(baseX + dx),
+              y: Math.round(baseY + dy),
               w,
               h
             }
