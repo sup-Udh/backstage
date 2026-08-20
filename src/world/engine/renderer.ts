@@ -252,6 +252,96 @@ export class WorldRenderer {
     }
   }
 
+  /**
+   * A thin line between two connected characters.
+   *
+   * Deliberately quiet. A room where six agents are linked is a room with
+   * several of these in it, and drawn as anything more assertive they would
+   * become the subject of the picture — the office is what the panel is for,
+   * and the links are annotation on top of it.
+   *
+   * Dashed, and drawn between the characters' chests rather than their feet,
+   * so the line reads as a relationship rather than as something painted on
+   * the floor. The dashes crawl only while the pair is actually exchanging
+   * something, which is what makes an active hand-off noticeable without any
+   * of them being animated all the time.
+   */
+  private drawLink(
+    ctx: CanvasRenderingContext2D,
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    t: number,
+    active: boolean
+  ): void {
+    const ax = Math.round(from.x)
+    const ay = Math.round(from.y - WORLD_SPRITE_H * 0.55)
+    const bx = Math.round(to.x)
+    const by = Math.round(to.y - WORLD_SPRITE_H * 0.55)
+
+    const dx = bx - ax
+    const dy = by - ay
+    const len = Math.hypot(dx, dy)
+    if (len < 1) return
+
+    ctx.save()
+    ctx.globalAlpha = active ? 0.95 : 0.4
+    ctx.fillStyle = active ? this.pal.brand : this.pal.brandDeep
+
+    // Stamped pixel by pixel rather than stroked: a 1px diagonal line drawn
+    // with lineTo lands on half pixels and is the one blurred thing in the
+    // scene. Walking the line and filling whole pixels cannot do that.
+    const steps = Math.ceil(len)
+    const crawl = active ? t * 14 : 0
+    for (let i = 0; i <= steps; i++) {
+      // 3 on, 3 off — long enough to read as a dash at any zoom.
+      if ((Math.floor(i - crawl) % 6 + 6) % 6 > 2) continue
+      const p = i / steps
+      ctx.fillRect(Math.round(ax + dx * p), Math.round(ay + dy * p), 1, 1)
+    }
+
+    // A small mark at the midpoint, so a link is findable when the two
+    // characters are far apart and the dashes are sparse.
+    const mx = Math.round(ax + dx / 2)
+    const my = Math.round(ay + dy / 2)
+    ctx.globalAlpha = active ? 1 : 0.65
+    ctx.fillRect(mx - 1, my, 3, 1)
+    ctx.fillRect(mx, my - 1, 1, 3)
+    ctx.restore()
+  }
+
+  /** The line being dragged out of a character, before it is dropped. */
+  private drawPending(
+    ctx: CanvasRenderingContext2D,
+    from: { x: number; y: number },
+    pending: PendingLink,
+    t: number
+  ): void {
+    const ax = Math.round(from.x)
+    const ay = Math.round(from.y - WORLD_SPRITE_H * 0.55)
+    const bx = Math.round(pending.x)
+    const by = Math.round(pending.y)
+
+    const dx = bx - ax
+    const dy = by - ay
+    const len = Math.hypot(dx, dy)
+    if (len < 1) return
+
+    ctx.save()
+    ctx.globalAlpha = 0.9
+    // Red while over an illegal target, so the refusal is visible before the
+    // drop rather than as an error message after it.
+    ctx.fillStyle = pending.blocked ? this.pal.rust : this.pal.brand
+
+    const steps = Math.ceil(len)
+    const crawl = t * 20
+    for (let i = 0; i <= steps; i++) {
+      if ((Math.floor(i - crawl) % 6 + 6) % 6 > 2) continue
+      const p = i / steps
+      ctx.fillRect(Math.round(ax + dx * p), Math.round(ay + dy * p), 1, 1)
+    }
+    ctx.restore()
+  }
+
   private drawMotes(ctx: CanvasRenderingContext2D, t: number): void {
     ctx.save()
     ctx.globalAlpha = 0.4
@@ -344,7 +434,11 @@ export class WorldRenderer {
     selectedId: string | null,
     cam: Camera,
     viewW: number,
-    viewH: number
+    viewH: number,
+    links: WorldLink[] = [],
+    pending: PendingLink | null = null,
+    /** Characters a pending link could legally be dropped on. */
+    droppable: Set<string> = new Set()
   ): void {
     const scene = this.theme.scene
 
@@ -408,6 +502,44 @@ export class WorldRenderer {
 
     items.sort((a, b) => a.baseY - b.baseY)
     for (const item of items) item.draw()
+
+    /*
+     * Links are drawn after the room rather than sorted into it.
+     *
+     * A relationship is not a physical object in the office — it has no place
+     * in the depth order, and sorting it by either end's y would make the
+     * same connection pass in front of a desk at one moment and behind it the
+     * next as the pair walked around. Painting them on top keeps a link
+     * readable and keeps the furniture sorting honest.
+     */
+    const at = new Map(chars.map((c) => [c.agentId, c]))
+    for (const link of links) {
+      const a = at.get(link.a)
+      const b = at.get(link.b)
+      if (a && b) this.drawLink(ctx, a, b, t, link.active)
+    }
+
+    if (pending) {
+      // Mark what this could be dropped on, so the gesture has a target
+      // rather than being a guess.
+      for (const id of droppable) {
+        const c = at.get(id)
+        if (!c || id === pending.from) continue
+        ctx.save()
+        ctx.globalAlpha = id === pending.target ? 1 : 0.5
+        ctx.fillStyle = this.pal.brand
+        const cx = Math.round(c.x)
+        const feet = Math.round(c.y)
+        const w = WORLD_SPRITE_W + 4
+        ctx.fillRect(cx - (w >> 1), feet + 2, w, 1)
+        ctx.fillRect(cx - (w >> 1), feet, 1, 2)
+        ctx.fillRect(cx + (w >> 1) - 1, feet, 1, 2)
+        ctx.restore()
+      }
+
+      const from = at.get(pending.from)
+      if (from) this.drawPending(ctx, from, pending, t)
+    }
 
     /*
      * Names and statuses are deliberately absent here. They are drawn as DOM

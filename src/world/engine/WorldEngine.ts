@@ -6,7 +6,12 @@ import { WORLD_SPRITE_H, WORLD_SPRITE_W } from './spriteCache'
 import type { AgentView, CharacterRuntime } from '../world.types'
 import { Director } from './behavior'
 import type { CharacterDef } from '../../characters/character.types'
-import { WorldRenderer, type Camera } from './renderer'
+import {
+  WorldRenderer,
+  type Camera,
+  type PendingLink,
+  type WorldLink
+} from './renderer'
 
 /**
  * Owns the animation loop.
@@ -35,6 +40,12 @@ export class WorldEngine {
   private placed = new Set<string>()
   /** Whether the opening camera has been aimed yet. */
   private framed = false
+  /** Collaboration links, mirrored from the roster. */
+  private links: WorldLink[] = []
+  /** A link being dragged out of a character. */
+  private pending: PendingLink | null = null
+  /** Who a pending link could legally be dropped on. */
+  private droppable = new Set<string>()
   private views: AgentView[] = []
   private viewListeners = new Set<(v: AgentView[]) => void>()
   private unsubscribe: (() => void) | null = null
@@ -472,7 +483,10 @@ export class WorldEngine {
       this.selected,
       this.cam,
       this.viewW,
-      this.viewH
+      this.viewH,
+      this.links,
+      this.pending,
+      this.droppable
     )
   }
 
@@ -503,6 +517,28 @@ export class WorldEngine {
   subscribeViews = (fn: (v: AgentView[]) => void): (() => void) => {
     this.viewListeners.add(fn)
     return () => this.viewListeners.delete(fn)
+  }
+
+  /**
+   * Mirror the roster's collaboration links.
+   *
+   * The engine is told what the relationships are; it never decides them. The
+   * roster in the main process is the authority, so a link drawn here is one
+   * that was actually accepted and persisted — the world cannot show a
+   * connection the runtime would not honour.
+   */
+  setLinks(links: WorldLink[]): void {
+    this.links = links
+  }
+
+  /** Begin, update or end a drag-to-connect gesture. */
+  setPendingLink(pending: PendingLink | null, droppable: string[] = []): void {
+    this.pending = pending
+    this.droppable = new Set(droppable)
+  }
+
+  getPendingLink(): PendingLink | null {
+    return this.pending
   }
 
   setHovered(id: string | null): void {
