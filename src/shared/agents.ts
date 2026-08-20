@@ -251,6 +251,15 @@ export type RuntimeEventType =
   | 'git.changed'
   | 'terminal.started'
   | 'terminal.exited'
+  // Team Orchestration
+  | 'team.started'
+  | 'team.agent.started'
+  | 'team.agent.streaming'
+  | 'team.agent.completed'
+  | 'team.agent.failed'
+  | 'team.agent.skipped'
+  | 'team.cancelled'
+  | 'team.completed'
 
 /**
  * One thing that happened.
@@ -275,6 +284,9 @@ export interface RuntimeEvent {
   executionId?: string
   correlationId?: string
   depth?: number
+
+  teamExecutionId?: string
+  error?: string
 
   /** Line for the activity rail. */
   activity?: string

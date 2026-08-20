@@ -321,25 +321,36 @@ export class WorldEngine {
    */
   getLabelAnchors(): LabelAnchor[] {
     const { x: camX, y: camY, scale } = this.cam
-    const offX = Math.round(camX * scale)
-    const offY = Math.round(camY * scale)
+
     return this.chars.map((c) => {
-      const cx = Math.round(c.x) * scale - offX
-      const cy = Math.round(c.y) * scale - offY
-      const head = cy - WORLD_SPRITE_H * scale
-      const feet = cy
+      // 1. Character world position
+      // Keep precision here so zoom steps don't accumulate half-pixel drift.
+      const worldX = c.x
+      const worldY = c.y
+
+      // 2. Tag base positions in WORLD coordinates
+      // 16 is WORLD_SPRITE_H. 2 is the small world offset (GAP).
+      const worldHead = worldY - 16 - 2
+      const worldFeet = worldY + 2
+
+      // 3. Transform world positions to screen using the EXACT same camera transform.
+      // Pin rounding to the final CSS pixel result only.
+      const screenX = Math.round(worldX * scale - camX * scale)
+      const screenFeet = Math.round(worldFeet * scale - camY * scale)
+      const screenHead = Math.round(worldHead * scale - camY * scale)
+
+      const onScreen =
+        screenX > -20 &&
+        screenX < this.viewW + 20 &&
+        screenFeet > -20 &&
+        screenHead < this.viewH + 20
+
       return {
         agentId: c.agentId,
-        x: cx,
-        head,
-        feet,
-        // A margin either side, so a label does not pop as its character
-        // walks past the edge of the viewport.
-        onScreen:
-          cx > -MARGIN &&
-          cx < this.viewW + MARGIN &&
-          feet > -MARGIN &&
-          head < this.viewH + MARGIN
+        x: screenX,
+        feet: screenFeet,
+        head: screenHead,
+        onScreen
       }
     })
   }

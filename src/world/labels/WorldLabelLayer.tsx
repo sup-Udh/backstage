@@ -155,7 +155,7 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
            * "directly over" is the entire reason anyone can tell whose it is.
            */
           const x = Math.round(a.x - w / 2)
-          let y = Math.round(kind === 'name' ? a.head - GAP - h : a.feet + GAP)
+          let y = Math.round(kind === 'name' ? a.head - h : a.feet)
 
           // Names climb away from the head, statuses drop away from the feet.
           const step = kind === 'name' ? -(h + 2) : h + 2
