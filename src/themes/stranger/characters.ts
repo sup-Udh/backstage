@@ -1,30 +1,39 @@
 import { defineCast } from '../../characters/defineCast'
 import type { CharacterDef } from '../../characters/character.types'
 
-/** A basement crew running an investigation after school. */
-export const strangerCharacters: CharacterDef[] = [
+/**
+ * A basement crew running an investigation after school.
+ *
+ * Five of the eight used to share `hairStyle: 'short'`, which meant five
+ * identical silhouettes distinguished only by jumper colour — and colour is
+ * the first thing to go in a basement lit by one bulb. Every one now has its
+ * own outline and its own face.
+ */
+export const strangerCharacters: CharacterDef[] = defineCast([
   {
     id: 'el',
     agentId: 'agent-1',
     name: 'Eleven',
     role: 'Signal Analyst',
     homeDesk: 0,
-    appearance: {
-      skin: '#F0C6A0',
-      skinShade: '#D2A177',
-      hair: '#3A2A22',
-      hairShade: '#241812',
-      hairStyle: 'short',
-      outfit: '#D8CFC0',
-      outfitShade: '#B3A996',
-      shirt: '#F2EEE2',
-      accent: '#B03A3A',
-      vest: null,
-      trousers: '#3C4A63',
-      shoes: '#12141F',
-      glasses: false,
-      mouth: 'neutral'
-    }
+    // Cropped almost to the scalp: the only buzz cut, and unmistakable for it.
+    skin: '#F0C6A0',
+    hair: '#3A2A22',
+    hairStyle: 'buzz',
+    outfit: '#D8CFC0',
+    shirt: '#F2EEE2',
+    accent: '#B03A3A',
+    trousers: '#3C4A63',
+    shoes: '#12141F',
+    build: 'slim',
+    posture: 'rigid',
+    outfitStyle: 'blazer',
+    expression: 'focused',
+    faceWidth: 'narrow',
+    eyeSpacing: 'wide',
+    browShape: 'flat',
+    noseShape: 'small',
+    jaw: 'narrow'
   },
   {
     id: 'mike',
@@ -32,22 +41,24 @@ export const strangerCharacters: CharacterDef[] = [
     name: 'Mike',
     role: 'Strategist',
     homeDesk: 1,
-    appearance: {
-      skin: '#EDBE93',
-      skinShade: '#C99A67',
-      hair: '#241A16',
-      hairShade: '#140E0B',
-      hairStyle: 'swept',
-      outfit: '#3F5A8C',
-      outfitShade: '#2C4269',
-      shirt: '#E2DCCC',
-      accent: null,
-      vest: null,
-      trousers: '#2E3A52',
-      shoes: '#12141F',
-      glasses: false,
-      mouth: 'neutral'
-    }
+    skin: '#EDBE93',
+    hair: '#241A16',
+    hairStyle: 'parted',
+    outfit: '#3F5A8C',
+    shirt: '#E2DCCC',
+    trousers: '#2E3A52',
+    shoes: '#12141F',
+    build: 'slim',
+    posture: 'forward',
+    outfitStyle: 'hoodie',
+    accessory: 'notebook',
+    accessoryColor: '#FFC94F',
+    expression: 'serious',
+    faceWidth: 'narrow',
+    eyeSpacing: 'close',
+    browShape: 'angled',
+    noseShape: 'straight',
+    jaw: 'narrow'
   },
   {
     id: 'dustin',
@@ -55,22 +66,23 @@ export const strangerCharacters: CharacterDef[] = [
     name: 'Dustin',
     role: 'Researcher',
     homeDesk: 2,
-    appearance: {
-      skin: '#F3CBA4',
-      skinShade: '#D6A67C',
-      hair: '#5A3E28',
-      hairShade: '#3E2A1A',
-      hairStyle: 'short',
-      outfit: '#7FA05F',
-      outfitShade: '#5E7C43',
-      shirt: '#EDE7D6',
-      accent: null,
-      vest: null,
-      trousers: '#4A5266',
-      shoes: '#12141F',
-      glasses: false,
-      mouth: 'smirk'
-    }
+    // Curls under a cap of them, the widest face down here, always mid-grin.
+    skin: '#F3CBA4',
+    hair: '#5A3E28',
+    hairStyle: 'curly',
+    outfit: '#7FA05F',
+    shirt: '#EDE7D6',
+    trousers: '#4A5266',
+    shoes: '#12141F',
+    build: 'regular',
+    posture: 'relaxed',
+    outfitStyle: 'hoodie',
+    smirk: true,
+    faceWidth: 'wide',
+    eyeSpacing: 'wide',
+    browShape: 'arched',
+    noseShape: 'broad',
+    jaw: 'soft'
   },
   {
     id: 'nancy',
@@ -78,39 +90,119 @@ export const strangerCharacters: CharacterDef[] = [
     name: 'Nancy',
     role: 'Investigator',
     homeDesk: 0,
-    appearance: {
-      skin: '#F6D2AE',
-      skinShade: '#DBAC84',
-      hair: '#6A4526',
-      hairShade: '#4A2F19',
-      hairStyle: 'long',
-      outfit: '#B04A6A',
-      outfitShade: '#88334E',
-      shirt: '#F2EEE2',
-      accent: null,
-      vest: null,
-      trousers: '#3A4258',
-      shoes: '#12141F',
-      glasses: false,
-      mouth: 'neutral'
-    }
+    skin: '#F6D2AE',
+    hair: '#6A4526',
+    hairStyle: 'long',
+    outfit: '#B04A6A',
+    shirt: '#F2EEE2',
+    trousers: '#3A4258',
+    shoes: '#12141F',
+    build: 'slim',
+    posture: 'upright',
+    outfitStyle: 'cardigan',
+    accessory: 'tablet',
+    accessoryColor: '#FFC94F',
+    expression: 'focused',
+    faceWidth: 'narrow',
+    eyeSpacing: 'regular',
+    browShape: 'flat',
+    noseShape: 'small',
+    jaw: 'narrow'
+  },
+
+  /* The rest of the party, showing up as the investigation widens. */
+  {
+    id: 'lucas',
+    agentId: 'agent-5',
+    name: 'Lucas',
+    role: 'Scout',
+    homeDesk: 1,
+    skin: '#8A5F3C',
+    hair: '#241A16',
+    hairStyle: 'afro',
+    outfit: '#4A6E4A',
+    shirt: '#E2DCCC',
+    trousers: '#3A4A58',
+    build: 'regular',
+    posture: 'upright',
+    outfitStyle: 'shirt',
+    accessory: 'badge',
+    expression: 'serious',
+    faceWidth: 'regular',
+    eyeSpacing: 'regular',
+    browShape: 'heavy',
+    noseShape: 'broad',
+    jaw: 'square'
+  },
+  {
+    id: 'will',
+    agentId: 'agent-6',
+    name: 'Will',
+    role: 'Cartographer',
+    homeDesk: 2,
+    skin: '#F0C6A0',
+    hair: '#3A2A22',
+    hairStyle: 'bob',
+    outfit: '#6A5A8A',
+    shirt: '#EDE7D6',
+    trousers: '#3A4258',
+    build: 'slim',
+    posture: 'forward',
+    outfitStyle: 'shirt',
+    accessory: 'pen',
+    accessoryColor: '#FFC94F',
+    expression: 'tired',
+    faceWidth: 'narrow',
+    eyeSpacing: 'close',
+    browShape: 'flat',
+    noseShape: 'small',
+    jaw: 'narrow'
+  },
+  {
+    id: 'steve',
+    agentId: 'agent-7',
+    name: 'Steve',
+    role: 'Logistics',
+    homeDesk: 0,
+    // The hair. Volume at the sides, and a face that knows it.
+    skin: '#EDBE93',
+    hair: '#4A3524',
+    hairStyle: 'waves',
+    outfit: '#8A6A4A',
+    shirt: '#F2EEE2',
+    trousers: '#3E4A5E',
+    smirk: true,
+    build: 'broad',
+    posture: 'relaxed',
+    outfitStyle: 'blazer',
+    faceWidth: 'wide',
+    eyeSpacing: 'regular',
+    browShape: 'arched',
+    noseShape: 'straight',
+    jaw: 'square'
+  },
+  {
+    id: 'robin',
+    agentId: 'agent-8',
+    name: 'Robin',
+    role: 'Translator',
+    homeDesk: 1,
+    skin: '#F3CBA4',
+    hair: '#C7A45E',
+    hairStyle: 'topknot',
+    outfit: '#5A8A9A',
+    shirt: '#FFFFFF',
+    trousers: '#3A5260',
+    build: 'slim',
+    posture: 'relaxed',
+    outfitStyle: 'shirt',
+    accessory: 'headphones',
+    accessoryColor: '#FFC94F',
+    expression: 'skeptical',
+    faceWidth: 'narrow',
+    eyeSpacing: 'wide',
+    browShape: 'angled',
+    noseShape: 'straight',
+    jaw: 'narrow'
   }
-]
-
-/** The rest of the party, showing up as the investigation widens. */
-const strangerReserves = defineCast([
-  { id: 'lucas', agentId: 'agent-5', name: 'Lucas', role: 'Scout', homeDesk: 1,
-    skin: '#8A5F3C', hair: '#241A16', hairStyle: 'short', outfit: '#4A6E4A',
-    shirt: '#E2DCCC', trousers: '#3A4A58' },
-  { id: 'will', agentId: 'agent-6', name: 'Will', role: 'Cartographer', homeDesk: 2,
-    skin: '#F0C6A0', hair: '#3A2A22', hairStyle: 'short', outfit: '#6A5A8A',
-    shirt: '#EDE7D6', trousers: '#3A4258' },
-  { id: 'steve', agentId: 'agent-7', name: 'Steve', role: 'Logistics', homeDesk: 0,
-    skin: '#EDBE93', hair: '#4A3524', hairStyle: 'swept', outfit: '#8A6A4A',
-    shirt: '#F2EEE2', trousers: '#3E4A5E', smirk: true },
-  { id: 'robin', agentId: 'agent-8', name: 'Robin', role: 'Translator', homeDesk: 1,
-    skin: '#F3CBA4', hair: '#C7A45E', hairStyle: 'short', outfit: '#5A8A9A',
-    shirt: '#FFFFFF', trousers: '#3A5260' }
 ])
-
-strangerCharacters.push(...strangerReserves)

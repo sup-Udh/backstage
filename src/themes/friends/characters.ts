@@ -2,32 +2,38 @@ import { defineCast } from '../../characters/defineCast'
 import type { CharacterDef } from '../../characters/character.types'
 
 /**
- * The apartment ensemble. Same four agents as every other world - only the
- * people they are portrayed by change.
+ * The apartment ensemble. Same agents as every other world — only the people
+ * they are portrayed by change.
+ *
+ * Six of them share a living room, so the silhouettes have to do more work
+ * here than anywhere else: three have long hair and would otherwise be the
+ * same outline. They are separated by volume rather than length — waves,
+ * length, and a topknot — and then again by face.
  */
-export const friendsCharacters: CharacterDef[] = [
+export const friendsCharacters: CharacterDef[] = defineCast([
   {
     id: 'rachel',
     agentId: 'agent-1',
     name: 'Rachel',
     role: 'Coordinator',
     homeDesk: 0,
-    appearance: {
-      skin: '#F3CBA4',
-      skinShade: '#D6A67C',
-      hair: '#A9763E',
-      hairShade: '#82582A',
-      hairStyle: 'long',
-      outfit: '#D8DDE4',
-      outfitShade: '#B4BBC6',
-      shirt: '#FFFFFF',
-      accent: null,
-      vest: null,
-      trousers: '#3F4A63',
-      shoes: '#241C2E',
-      glasses: false,
-      mouth: 'smirk'
-    }
+    // The layered cut: volume at the sides rather than length down the back.
+    skin: '#F3CBA4',
+    hair: '#A9763E',
+    hairStyle: 'waves',
+    outfit: '#D8DDE4',
+    shirt: '#FFFFFF',
+    trousers: '#3F4A63',
+    shoes: '#241C2E',
+    build: 'slim',
+    posture: 'relaxed',
+    outfitStyle: 'blazer',
+    smirk: true,
+    faceWidth: 'narrow',
+    eyeSpacing: 'wide',
+    browShape: 'arched',
+    noseShape: 'small',
+    jaw: 'narrow'
   },
   {
     id: 'monica',
@@ -35,22 +41,23 @@ export const friendsCharacters: CharacterDef[] = [
     name: 'Monica',
     role: 'Organiser',
     homeDesk: 1,
-    appearance: {
-      skin: '#EFC49F',
-      skinShade: '#D0A075',
-      hair: '#2F211C',
-      hairShade: '#1D1310',
-      hairStyle: 'bun',
-      outfit: '#5E7FA8',
-      outfitShade: '#44608A',
-      shirt: '#FFF3E2',
-      accent: null,
-      vest: null,
-      trousers: '#2C3550',
-      shoes: '#241C2E',
-      glasses: false,
-      mouth: 'neutral'
-    }
+    // Dark hair up and out of the way, and the most focused brow in the flat.
+    skin: '#EFC49F',
+    hair: '#2F211C',
+    hairStyle: 'bun',
+    outfit: '#5E7FA8',
+    shirt: '#FFF3E2',
+    trousers: '#2C3550',
+    shoes: '#241C2E',
+    build: 'slim',
+    posture: 'rigid',
+    outfitStyle: 'shirt',
+    expression: 'focused',
+    faceWidth: 'narrow',
+    eyeSpacing: 'close',
+    browShape: 'angled',
+    noseShape: 'straight',
+    jaw: 'narrow'
   },
   {
     id: 'chandler',
@@ -58,22 +65,25 @@ export const friendsCharacters: CharacterDef[] = [
     name: 'Chandler',
     role: 'Analyst',
     homeDesk: 2,
-    appearance: {
-      skin: '#EDBE93',
-      skinShade: '#C99A67',
-      hair: '#3B2A20',
-      hairShade: '#241812',
-      hairStyle: 'short',
-      outfit: '#8C6E4A',
-      outfitShade: '#6B5236',
-      shirt: '#FFFDF5',
-      accent: '#5C6B8A',
-      vest: '#A98657',
-      trousers: '#4A4034',
-      shoes: '#241C2E',
-      glasses: false,
-      mouth: 'smirk'
-    }
+    // Waistcoat, side parting, permanently mid-remark.
+    skin: '#EDBE93',
+    hair: '#3B2A20',
+    hairStyle: 'parted',
+    outfit: '#8C6E4A',
+    shirt: '#FFFDF5',
+    accent: '#5C6B8A',
+    vest: '#A98657',
+    trousers: '#4A4034',
+    shoes: '#241C2E',
+    build: 'regular',
+    posture: 'relaxed',
+    outfitStyle: 'vest',
+    smirk: true,
+    faceWidth: 'regular',
+    eyeSpacing: 'wide',
+    browShape: 'arched',
+    noseShape: 'straight',
+    jaw: 'soft'
   },
   {
     id: 'phoebe',
@@ -81,39 +91,120 @@ export const friendsCharacters: CharacterDef[] = [
     name: 'Phoebe',
     role: 'Wildcard',
     homeDesk: 0,
-    appearance: {
-      skin: '#F6D2AE',
-      skinShade: '#DBAC84',
-      hair: '#D7B96A',
-      hairShade: '#AE9145',
-      hairStyle: 'long',
-      outfit: '#B4693F',
-      outfitShade: '#8E4F2C',
-      shirt: '#FFF3E2',
-      accent: null,
-      vest: null,
-      trousers: '#7A5A78',
-      shoes: '#241C2E',
-      glasses: false,
-      mouth: 'neutral'
-    }
+    // The longest hair in the flat and the calmest face under it.
+    skin: '#F6D2AE',
+    hair: '#D7B96A',
+    hairStyle: 'long',
+    outfit: '#B4693F',
+    shirt: '#FFF3E2',
+    trousers: '#7A5A78',
+    shoes: '#241C2E',
+    build: 'slim',
+    posture: 'relaxed',
+    outfitStyle: 'cardigan',
+    accessory: 'scarf',
+    accessoryColor: '#C6642F',
+    expression: 'calm',
+    faceWidth: 'narrow',
+    eyeSpacing: 'wide',
+    browShape: 'flat',
+    noseShape: 'small',
+    jaw: 'narrow'
+  },
+
+  /* The rest of the building, arriving as the workload grows. */
+  {
+    id: 'ross',
+    agentId: 'agent-5',
+    name: 'Ross',
+    role: 'Researcher',
+    homeDesk: 1,
+    skin: '#EDBE93',
+    hair: '#2F211C',
+    hairStyle: 'slick',
+    outfit: '#5A4A7A',
+    shirt: '#FFF3E2',
+    accent: '#3E3358',
+    trousers: '#3E3358',
+    build: 'regular',
+    posture: 'forward',
+    outfitStyle: 'blazer',
+    expression: 'skeptical',
+    faceWidth: 'narrow',
+    eyeSpacing: 'close',
+    browShape: 'heavy',
+    noseShape: 'straight',
+    jaw: 'narrow'
+  },
+  {
+    id: 'joey',
+    agentId: 'agent-6',
+    name: 'Joey',
+    role: 'Frontman',
+    homeDesk: 2,
+    skin: '#E8B98D',
+    hair: '#241A16',
+    hairStyle: 'swept',
+    outfit: '#7A4A3A',
+    shirt: '#F2EEE2',
+    trousers: '#3A3242',
+    smirk: true,
+    build: 'broad',
+    posture: 'relaxed',
+    outfitStyle: 'blazer',
+    faceWidth: 'wide',
+    eyeSpacing: 'regular',
+    browShape: 'flat',
+    noseShape: 'broad',
+    jaw: 'square',
+    facialHair: 'stubble'
+  },
+  {
+    id: 'gunther',
+    agentId: 'agent-7',
+    name: 'Gunther',
+    role: 'Support',
+    homeDesk: 0,
+    // Bleached to the point of being its own light source.
+    skin: '#F6D2AE',
+    hair: '#E8DCA8',
+    hairStyle: 'parted',
+    outfit: '#4A6E6A',
+    shirt: '#FFFFFF',
+    trousers: '#38504E',
+    build: 'slim',
+    posture: 'upright',
+    outfitStyle: 'shirt',
+    accessory: 'mug',
+    accessoryColor: '#E8E4DA',
+    expression: 'tired',
+    faceWidth: 'narrow',
+    eyeSpacing: 'regular',
+    browShape: 'flat',
+    noseShape: 'straight',
+    jaw: 'narrow'
+  },
+  {
+    id: 'janice',
+    agentId: 'agent-8',
+    name: 'Janice',
+    role: 'Escalations',
+    homeDesk: 1,
+    // The biggest hair in the building, and the only face that is all curve.
+    skin: '#F0C6A0',
+    hair: '#3A2A24',
+    hairStyle: 'curly',
+    outfit: '#A8467A',
+    shirt: '#FFF3E2',
+    trousers: '#5A2E48',
+    build: 'regular',
+    posture: 'relaxed',
+    outfitStyle: 'blazer',
+    expression: 'friendly',
+    faceWidth: 'wide',
+    eyeSpacing: 'wide',
+    browShape: 'arched',
+    noseShape: 'small',
+    jaw: 'soft'
   }
-]
-
-/** The reserves: more of the building, arriving as the workload grows. */
-const friendsReserves = defineCast([
-  { id: 'ross', agentId: 'agent-5', name: 'Ross', role: 'Researcher', homeDesk: 1,
-    skin: '#EDBE93', hair: '#2F211C', hairStyle: 'short', outfit: '#5A4A7A',
-    shirt: '#FFF3E2', accent: '#3E3358', trousers: '#3E3358' },
-  { id: 'joey', agentId: 'agent-6', name: 'Joey', role: 'Frontman', homeDesk: 2,
-    skin: '#E8B98D', hair: '#241A16', hairStyle: 'swept', outfit: '#7A4A3A',
-    shirt: '#F2EEE2', trousers: '#3A3242', smirk: true },
-  { id: 'gunther', agentId: 'agent-7', name: 'Gunther', role: 'Support', homeDesk: 0,
-    skin: '#F6D2AE', hair: '#E8DCA8', hairStyle: 'short', outfit: '#4A6E6A',
-    shirt: '#FFFFFF', trousers: '#38504E' },
-  { id: 'janice', agentId: 'agent-8', name: 'Janice', role: 'Escalations', homeDesk: 1,
-    skin: '#F0C6A0', hair: '#3A2A24', hairStyle: 'long', outfit: '#A8467A',
-    shirt: '#FFF3E2', trousers: '#5A2E48' }
 ])
-
-friendsCharacters.push(...friendsReserves)

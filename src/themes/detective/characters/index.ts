@@ -16,6 +16,13 @@ import type { CharacterDef } from '../../../characters/character.types'
  *   Hightower   ponytail, blazer, earpiece               regular, upright
  *   Bertram     grey messy hair, cardigan, glasses, pen  slim, forward
  *
+ * The *faces* are specified too, and that is what changed most recently. Hair
+ * and clothing used to carry the whole identity, so eight characters shared
+ * one face and the cast read as one person in eight wigs — fine at the size
+ * they were drawn, useless once they shrank to twelve pixels wide. Every one
+ * now has its own head width, eye spacing, brow, nose and jaw, so the second
+ * test is whether you can tell them apart from the neck up alone.
+ *
  * `agentId` is the only link back to the runtime. Another theme binds a
  * completely different character to the same agent.
  */
@@ -28,6 +35,8 @@ export const detectiveCharacters: CharacterDef[] = [
     homeDesk: 0,
     appearance: {
       // Warm fair hair swept to one side; the only three-piece in the room.
+      // Narrow face, wide-set eyes and an arched brow: reads as amused before
+      // the smirk is even drawn, which is the entire character.
       skin: '#F0C9A4',
       hair: '#D8B26A',
       hairStyle: 'swept',
@@ -43,7 +52,12 @@ export const detectiveCharacters: CharacterDef[] = [
       posture: 'relaxed',
       accessory: 'notebook',
       accessoryColor: '#FFC94F',
-      expression: 'smirk'
+      expression: 'smirk',
+      faceWidth: 'narrow',
+      eyeSpacing: 'wide',
+      browShape: 'arched',
+      noseShape: 'straight',
+      jaw: 'narrow'
     }
   },
   {
@@ -53,7 +67,8 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Team Lead',
     homeDesk: 0,
     appearance: {
-      // Dark hair up, restrained charcoal, badge at the chest.
+      // Dark hair up, restrained charcoal, badge at the chest. Close-set eyes
+      // under a flat brow: the most level face on the team.
       skin: '#EDC49E',
       hair: '#33241E',
       hairStyle: 'bun',
@@ -69,7 +84,12 @@ export const detectiveCharacters: CharacterDef[] = [
       posture: 'upright',
       accessory: 'badge',
       accessoryColor: '#FFC94F',
-      expression: 'serious'
+      expression: 'serious',
+      faceWidth: 'narrow',
+      eyeSpacing: 'close',
+      browShape: 'flat',
+      noseShape: 'small',
+      jaw: 'soft'
     }
   },
   {
@@ -79,8 +99,9 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Technical Investigator',
     homeDesk: 1,
     appearance: {
-      // Buzz cut, plain suit, no accessory, narrow frame. Deliberately the
-      // most austere outline on the team — recognisable by being the least.
+      // Buzz cut, plain suit, no accessory. Deliberately the most austere
+      // outline on the team — recognisable by being the least. A square jaw
+      // and a heavy brow do the work the hair refuses to.
       skin: '#E4B489',
       hair: '#1E1917',
       hairStyle: 'buzz',
@@ -95,7 +116,12 @@ export const detectiveCharacters: CharacterDef[] = [
       build: 'slim',
       posture: 'rigid',
       accessory: 'none',
-      expression: 'serious'
+      expression: 'serious',
+      faceWidth: 'regular',
+      eyeSpacing: 'regular',
+      browShape: 'heavy',
+      noseShape: 'straight',
+      jaw: 'square'
     }
   },
   {
@@ -105,7 +131,8 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Research Specialist',
     homeDesk: 2,
     appearance: {
-      // Long auburn hair past the shoulders: the tallest outline.
+      // Long auburn hair past the shoulders: the tallest outline. A narrow
+      // face inside it, so the hair reads as volume rather than as a head.
       skin: '#F4D0AB',
       hair: '#A85B33',
       hairStyle: 'long',
@@ -121,7 +148,12 @@ export const detectiveCharacters: CharacterDef[] = [
       posture: 'upright',
       accessory: 'tablet',
       accessoryColor: '#FFC94F',
-      expression: 'focused'
+      expression: 'focused',
+      faceWidth: 'narrow',
+      eyeSpacing: 'regular',
+      browShape: 'arched',
+      noseShape: 'small',
+      jaw: 'narrow'
     }
   },
   {
@@ -132,6 +164,7 @@ export const detectiveCharacters: CharacterDef[] = [
     homeDesk: 1,
     appearance: {
       // Broadest shoulders in the office, no jacket, coffee always in hand.
+      // The face matches the build: wide, square-jawed, stubbled.
       skin: '#EABB91',
       hair: '#4A3524',
       hairStyle: 'short',
@@ -147,7 +180,13 @@ export const detectiveCharacters: CharacterDef[] = [
       posture: 'slouched',
       accessory: 'mug',
       accessoryColor: '#E8E4DA',
-      expression: 'friendly'
+      expression: 'friendly',
+      faceWidth: 'wide',
+      eyeSpacing: 'wide',
+      browShape: 'flat',
+      noseShape: 'broad',
+      jaw: 'square',
+      facialHair: 'stubble'
     }
   },
   {
@@ -157,7 +196,8 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Supervisor',
     homeDesk: 2,
     appearance: {
-      // Slicked hair and a long coat: the outline reads as management.
+      // Slicked hair and a long coat: the outline reads as management. The
+      // angled brow and thin moustache are the rest of the impression.
       skin: '#EFC6A0',
       hair: '#6E5334',
       hairStyle: 'slick',
@@ -173,7 +213,13 @@ export const detectiveCharacters: CharacterDef[] = [
       posture: 'rigid',
       accessory: 'briefcase',
       accessoryColor: '#8A6236',
-      expression: 'skeptical'
+      expression: 'skeptical',
+      faceWidth: 'regular',
+      eyeSpacing: 'close',
+      browShape: 'angled',
+      noseShape: 'straight',
+      jaw: 'square',
+      facialHair: 'moustache'
     }
   },
   {
@@ -184,6 +230,8 @@ export const detectiveCharacters: CharacterDef[] = [
     homeDesk: 0,
     appearance: {
       // Ponytail off to one side and an earpiece: senior, always on a call.
+      // The only wide-set, arched-brow face with a square jaw — composed
+      // rather than soft.
       skin: '#8A5F3C',
       hair: '#2A1D16',
       hairStyle: 'ponytail',
@@ -199,7 +247,12 @@ export const detectiveCharacters: CharacterDef[] = [
       posture: 'upright',
       accessory: 'earpiece',
       accessoryColor: '#FFC94F',
-      expression: 'calm'
+      expression: 'calm',
+      faceWidth: 'regular',
+      eyeSpacing: 'wide',
+      browShape: 'arched',
+      noseShape: 'broad',
+      jaw: 'square'
     }
   },
   {
@@ -209,7 +262,9 @@ export const detectiveCharacters: CharacterDef[] = [
     role: 'Liaison',
     homeDesk: 1,
     appearance: {
-      // Grey untidy hair and glasses: the oldest silhouette in the room.
+      // Grey untidy hair, glasses and a grey beard: the oldest silhouette in
+      // the room, and the only one whose facial hair is a different colour
+      // from what is left on top.
       skin: '#EDC4A0',
       hair: '#8C8C86',
       hairStyle: 'messy',
@@ -225,7 +280,14 @@ export const detectiveCharacters: CharacterDef[] = [
       posture: 'forward',
       accessory: 'pen',
       accessoryColor: '#FFC94F',
-      expression: 'tired'
+      expression: 'tired',
+      faceWidth: 'wide',
+      eyeSpacing: 'close',
+      browShape: 'heavy',
+      noseShape: 'broad',
+      jaw: 'soft',
+      facialHair: 'beard',
+      facialHairColor: '#9A9A93'
     }
   }
 ]

@@ -81,6 +81,13 @@ export function appearancePalette(a: CharacterAppearance): Palette {
     hairShade: a.hairShade ?? tint(a.hair, -0.28),
     hairDeep: tint(a.hair, -0.48),
 
+    /*
+     * Facial hair, which is usually the hair darkened and occasionally not.
+     * A grey beard under dark hair is a whole character by itself, so it gets
+     * its own entry rather than being derived and then fought with.
+     */
+    facialHair: a.facialHairColor ?? tint(a.hair, -0.28),
+
     outfitLit: tint(a.outfit, 0.2),
     outfit: a.outfit,
     outfitShade: a.outfitShade ?? tint(a.outfit, -0.24),
@@ -145,17 +152,22 @@ function headGeom(a: CharacterAppearance, dy: number): Head {
 /**
  * Where each eye's left edge sits.
  *
- * Measured out from the centre line rather than in from the head's edge, so
- * spacing is independent of face width — a wide face with close-set eyes is a
- * different person from a narrow face with the same spacing, and deriving one
- * from the other would have collapsed them into the same drawing.
+ * The pair is centred as a unit and then the gap opened out from there, which
+ * is the only way to keep both eyes on the face: measuring each one out from
+ * the centre line independently put a wide-set eye on a narrow head straight
+ * through the outline and onto the ear.
+ *
+ * The gap is also capped by what the head can hold. A narrow face cannot have
+ * wide-set eyes — there is nowhere for them to go — so it gets the widest
+ * spacing that fits instead of one that does not.
  */
 function eyeColumns(a: CharacterAppearance, head: Head): { l: number; r: number } {
-  const gap = a.eyeSpacing === 'close' ? 1 : a.eyeSpacing === 'wide' ? 3 : 2
-  return {
-    l: head.cx - Math.ceil(gap / 2) - EYE_W,
-    r: head.cx + Math.floor(gap / 2)
-  }
+  const wanted = a.eyeSpacing === 'close' ? 1 : a.eyeSpacing === 'wide' ? 3 : 2
+  const gap = Math.max(1, Math.min(wanted, head.w - EYE_W * 2))
+
+  const span = gap + EYE_W * 2
+  const l = head.cx - Math.floor(span / 2)
+  return { l, r: l + EYE_W + gap }
 }
 
 const EYE_W = 2
@@ -166,197 +178,358 @@ const EYE_W = 2
  * extend past the skull without covering the face — which is most of what
  * makes one character distinguishable from another at this size.
  */
-function hairBack(a: CharacterAppearance, dy: number): Op[] {
-  const y = HEAD_Y + dy
+function hairBack(a: CharacterAppearance, h: Head): Op[] {
+  const { x, w, y } = h
+  const right = x + w
+
   switch (a.hairStyle) {
     case 'long':
       return [
-        [3, y + 1, 3, 15, 'ink'],
-        [14, y + 1, 3, 15, 'ink'],
-        [4, y + 2, 2, 13, 'hairShade'],
-        [14, y + 2, 2, 13, 'hairDeep'],
-        [4, y + 2, 2, 5, 'hair']
+        [x - 3, y + 1, 3, 15, 'ink'],
+        [right, y + 1, 3, 15, 'ink'],
+        [x - 2, y + 2, 2, 13, 'hairShade'],
+        [right, y + 2, 2, 13, 'hairDeep'],
+        [x - 2, y + 2, 2, 5, 'hair']
+      ]
+    case 'waves':
+      // Shoulder-length, but the volume is at the sides rather than the length
+      // — a wider outline than 'long' and a shorter one.
+      return [
+        [x - 3, y + 1, 3, 10, 'ink'],
+        [right, y + 1, 3, 10, 'ink'],
+        [x - 3, y + 3, 2, 7, 'hair'],
+        [right + 1, y + 3, 2, 7, 'hairShade'],
+        [x - 4, y + 4, 1, 4, 'ink'],
+        [right + 3, y + 4, 1, 4, 'ink']
       ]
     case 'bob':
       return [
-        [4, y + 1, 2, 10, 'ink'],
-        [14, y + 1, 2, 10, 'ink'],
-        [4, y + 2, 2, 8, 'hairShade'],
-        [14, y + 2, 2, 8, 'hairDeep']
+        [x - 2, y + 1, 2, 10, 'ink'],
+        [right, y + 1, 2, 10, 'ink'],
+        [x - 2, y + 2, 2, 8, 'hairShade'],
+        [right, y + 2, 2, 8, 'hairDeep']
       ]
     case 'ponytail':
       // A long tail well clear of the shoulder line.
       return [
-        [13, y + 1, 5, 4, 'ink'],
-        [15, y + 3, 4, 11, 'ink'],
-        [14, y + 2, 3, 3, 'hair'],
-        [16, y + 4, 2, 9, 'hairShade'],
-        [16, y + 11, 2, 2, 'hairDeep']
+        [right - 1, y + 1, 5, 4, 'ink'],
+        [right + 1, y + 3, 4, 11, 'ink'],
+        [right, y + 2, 3, 3, 'hair'],
+        [right + 2, y + 4, 2, 9, 'hairShade'],
+        [right + 2, y + 11, 2, 2, 'hairDeep']
       ]
+    /*
+     * Everything below reaches at most two rows above the skull. That is all
+     * the headroom the cell has once the bob is accounted for, and a pixel
+     * past it lands in the pose above rather than being clipped.
+     */
     case 'bun':
-      // Sits proud of the head so the outline has a bump only she has.
+      // Sits proud of the head so the outline has a bump only they have.
       return [
-        [7, y - 5, 7, 6, 'ink'],
-        [8, y - 4, 5, 4, 'hair'],
-        [8, y - 4, 5, 1, 'hairLit'],
-        [11, y - 4, 2, 4, 'hairShade']
+        [x + 1, y - 2, w - 1, 4, 'ink'],
+        [x + 2, y - 1, w - 3, 3, 'hair'],
+        [x + 2, y - 1, w - 3, 1, 'hairLit'],
+        [x + w - 3, y - 1, 2, 3, 'hairShade']
+      ]
+    case 'topknot':
+      // Gathered high and narrow: a spike nobody else in a cast will have.
+      return [
+        [h.cx - 2, y - 2, 4, 4, 'ink'],
+        [h.cx - 1, y - 2, 2, 4, 'hair'],
+        [h.cx - 1, y - 2, 2, 1, 'hairLit'],
+        [h.cx, y - 1, 1, 3, 'hairShade']
+      ]
+    case 'afro':
+      // Round and wide. The broadest silhouette any cast has — the volume goes
+      // sideways, because sideways is where the room is.
+      return [
+        [x - 3, y - 2, w + 6, 9, 'ink'],
+        [x - 2, y - 1, w + 4, 7, 'hair'],
+        [x - 1, y - 2, w + 2, 2, 'hair'],
+        [x - 2, y - 1, 3, 4, 'hairLit'],
+        [x + w - 1, y - 1, 3, 6, 'hairShade']
       ]
     case 'curly':
       return [
-        [3, y - 1, 5, 6, 'ink'],
-        [12, y - 1, 5, 6, 'ink'],
-        [4, y, 3, 4, 'hair'],
-        [13, y, 3, 4, 'hairShade'],
-        [5, y - 2, 4, 3, 'ink'],
-        [11, y - 2, 4, 3, 'ink'],
-        [6, y - 1, 2, 2, 'hair'],
-        [12, y - 1, 2, 2, 'hairShade']
+        [x - 3, y - 1, 5, 6, 'ink'],
+        [x + w - 2, y - 1, 5, 6, 'ink'],
+        [x - 2, y, 3, 4, 'hair'],
+        [x + w - 1, y, 3, 4, 'hairShade'],
+        [x - 1, y - 2, 4, 3, 'ink'],
+        [x + w - 3, y - 2, 4, 3, 'ink'],
+        [x, y - 1, 2, 2, 'hair'],
+        [x + w - 2, y - 1, 2, 2, 'hairShade']
       ]
     case 'messy':
       return [
-        [4, y - 2, 3, 4, 'ink'],
-        [13, y - 2, 3, 4, 'ink'],
-        [4, y - 1, 2, 3, 'hair'],
-        [14, y - 1, 2, 3, 'hairShade'],
-        [8, y - 3, 4, 3, 'ink'],
-        [9, y - 2, 2, 2, 'hair']
+        [x - 2, y - 2, 3, 4, 'ink'],
+        [x + w - 1, y - 2, 3, 4, 'ink'],
+        [x - 2, y - 1, 2, 3, 'hair'],
+        [right, y - 1, 2, 3, 'hairShade'],
+        [x + 2, y - 2, 4, 2, 'ink'],
+        [x + 3, y - 1, 2, 2, 'hair']
       ]
     default:
       return []
   }
 }
 
-function hairFront(a: CharacterAppearance, dy: number): Op[] {
-  const y = HEAD_Y + dy
+function hairFront(a: CharacterAppearance, h: Head): Op[] {
+  const { x, w, y } = h
   const ops: Op[] = []
 
-  // The cap every style shares, so the skull reads as one shape.
-  ops.push([HEAD_X, y, HEAD_W, 3, 'hair'])
-  ops.push([HEAD_X, y, HEAD_W, 1, 'hairLit'])
-  ops.push([HEAD_X + HEAD_W - 2, y + 1, 2, 2, 'hairShade'])
+  /*
+   * A bald head has no cap at all — the skull is the silhouette, and drawing
+   * one in skin tones would be drawing hair the colour of a forehead.
+   */
+  if (a.hairStyle === 'bald') {
+    ops.push([x + 1, y, w - 2, 1, 'skinLit'])
+    return ops
+  }
+
+  /*
+   * The cap every style shares, so the skull reads as one shape.
+   *
+   * Two rows, not three. The head is nine rows tall and the features need
+   * five of them — brow, two of eye, nose, mouth — so a three-row cap plus a
+   * fringe left the brow with nowhere to move and every expression pushed it
+   * into the hair. Two rows buys a row of forehead, which is what lets a
+   * raised brow read as a raised brow.
+   */
+  ops.push([x, y, w, 2, 'hair'])
+  ops.push([x, y, w, 1, 'hairLit'])
+  ops.push([x + w - 2, y + 1, 2, 1, 'hairShade'])
 
   switch (a.hairStyle) {
     case 'swept':
-      // Side parting: thick over the left brow, sweeping right and thinning.
-      ops.push([HEAD_X, y + 3, 5, 1, 'hair'])
-      ops.push([HEAD_X, y + 3, 3, 1, 'hairLit'])
-      ops.push([HEAD_X + 5, y + 3, 3, 1, 'hairShade'])
+      // Side parting: thick over one brow, sweeping across and thinning.
+      ops.push([x, y + 2, w - 3, 1, 'hair'])
+      ops.push([x, y + 2, 3, 1, 'hairLit'])
+      ops.push([x + w - 3, y + 2, 3, 1, 'hairShade'])
+      break
+    case 'parted':
+      /*
+       * A hard parting: a full fringe with one column of shadow cut through
+       * it. The clearest hairline of any style, and the reason it exists — a
+       * face needs somewhere the hair visibly stops.
+       */
+      ops.push([x, y + 2, w, 1, 'hair'])
+      ops.push([x, y + 1, 3, 2, 'hairLit'])
+      ops.push([x + 2, y, 1, 3, 'hairDeep'])
+      ops.push([x + 3, y + 2, w - 3, 1, 'hairShade'])
       break
     case 'slick':
-      ops.push([HEAD_X, y + 3, HEAD_W, 1, 'hairShade'])
-      ops.push([HEAD_X + 1, y, HEAD_W - 3, 1, 'hairLit'])
+      // Combed flat back: the hairline is a hard horizontal edge.
+      ops.push([x, y + 2, w, 1, 'hairShade'])
+      ops.push([x + 1, y, w - 3, 1, 'hairLit'])
       break
     case 'short':
-      ops.push([HEAD_X, y + 3, HEAD_W, 1, 'hair'])
-      ops.push([HEAD_X, y + 3, 3, 1, 'hairLit'])
+      ops.push([x, y + 2, w, 1, 'hair'])
+      ops.push([x, y + 2, 3, 1, 'hairLit'])
       break
     case 'buzz':
-      // Cropped: the hair barely clears the brow, so the skull shape shows.
-      ops.push([HEAD_X, y + 2, HEAD_W, 1, 'hairShade'])
+      // Cropped: no fringe at all, so the whole forehead and the skull's
+      // shape are visible. The most face of any style.
+      ops.push([x, y + 1, w, 1, 'hairShade'])
       break
     case 'messy':
-      ops.push([HEAD_X, y + 3, 3, 1, 'hair'])
-      ops.push([HEAD_X + 4, y + 3, 4, 1, 'hairShade'])
+      // Uneven: the fringe covers one side and not the other.
+      ops.push([x, y + 2, 3, 1, 'hair'])
+      ops.push([x + 4, y + 2, w - 4, 1, 'hairShade'])
       break
     case 'curly':
-      ops.push([HEAD_X, y + 3, HEAD_W, 1, 'hair'])
-      ops.push([HEAD_X + 1, y + 2, 2, 1, 'hairLit'])
-      ops.push([HEAD_X + 5, y + 2, 2, 1, 'hairLit'])
+    case 'afro':
+      ops.push([x, y + 2, w, 1, 'hair'])
+      ops.push([x + 1, y + 1, 2, 1, 'hairLit'])
+      ops.push([x + w - 3, y + 1, 2, 1, 'hairLit'])
+      break
+    case 'waves':
+      ops.push([x, y + 2, w, 1, 'hair'])
+      ops.push([x + 1, y + 2, 2, 1, 'hairLit'])
+      ops.push([x + w - 4, y + 1, 3, 2, 'hairShade'])
       break
     default:
-      ops.push([HEAD_X, y + 3, HEAD_W, 1, 'hair'])
-      ops.push([HEAD_X, y + 3, 3, 1, 'hairLit'])
+      ops.push([x, y + 2, w, 1, 'hair'])
+      ops.push([x, y + 2, 3, 1, 'hairLit'])
       break
   }
   return ops
 }
 
-/** Brows carry most of the expression at this size: one row, two clusters. */
-function brows(exp: Expression, dy: number): Op[] {
-  const y = HEAD_Y + 4 + dy
-  const l = HEAD_X + 1
-  const r = HEAD_X + 5
-  switch (exp) {
-    case 'serious':
-    case 'focused':
-      return [
-        [l, y, 2, 1, 'hairShade'],
-        [r, y, 2, 1, 'hairShade']
-      ]
-    case 'skeptical':
-      // One brow a pixel higher. The whole read is that single offset.
-      return [
-        [l, y - 1, 2, 1, 'hairShade'],
-        [r, y, 2, 1, 'hairShade']
-      ]
-    case 'friendly':
-      return [
-        [l, y - 1, 2, 1, 'hairShade'],
-        [r, y - 1, 2, 1, 'hairShade']
-      ]
-    case 'tired':
-      return [
-        [l, y, 2, 1, 'hairShade'],
-        [r, y, 2, 1, 'hairShade'],
-        [l, y + 3, 2, 1, 'skinShade'],
-        [r, y + 3, 2, 1, 'skinShade']
-      ]
-    default:
-      return [
-        [l, y, 2, 1, 'hairShade'],
-        [r, y, 2, 1, 'hairShade']
-      ]
+/**
+ * Brows.
+ *
+ * The single most expressive two pixels on the sprite, and now the most
+ * *identifying* — shape comes from the character and only the offsets come
+ * from their mood, so a sceptical Wainwright and a sceptical Bertram do not
+ * arrive at the same eyebrows.
+ */
+function brows(a: CharacterAppearance, exp: Expression, h: Head): Op[] {
+  const { l, r } = eyeColumns(a, h)
+  const y = h.y + 4
+  const shape = a.browShape ?? 'flat'
+
+  // Mood raises or lowers the whole brow line, and tilts it.
+  const lift = exp === 'friendly' ? -1 : 0
+  const inner = exp === 'serious' || exp === 'focused' ? 1 : 0
+  // One brow a pixel higher. The whole read of "sceptical" is that offset.
+  const cocked = exp === 'skeptical' ? -1 : 0
+
+  const ops: Op[] = []
+  const colour = a.facialHairColor && shape === 'heavy' ? 'facialHair' : 'hairShade'
+
+  if (shape === 'heavy') {
+    /*
+     * Two rows of brow, sitting on the forehead rather than on the eyes, and
+     * exactly as wide as the eye beneath it.
+     *
+     * Both of those are corrections. Starting on the brow row put the lower
+     * half through the eye, and running a pixel wider than the eye meant that
+     * on a close-set face the two brows met in the middle — a unibrow on every
+     * heavy-browed character, which is not what "heavy" was supposed to mean.
+     */
+    ops.push([l, y - 1 + lift + cocked, EYE_W, 2, colour])
+    ops.push([r, y - 1 + lift, EYE_W, 2, colour])
+  } else if (shape === 'angled') {
+    // Inner ends dropped: permanently unimpressed.
+    ops.push([l, y - 1 + lift + cocked, EYE_W, 1, colour])
+    ops.push([l + EYE_W - 1, y + lift + cocked, 1, 1, colour])
+    ops.push([r + 1, y - 1 + lift, EYE_W - 1, 1, colour])
+    ops.push([r, y + lift, 1, 1, colour])
+  } else if (shape === 'arched') {
+    // Outer ends dropped, middle raised: open and a little surprised.
+    ops.push([l, y + lift + cocked, 1, 1, colour])
+    ops.push([l + 1, y - 1 + lift + cocked, EYE_W - 1, 1, colour])
+    ops.push([r, y - 1 + lift, EYE_W - 1, 1, colour])
+    ops.push([r + EYE_W - 1, y + lift, 1, 1, colour])
+  } else {
+    ops.push([l, y + lift + inner + cocked, EYE_W, 1, colour])
+    ops.push([r, y + lift + inner, EYE_W, 1, colour])
   }
+
+  // Tired eyes carry a shadow under them as well as a flat brow.
+  if (exp === 'tired') {
+    ops.push([l, y + 3, EYE_W, 1, 'skinShade'])
+    ops.push([r, y + 3, EYE_W, 1, 'skinShade'])
+  }
+  return ops
 }
 
-function eyes(a: CharacterAppearance, exp: Expression, dy: number): Op[] {
-  const y = HEAD_Y + 5 + dy
-  const l = HEAD_X + 1
-  const r = HEAD_X + 5
+function eyes(a: CharacterAppearance, exp: Expression, h: Head): Op[] {
+  const { l, r } = eyeColumns(a, h)
+  const y = h.y + 5
   const ops: Op[] = []
 
   if (exp === 'friendly' || exp === 'tired') {
     // Creased shut: a flat line rather than a pupil.
-    ops.push([l, y + 1, 2, 1, 'ink'])
-    ops.push([r, y + 1, 2, 1, 'ink'])
+    ops.push([l, y + 1, EYE_W, 1, 'ink'])
+    ops.push([r, y + 1, EYE_W, 1, 'ink'])
   } else {
-    ops.push([l, y, 2, 2, 'white'])
-    ops.push([r, y, 2, 2, 'white'])
+    ops.push([l, y, EYE_W, 2, 'white'])
+    ops.push([r, y, EYE_W, 2, 'white'])
+    // Pupils, both looking the same way so the gaze is not cross-eyed.
     ops.push([l + 1, y, 1, 2, 'ink'])
     ops.push([r + 1, y, 1, 2, 'ink'])
   }
 
   if (a.glasses) {
-    ops.push([l - 1, y - 1, 4, 4, 'ink2'])
-    ops.push([r - 1, y - 1, 4, 4, 'ink2'])
-    ops.push([l, y, 2, 2, 'white'])
-    ops.push([r, y, 2, 2, 'white'])
+    // Frames sit around the eyes wherever they ended up, and the bridge spans
+    // whatever gap the character actually has.
+    ops.push([l - 1, y - 1, EYE_W + 2, 4, 'ink2'])
+    ops.push([r - 1, y - 1, EYE_W + 2, 4, 'ink2'])
+    ops.push([l, y, EYE_W, 2, 'white'])
+    ops.push([r, y, EYE_W, 2, 'white'])
     ops.push([l + 1, y, 1, 2, 'ink'])
     ops.push([r + 1, y, 1, 2, 'ink'])
-    ops.push([l + 3, y, 1, 1, 'ink2'])
+    const bridge = r - 1 - (l + EYE_W + 1)
+    if (bridge > 0) ops.push([l + EYE_W + 1, y, bridge, 1, 'ink2'])
   }
   return ops
 }
 
-function mouth(exp: Expression, dy: number, open: boolean): Op[] {
-  const y = HEAD_Y + 8 + dy
-  const x = HEAD_X + 2
-  if (open) return [[x, y - 1, 3, 2, 'ink']]
-  switch (exp) {
-    case 'smirk':
+/** One to two pixels, and the difference between three different faces. */
+function nose(a: CharacterAppearance, h: Head): Op[] {
+  const y = h.y + 7
+  switch (a.noseShape ?? 'small') {
+    case 'straight':
       return [
-        [x, y, 3, 1, 'skinShade'],
-        [x + 3, y - 1, 1, 1, 'skinShade']
+        [h.cx, y - 1, 1, 2, 'skinShade'],
+        [h.cx, y, 1, 1, 'skinDeep']
       ]
-    case 'friendly':
+    case 'broad':
       return [
-        [x, y, 4, 1, 'skinShade'],
-        [x - 1, y - 1, 1, 1, 'skinShade']
+        [h.cx - 1, y, 2, 1, 'skinShade'],
+        [h.cx - 1, y, 1, 1, 'skinDeep']
       ]
-    case 'serious':
-      return [[x, y, 4, 1, 'skinDeep']]
     default:
-      return [[x, y, 3, 1, 'skinShade']]
+      return [[h.cx, y, 1, 1, 'skinShade']]
+  }
+}
+
+/**
+ * The bottom of the head.
+ *
+ * Whether a face reads as soft or hard is decided almost entirely here, in the
+ * last two rows — which is why it is worth having three of them rather than
+ * shading every chin the same way.
+ */
+function jawLine(a: CharacterAppearance, h: Head): Op[] {
+  const { x, w, y } = h
+  const bottom = y + h.h - 1
+
+  switch (a.jaw ?? 'soft') {
+    case 'square':
+      // Full width to the chin, flat across: heavy and deliberate.
+      return [[x, bottom, w, 1, 'skinShade']]
+    case 'narrow':
+      // Tapered: the last row is inset a pixel on each side.
+      return [
+        [x, bottom, 1, 1, 'none'],
+        [x + w - 1, bottom, 1, 1, 'none'],
+        [x + 1, bottom, w - 2, 1, 'skinShade'],
+        [x, bottom - 1, 1, 1, 'skinShade'],
+        [x + w - 1, bottom - 1, 1, 1, 'skinShade']
+      ]
+    default:
+      // Rounded: shaded corners only, so the chin reads as curved.
+      return [
+        [x, bottom, 2, 1, 'skinShade'],
+        [x + w - 2, bottom, 2, 1, 'skinShade']
+      ]
+  }
+}
+
+function beard(a: CharacterAppearance, h: Head): Op[] {
+  const { x, w, y } = h
+  const chin = y + h.h - 1
+  const colour = a.facialHairColor ? 'facialHair' : 'hairShade'
+
+  switch (a.facialHair ?? 'none') {
+    case 'stubble':
+      // Speckled rather than solid, so it reads as growth and not as a beard.
+      return [
+        [x + 1, chin, w - 2, 1, colour],
+        [x, chin - 1, 1, 1, colour],
+        [x + w - 1, chin - 1, 1, 1, colour]
+      ]
+    case 'moustache':
+      return [[h.cx - 2, y + 7, 4, 1, colour]]
+    case 'goatee':
+      return [
+        [h.cx - 1, y + 8, 3, 1, colour],
+        [h.cx - 1, chin, 3, 1, colour]
+      ]
+    case 'beard':
+      // Down the jaw and across the chin: the tallest facial silhouette.
+      return [
+        [x, y + 6, 1, 3, colour],
+        [x + w - 1, y + 6, 1, 3, colour],
+        [x, chin, w, 1, colour],
+        [x + 1, chin + 1, w - 2, 1, 'ink'],
+        [h.cx - 2, y + 7, 4, 1, colour]
+      ]
+    default:
+      return []
   }
 }
 
@@ -367,57 +540,87 @@ function head(
   mouthOpen: boolean
 ): Op[] {
   const exp = expressionOf(a)
-  const y = HEAD_Y + dy
+  const h = headGeom(a, dy)
+  const { x, w, y } = h
   const ops: Op[] = []
 
-  ops.push(...hairBack(a, dy))
+  ops.push(...hairBack(a, h))
 
   if (facing === 'up') {
-    ops.push([HEAD_X - 1, y - 1, HEAD_W + 2, HEAD_H + 2, 'ink'])
-    ops.push([HEAD_X, y, HEAD_W, HEAD_H, 'hair'])
-    ops.push([HEAD_X, y, HEAD_W, 1, 'hairLit'])
-    ops.push([HEAD_X + HEAD_W - 2, y, 2, HEAD_H, 'hairShade'])
-    ops.push([HEAD_X - 1, y + 5, 1, 2, 'skinShade'])
-    ops.push([HEAD_X + HEAD_W, y + 5, 1, 2, 'skinShade'])
+    ops.push([x - 1, y - 1, w + 2, h.h + 2, 'ink'])
+    const crown = a.hairStyle === 'bald' ? 'skin' : 'hair'
+    ops.push([x, y, w, h.h, crown])
+    ops.push([x, y, w, 1, a.hairStyle === 'bald' ? 'skinLit' : 'hairLit'])
+    ops.push([x + w - 2, y, 2, h.h, a.hairStyle === 'bald' ? 'skinShade' : 'hairShade'])
+    ops.push([x - 1, y + 5, 1, 2, 'skinShade'])
+    ops.push([x + w, y + 5, 1, 2, 'skinShade'])
     return ops
   }
 
   if (facing === 'side') {
-    ops.push([HEAD_X - 1, y - 1, HEAD_W + 2, HEAD_H + 2, 'ink'])
-    ops.push([HEAD_X, y, HEAD_W, HEAD_H, 'skin'])
-    ops.push([HEAD_X, y, HEAD_W, 3, 'hair'])
-    ops.push([HEAD_X, y, 5, 1, 'hairLit'])
-    ops.push([HEAD_X, y + 3, 3, 6, 'hair'])
-    ops.push([HEAD_X + HEAD_W - 1, y + 2, 1, 7, 'skinShade'])
-    ops.push([HEAD_X + HEAD_W, y + 5, 1, 1, 'skin']) // nose
-    ops.push([HEAD_X + 5, y + 5, 2, 2, 'white'])
-    ops.push([HEAD_X + 6, y + 5, 1, 2, 'ink'])
-    ops.push([HEAD_X + 5, y + 4, 2, 1, 'hairShade'])
-    if (a.glasses) ops.push([HEAD_X + 4, y + 4, 4, 1, 'ink2'])
-    ops.push([HEAD_X + 5, y + 8, 2, 1, mouthOpen ? 'ink' : 'skinShade'])
-    ops.push([HEAD_X + 2, y + 5, 2, 2, 'skinShade']) // ear
+    ops.push([x - 1, y - 1, w + 2, h.h + 2, 'ink'])
+    ops.push([x, y, w, h.h, 'skin'])
+    if (a.hairStyle !== 'bald') {
+      ops.push([x, y, w, 3, 'hair'])
+      ops.push([x, y, 5, 1, 'hairLit'])
+      ops.push([x, y + 3, 3, 6, 'hair'])
+    }
+    ops.push([x + w - 1, y + 2, 1, 7, 'skinShade'])
+    // The nose in profile is the one place it breaks the silhouette.
+    ops.push([x + w, y + 5, 1, a.noseShape === 'broad' ? 2 : 1, 'skin'])
+    ops.push([x + w - 3, y + 5, 2, 2, 'white'])
+    ops.push([x + w - 2, y + 5, 1, 2, 'ink'])
+    ops.push([x + w - 3, y + 4, 2, 1, 'hairShade'])
+    if (a.glasses) ops.push([x + w - 4, y + 4, 4, 1, 'ink2'])
+    ops.push([x + w - 3, y + 8, 2, 1, mouthOpen ? 'ink' : 'skinShade'])
+    ops.push([x + 2, y + 5, 2, 2, 'skinShade']) // ear
+    ops.push(...beard(a, h))
     return ops
   }
 
   // Front view.
-  ops.push([HEAD_X - 1, y - 1, HEAD_W + 2, HEAD_H + 2, 'ink'])
-  ops.push([HEAD_X, y, HEAD_W, HEAD_H, 'skin'])
-  ops.push([HEAD_X, y, HEAD_W, 1, 'skinLit'])
-  // Cheek and jaw, lit from the upper left.
-  ops.push([HEAD_X + HEAD_W - 1, y + 1, 1, HEAD_H - 1, 'skinShade'])
-  ops.push([HEAD_X, y + HEAD_H - 1, 2, 1, 'skinShade'])
-  ops.push([HEAD_X + HEAD_W - 2, y + HEAD_H - 1, 2, 1, 'skinShade'])
+  ops.push([x - 1, y - 1, w + 2, h.h + 2, 'ink'])
+  ops.push([x, y, w, h.h, 'skin'])
+  ops.push([x, y, w, 1, 'skinLit'])
+  // Cheek, lit from the upper left.
+  ops.push([x + w - 1, y + 1, 1, h.h - 1, 'skinShade'])
+  ops.push(...jawLine(a, h))
   // Ears.
-  ops.push([HEAD_X - 1, y + 4, 1, 2, 'skin'])
-  ops.push([HEAD_X + HEAD_W, y + 4, 1, 2, 'skinShade'])
-  // Nose: one pixel of shadow on the centre line.
-  ops.push([HEAD_X + 4, y + 7, 1, 1, 'skinShade'])
+  ops.push([x - 1, y + 4, 1, 2, 'skin'])
+  ops.push([x + w, y + 4, 1, 2, 'skinShade'])
 
-  ops.push(...hairFront(a, dy))
-  ops.push(...brows(exp, dy))
-  ops.push(...eyes(a, exp, dy))
-  ops.push(...mouth(exp, dy, mouthOpen))
+  ops.push(...nose(a, h))
+  ops.push(...hairFront(a, h))
+  ops.push(...brows(a, exp, h))
+  ops.push(...eyes(a, exp, h))
+  ops.push(...mouth(exp, h, mouthOpen))
+  ops.push(...beard(a, h))
   return ops
+}
+
+function mouth(exp: Expression, h: Head, open: boolean): Op[] {
+  const y = h.y + 8
+  const x = h.cx - 1
+  if (open) return [[x - 1, y - 1, 3, 2, 'ink']]
+
+  switch (exp) {
+    case 'smirk':
+      // Level on one side, lifted on the other. Half a smile, deliberately.
+      return [
+        [x - 1, y, 3, 1, 'skinShade'],
+        [x + 2, y - 1, 1, 1, 'skinShade']
+      ]
+    case 'friendly':
+      return [
+        [x - 1, y, 4, 1, 'skinShade'],
+        [x - 2, y - 1, 1, 1, 'skinShade'],
+        [x + 3, y - 1, 1, 1, 'skinShade']
+      ]
+    case 'serious':
+      return [[x - 1, y, 4, 1, 'skinDeep']]
+    default:
+      return [[x - 1, y, 3, 1, 'skinShade']]
+  }
 }
 
 function expressionOf(a: CharacterAppearance): Expression {
@@ -428,6 +631,9 @@ function expressionOf(a: CharacterAppearance): Expression {
 /* --------------------------------------------------------------- torso --- */
 
 type ArmPose = 'down' | 'typing' | 'chin' | 'gesture' | 'up' | 'hold'
+
+/** How much room a held object needs beside the hand, in pixels. */
+const HELD_W = 4
 
 const TORSO_Y = 12
 const TORSO_H = 9
@@ -579,35 +785,50 @@ function accessory(a: CharacterAppearance, dy: number, arms: ArmPose): Op[] {
   const handY = y + TORSO_H - 3
   const free = arms === 'down' || arms === 'hold'
 
+  // Anything worn on the head has to follow the head, which is no longer the
+  // same width for everybody.
+  const h = headGeom(a, dy)
+
+  /*
+   * Where a held object may start, so it still fits.
+   *
+   * Broad shoulders put the hand far enough out that a mug or a briefcase ran
+   * off the side of the cell — and the sheet packs frames side by side, so
+   * that pixel appears in the next frame of the walk rather than being
+   * clipped. Held items are tucked back against the body instead.
+   */
+  const heldRight = Math.min(left + w, SPRITE_W - HELD_W)
+  const heldLeft = Math.max(left, HELD_W)
+
   switch (a.accessory ?? 'none') {
     case 'headphones':
       // Band over the hair, cups at the ears: unmistakable in silhouette.
-      ops.push([HEAD_X - 1, dy, HEAD_W + 2, 2, 'ink'])
-      ops.push([HEAD_X, dy, HEAD_W, 1, 'accShade'])
-      ops.push([HEAD_X - 3, 5 + dy, 3, 4, 'ink'])
-      ops.push([HEAD_X + HEAD_W, 5 + dy, 3, 4, 'ink'])
-      ops.push([HEAD_X - 2, 6 + dy, 2, 2, 'acc'])
-      ops.push([HEAD_X + HEAD_W + 1, 6 + dy, 2, 2, 'accShade'])
+      ops.push([h.x - 1, dy, h.w + 2, 2, 'ink'])
+      ops.push([h.x, dy, h.w, 1, 'accShade'])
+      ops.push([h.x - 3, 5 + dy, 3, 4, 'ink'])
+      ops.push([h.x + h.w, 5 + dy, 3, 4, 'ink'])
+      ops.push([h.x - 2, 6 + dy, 2, 2, 'acc'])
+      ops.push([h.x + h.w + 1, 6 + dy, 2, 2, 'accShade'])
       break
     case 'notebook':
       if (free) {
-        ops.push([left - 4, handY - 1, 4, 5, 'ink'])
-        ops.push([left - 3, handY, 2, 3, 'white'])
-        ops.push([left - 3, handY, 2, 1, 'acc'])
+        ops.push([heldLeft - 4, handY - 1, 4, 5, 'ink'])
+        ops.push([heldLeft - 3, handY, 2, 3, 'white'])
+        ops.push([heldLeft - 3, handY, 2, 1, 'acc'])
       }
       break
     case 'tablet':
       if (free) {
-        ops.push([left + w, handY - 2, 4, 6, 'ink'])
-        ops.push([left + w + 1, handY - 1, 2, 4, 'ink2'])
-        ops.push([left + w + 1, handY, 2, 1, 'acc'])
+        ops.push([heldRight, handY - 2, 4, 6, 'ink'])
+        ops.push([heldRight + 1, handY - 1, 2, 4, 'ink2'])
+        ops.push([heldRight + 1, handY, 2, 1, 'acc'])
       }
       break
     case 'mug':
       if (arms !== 'up') {
-        ops.push([left + w, handY, 4, 4, 'ink'])
-        ops.push([left + w + 1, handY + 1, 2, 2, 'white'])
-        ops.push([left + w + 3, handY + 1, 1, 1, 'ink'])
+        ops.push([heldRight, handY, 4, 4, 'ink'])
+        ops.push([heldRight + 1, handY + 1, 2, 2, 'white'])
+        ops.push([heldRight + 3, handY + 1, 1, 1, 'ink'])
       }
       break
     case 'badge':
@@ -623,14 +844,15 @@ function accessory(a: CharacterAppearance, dy: number, arms: ArmPose): Op[] {
       break
     case 'briefcase':
       if (arms === 'down') {
-        ops.push([left + w, handY + 2, 5, 5, 'ink'])
-        ops.push([left + w + 1, handY + 3, 3, 3, 'accShade'])
-        ops.push([left + w + 2, handY + 1, 1, 1, 'ink'])
+        const bx = Math.min(left + w, SPRITE_W - 5)
+        ops.push([bx, handY + 2, 5, 5, 'ink'])
+        ops.push([bx + 1, handY + 3, 3, 3, 'accShade'])
+        ops.push([bx + 2, handY + 1, 1, 1, 'ink'])
       }
       break
     case 'earpiece':
-      ops.push([HEAD_X + HEAD_W, 5 + dy, 2, 3, 'ink'])
-      ops.push([HEAD_X + HEAD_W, 6 + dy, 1, 1, 'accLit'])
+      ops.push([h.x + h.w, 5 + dy, 2, 3, 'ink'])
+      ops.push([h.x + h.w, 6 + dy, 1, 1, 'accLit'])
       break
     case 'pen':
       if (free) {
@@ -708,6 +930,17 @@ export function buildCharacterOps(
   frame: number,
   facing: SpriteFacing
 ): Op[] {
+  /*
+   * The bob never goes negative.
+   *
+   * It used to lift the upper body by a pixel on alternate frames, which is
+   * visually identical to dropping it on the others — and is the difference
+   * between having two rows of headroom above the skull and having one. Tall
+   * hair needs those two rows: a bun, a topknot and an afro all sit proud of
+   * the head, and the sheet packs frames directly above one another, so a
+   * pixel that escapes the cell is not clipped, it appears in somebody else's
+   * pose.
+   */
   let bob = 0
   let arms: ArmPose = 'down'
   let mouthOpen = false
@@ -718,7 +951,7 @@ export function buildCharacterOps(
 
   switch (state) {
     case 'walking':
-      bob = frame % 2 === 1 ? -1 : 0
+      bob = frame % 2 === 1 ? 0 : 1
       arms = idleArms
       legs = walkLegs(bob, frame)
       break
@@ -740,7 +973,7 @@ export function buildCharacterOps(
     case 'success':
       arms = 'up'
       mouthOpen = true
-      bob = frame % 2 === 0 ? -1 : 0
+      bob = frame % 2 === 0 ? 0 : 1
       legs = standLegs(bob)
       break
     case 'error':

@@ -1,30 +1,40 @@
 import { defineCast } from '../../characters/defineCast'
 import type { CharacterDef } from '../../characters/character.types'
 
-/** A consulting practice in a dark London flat. */
-export const sherlockCharacters: CharacterDef[] = [
+/**
+ * A consulting practice in a dark London flat.
+ *
+ * The hardest cast to separate: four men in dark Victorian tailoring, in a
+ * room lit like a study. Colour does almost nothing here, so the faces carry
+ * it — every one has a different width, brow and jaw, and three of the eight
+ * have facial hair no two of which are the same shape.
+ */
+export const sherlockCharacters: CharacterDef[] = defineCast([
   {
     id: 'holmes',
     agentId: 'agent-1',
     name: 'Holmes',
     role: 'Consulting Detective',
     homeDesk: 0,
-    appearance: {
-      skin: '#EBC49E',
-      skinShade: '#C79C71',
-      hair: '#241A16',
-      hairShade: '#140E0B',
-      hairStyle: 'swept',
-      outfit: '#242B34',
-      outfitShade: '#171D24',
-      shirt: '#E9E2D2',
-      accent: null,
-      vest: null,
-      trousers: '#1C2229',
-      shoes: '#14191C',
-      glasses: false,
-      mouth: 'smirk'
-    }
+    // The sharpest face in the practice: narrow, close-set, angled brow.
+    skin: '#EBC49E',
+    hair: '#241A16',
+    hairStyle: 'swept',
+    outfit: '#242B34',
+    shirt: '#E9E2D2',
+    trousers: '#1C2229',
+    shoes: '#14191C',
+    build: 'slim',
+    posture: 'upright',
+    outfitStyle: 'coat',
+    accessory: 'scarf',
+    accessoryColor: '#6A2E2E',
+    smirk: true,
+    faceWidth: 'narrow',
+    eyeSpacing: 'close',
+    browShape: 'angled',
+    noseShape: 'straight',
+    jaw: 'narrow'
   },
   {
     id: 'watson',
@@ -32,22 +42,28 @@ export const sherlockCharacters: CharacterDef[] = [
     name: 'Watson',
     role: 'Field Chronicler',
     homeDesk: 1,
-    appearance: {
-      skin: '#EFC49F',
-      skinShade: '#D0A075',
-      hair: '#7A6042',
-      hairShade: '#5A462F',
-      hairStyle: 'short',
-      outfit: '#4A5A4A',
-      outfitShade: '#354034',
-      shirt: '#F0EADA',
-      accent: '#8C3A3A',
-      vest: null,
-      trousers: '#3A4239',
-      shoes: '#14191C',
-      glasses: false,
-      mouth: 'neutral'
-    }
+    // Broader, softer, moustached: the steady one, and drawn as such.
+    skin: '#EFC49F',
+    hair: '#7A6042',
+    hairStyle: 'short',
+    outfit: '#4A5A4A',
+    shirt: '#F0EADA',
+    accent: '#8C3A3A',
+    trousers: '#3A4239',
+    shoes: '#14191C',
+    build: 'regular',
+    posture: 'upright',
+    outfitStyle: 'vest',
+    vest: '#5E6E58',
+    accessory: 'notebook',
+    accessoryColor: '#FFC94F',
+    expression: 'calm',
+    faceWidth: 'regular',
+    eyeSpacing: 'regular',
+    browShape: 'flat',
+    noseShape: 'broad',
+    jaw: 'soft',
+    facialHair: 'moustache'
   },
   {
     id: 'lestrade',
@@ -55,22 +71,27 @@ export const sherlockCharacters: CharacterDef[] = [
     name: 'Lestrade',
     role: 'Inspector',
     homeDesk: 2,
-    appearance: {
-      skin: '#DDAE84',
-      skinShade: '#B98A5F',
-      hair: '#3A3A3E',
-      hairShade: '#252528',
-      hairStyle: 'short',
-      outfit: '#3F4A57',
-      outfitShade: '#2C343E',
-      shirt: '#D9DEE4',
-      accent: '#2E3A48',
-      vest: null,
-      trousers: '#333B45',
-      shoes: '#14191C',
-      glasses: false,
-      mouth: 'neutral'
-    }
+    // Grey at the temples, heavy brow, square jaw. Tired and unimpressed.
+    skin: '#DDAE84',
+    hair: '#3A3A3E',
+    hairStyle: 'short',
+    outfit: '#3F4A57',
+    shirt: '#D9DEE4',
+    accent: '#2E3A48',
+    trousers: '#333B45',
+    shoes: '#14191C',
+    build: 'regular',
+    posture: 'slouched',
+    outfitStyle: 'coat',
+    accessory: 'badge',
+    expression: 'tired',
+    faceWidth: 'wide',
+    eyeSpacing: 'regular',
+    browShape: 'heavy',
+    noseShape: 'broad',
+    jaw: 'square',
+    facialHair: 'stubble',
+    facialHairColor: '#4E4E52'
   },
   {
     id: 'hooper',
@@ -78,39 +99,127 @@ export const sherlockCharacters: CharacterDef[] = [
     name: 'Hooper',
     role: 'Pathologist',
     homeDesk: 0,
-    appearance: {
-      skin: '#F3CBA4',
-      skinShade: '#D6A67C',
-      hair: '#5A3E28',
-      hairShade: '#3E2A1A',
-      hairStyle: 'long',
-      outfit: '#C8CBC4',
-      outfitShade: '#A2A69E',
-      shirt: '#F6F1E4',
-      accent: null,
-      vest: null,
-      trousers: '#4A5058',
-      shoes: '#14191C',
-      glasses: false,
-      mouth: 'neutral'
-    }
+    // The one lab coat in a room of wool, and the only long hair.
+    skin: '#F3CBA4',
+    hair: '#5A3E28',
+    hairStyle: 'long',
+    outfit: '#C8CBC4',
+    shirt: '#F6F1E4',
+    trousers: '#4A5058',
+    shoes: '#14191C',
+    build: 'slim',
+    posture: 'forward',
+    outfitStyle: 'labcoat',
+    accessory: 'tablet',
+    accessoryColor: '#FFC94F',
+    expression: 'focused',
+    faceWidth: 'narrow',
+    eyeSpacing: 'wide',
+    browShape: 'arched',
+    noseShape: 'small',
+    jaw: 'narrow'
+  },
+
+  /* The wider circle, arriving as the case load grows. */
+  {
+    id: 'mycroft',
+    agentId: 'agent-5',
+    name: 'Mycroft',
+    role: 'Strategist',
+    homeDesk: 1,
+    // Holmes's face, widened and slowed down: same close eyes, opposite build.
+    skin: '#EBC49E',
+    hair: '#4A3A2A',
+    hairStyle: 'slick',
+    outfit: '#2A2E38',
+    shirt: '#E9E2D2',
+    accent: '#6A2E2E',
+    vest: '#3E4450',
+    trousers: '#22262E',
+    build: 'broad',
+    posture: 'rigid',
+    outfitStyle: 'vest',
+    accessory: 'briefcase',
+    accessoryColor: '#8A6236',
+    expression: 'skeptical',
+    faceWidth: 'wide',
+    eyeSpacing: 'close',
+    browShape: 'heavy',
+    noseShape: 'straight',
+    jaw: 'square'
+  },
+  {
+    id: 'hudson',
+    agentId: 'agent-6',
+    name: 'Hudson',
+    role: 'Housekeeper',
+    homeDesk: 2,
+    skin: '#F0C6A0',
+    hair: '#B4B0A6',
+    hairStyle: 'bun',
+    outfit: '#6A4A5A',
+    shirt: '#F0EADA',
+    trousers: '#4A3440',
+    build: 'regular',
+    posture: 'upright',
+    outfitStyle: 'cardigan',
+    accessory: 'mug',
+    accessoryColor: '#E8E4DA',
+    expression: 'friendly',
+    faceWidth: 'regular',
+    eyeSpacing: 'wide',
+    browShape: 'arched',
+    noseShape: 'small',
+    jaw: 'soft'
+  },
+  {
+    id: 'donovan',
+    agentId: 'agent-7',
+    name: 'Donovan',
+    role: 'Sergeant',
+    homeDesk: 0,
+    skin: '#7A5236',
+    hair: '#241A16',
+    hairStyle: 'curly',
+    outfit: '#3A4A57',
+    shirt: '#D9DEE4',
+    trousers: '#2E3A45',
+    build: 'regular',
+    posture: 'rigid',
+    outfitStyle: 'blazer',
+    accessory: 'earpiece',
+    accessoryColor: '#FFC94F',
+    expression: 'serious',
+    faceWidth: 'regular',
+    eyeSpacing: 'regular',
+    browShape: 'angled',
+    noseShape: 'straight',
+    jaw: 'narrow'
+  },
+  {
+    id: 'anderson',
+    agentId: 'agent-8',
+    name: 'Anderson',
+    role: 'Forensics',
+    homeDesk: 1,
+    skin: '#DDAE84',
+    hair: '#3A2A20',
+    hairStyle: 'parted',
+    outfit: '#C8CBC4',
+    shirt: '#F6F1E4',
+    trousers: '#4A5058',
+    glasses: true,
+    build: 'slim',
+    posture: 'forward',
+    outfitStyle: 'labcoat',
+    accessory: 'pen',
+    accessoryColor: '#FFC94F',
+    expression: 'skeptical',
+    faceWidth: 'narrow',
+    eyeSpacing: 'close',
+    browShape: 'flat',
+    noseShape: 'straight',
+    jaw: 'square',
+    facialHair: 'goatee'
   }
-]
-
-/** The wider circle, arriving as the case load grows. */
-const sherlockReserves = defineCast([
-  { id: 'mycroft', agentId: 'agent-5', name: 'Mycroft', role: 'Strategist', homeDesk: 1,
-    skin: '#EBC49E', hair: '#4A3A2A', hairStyle: 'swept', outfit: '#2A2E38',
-    shirt: '#E9E2D2', accent: '#6A2E2E', vest: '#3E4450', trousers: '#22262E' },
-  { id: 'hudson', agentId: 'agent-6', name: 'Hudson', role: 'Housekeeper', homeDesk: 2,
-    skin: '#F0C6A0', hair: '#B4B0A6', hairStyle: 'bun', outfit: '#6A4A5A',
-    shirt: '#F0EADA', trousers: '#4A3440' },
-  { id: 'donovan', agentId: 'agent-7', name: 'Donovan', role: 'Sergeant', homeDesk: 0,
-    skin: '#7A5236', hair: '#241A16', hairStyle: 'long', outfit: '#3A4A57',
-    shirt: '#D9DEE4', trousers: '#2E3A45' },
-  { id: 'anderson', agentId: 'agent-8', name: 'Anderson', role: 'Forensics', homeDesk: 1,
-    skin: '#DDAE84', hair: '#3A2A20', hairStyle: 'short', outfit: '#C8CBC4',
-    shirt: '#F6F1E4', trousers: '#4A5058', glasses: true }
 ])
-
-sherlockCharacters.push(...sherlockReserves)

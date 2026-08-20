@@ -1,9 +1,15 @@
 import type {
   Accessory,
+  BrowShape,
   Build,
   CharacterDef,
   Expression,
+  EyeSpacing,
+  FaceWidth,
+  FacialHair,
   HairStyle,
+  JawShape,
+  NoseShape,
   Outfit,
   Posture
 } from './character.types'
@@ -53,6 +59,22 @@ export interface CastSpec {
   accessory?: Accessory
   accessoryColor?: string
   expression?: Expression
+
+  /**
+   * The face.
+   *
+   * Optional, and every default reproduces the original head — but a character
+   * declared without them is a character wearing the skeleton's face, which is
+   * exactly how a cast ends up looking like one person in eight wigs. Worth
+   * three or four lines each.
+   */
+  faceWidth?: FaceWidth
+  eyeSpacing?: EyeSpacing
+  browShape?: BrowShape
+  noseShape?: NoseShape
+  jaw?: JawShape
+  facialHair?: FacialHair
+  facialHairColor?: string
 }
 
 export function defineCast(specs: CastSpec[]): CharacterDef[] {
@@ -82,7 +104,15 @@ export function defineCast(specs: CastSpec[]): CharacterDef[] {
       outfitStyle: s.outfitStyle ?? (s.vest ? 'vest' : s.accent ? 'suit' : 'blazer'),
       accessory: s.accessory ?? 'none',
       accessoryColor: s.accessoryColor,
-      expression: s.expression ?? (s.smirk ? 'smirk' : 'calm')
+      expression: s.expression ?? (s.smirk ? 'smirk' : 'calm'),
+
+      faceWidth: s.faceWidth ?? 'regular',
+      eyeSpacing: s.eyeSpacing ?? 'regular',
+      browShape: s.browShape ?? 'flat',
+      noseShape: s.noseShape ?? 'small',
+      jaw: s.jaw ?? 'soft',
+      facialHair: s.facialHair ?? 'none',
+      facialHairColor: s.facialHairColor
     }
   }))
 }

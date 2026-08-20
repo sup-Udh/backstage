@@ -59,16 +59,20 @@ const MAX_FRAMES = 4
  * 25% cut and does not: it gives 9 x 13.5, and 32 rows of 13.5 puts every
  * boundary after the first on a half pixel.
  *
- * 0.8 gives 16x24 — a 4:5 grid, so one row in five is dropped uniformly
- * across the whole sheet. That costs a little detail against a clean halving,
- * and buys back the thing that matters more: at 0.5 the cast had shrunk far
- * enough that a seated character was almost entirely hidden behind their own
- * desk, and faces stopped being tellable apart at the default zoom. The room
- * carries the proportion instead — it grew from 480x240 to 640x400 in the
- * same pass, so a character still occupies a smaller share of the office than
- * it did before any of this, while staying big enough to recognise.
+ * 0.6 gives 12x18 from the 20x30 art, and 32 rows of 18 lands every cell
+ * boundary on a whole pixel — so the frame grid survives the resample intact.
+ *
+ * ── Why it came down from 0.8 ──
+ *
+ * The cast was too large for the room: at 16x24 a seated character was as tall
+ * as the monitor beside them and the office read as a set built around the
+ * people rather than a place they work in. A quarter off fixes the proportion,
+ * and it is only affordable now because the faces were redrawn in the same
+ * pass — the old heads relied on hair and clothing to tell people apart, which
+ * stops working the moment the head is twelve pixels wide. A face built from
+ * deliberate features survives the reduction; a recoloured one does not.
  */
-export const CHARACTER_SCALE = 0.8
+export const CHARACTER_SCALE = 0.6
 
 /** The character's footprint in the world, in scene pixels. */
 export const WORLD_SPRITE_W = Math.round(SPRITE_W * CHARACTER_SCALE)
