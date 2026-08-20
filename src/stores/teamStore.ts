@@ -23,6 +23,18 @@ import type {
  * did not persist.
  */
 
+/**
+ * What happened to a collaboration link.
+ *
+ * Empty means it worked and there is nothing to say. Never both fields.
+ */
+export interface LinkOutcome {
+  /** Set when nothing changed, and why. */
+  error?: string
+  /** Set when it worked but something happened worth telling the user. */
+  notice?: string
+}
+
 const DEFAULT_SETTINGS: OrchestrationSettings = {
   autoCollaboration: false,
   maxChainDepth: 3,
@@ -57,14 +69,19 @@ interface TeamState {
   retry: (taskId: string) => Promise<string | null>
 
   /**
-   * Collaboration links. Resolve to an error message, or null on success.
+   * Collaboration links.
    *
    * The main process owns the limits and can refuse, so these report back
    * rather than assuming. The roster it returns replaces the mirror, which is
    * what keeps a refused link from lingering in the UI as though it existed.
+   *
+   * `error` and `notice` are kept apart because they are not the same thing:
+   * a refusal means nothing happened, while a notice means something happened
+   * that the user should know about. Collapsing both into one string made a
+   * successful connection announce itself in the styling of a failure.
    */
-  connect: (a: string, b: string) => Promise<string | null>
-  disconnect: (a: string, b: string) => Promise<string | null>
+  connect: (a: string, b: string) => Promise<LinkOutcome>
+  disconnect: (a: string, b: string) => Promise<LinkOutcome>
 
   saveTrigger: (trigger: Partial<Trigger>) => Promise<void>
   removeTrigger: (triggerId: string) => Promise<void>
@@ -181,13 +198,22 @@ export const useTeam = create<TeamState>((set, get) => ({
   connect: async (a, b) => {
     const result = await window.backstage.agents.connect(a, b)
     set({ agents: result.agents })
-    return result.ok ? null : (result.error ?? 'Could not connect those agents.')
+    if (!result.ok) return { error: result.error ?? 'Could not connect those agents.' }
+    /*
+     * Connecting grants the ability to talk, and a permission change the user
+     * did not explicitly ask for should be visible rather than discovered
+     * later when an agent mentions it in passing.
+     */
+    if (result.granted?.length) {
+      return { notice: `${result.granted.join(' and ')} can now talk to teammates.` }
+    }
+    return {}
   },
 
   disconnect: async (a, b) => {
     const result = await window.backstage.agents.disconnect(a, b)
     set({ agents: result.agents })
-    return result.ok ? null : (result.error ?? 'Could not remove that connection.')
+    return result.ok ? {} : { error: result.error ?? 'Could not remove that connection.' }
   },
 
   saveTrigger: async (trigger) => {

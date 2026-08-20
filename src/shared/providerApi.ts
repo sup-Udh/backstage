@@ -201,6 +201,15 @@ export interface OkResult {
 export interface LinkResult extends OkResult {
   /** The roster after the change, so the caller never has to refetch. */
   agents: AgentConfig[]
+  /**
+   * Agents granted the ability to talk as part of this connection.
+   *
+   * Connecting two agents implies they may contact each other, but the tools
+   * that do the contacting need the `agents.talk` capability — so linking
+   * grants it. Reported here so the change can be shown rather than made
+   * quietly.
+   */
+  granted?: string[]
 }
 
 /** A group of connected agents and the conversation they share. */

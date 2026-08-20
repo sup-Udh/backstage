@@ -347,14 +347,25 @@ export class WorldEngine {
       this.clampCamera()
       return
     }
+
     let sx = 0
-    let sy = 0
-    for (const seat of seats) {
-      sx += seat.x
-      sy += seat.y
-    }
+    for (const seat of seats) sx += seat.x
     this.cam.x = sx / seats.length - this.viewW / this.cam.scale / 2
-    this.cam.y = sy / seats.length - this.viewH / this.cam.scale / 2
+
+    /*
+     * Vertically, aim between the back wall and the first row of desks rather
+     * than at the middle of the seats.
+     *
+     * Centring on the seats put the average of the two desk rows in the
+     * middle of the frame, which on a panel too short to show the whole room
+     * pushed the entire back wall off the top — the windows, the boards, the
+     * signage and the door, which is most of what says what kind of place
+     * this is. Biasing upwards keeps the wall in shot and lets the lower
+     * zones fall off the bottom instead, where there is less to lose.
+     */
+    const front = Math.min(...seats.map((s) => s.y))
+    const aim = (scene.horizon + front) / 2
+    this.cam.y = aim - this.viewH / this.cam.scale / 2
     this.clampCamera()
   }
 

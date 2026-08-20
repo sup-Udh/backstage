@@ -6,7 +6,7 @@ import { AgentInspector } from './AgentInspector'
 import { WorldLabelLayer } from '../../world/labels/WorldLabelLayer'
 import type { Theme } from '../../themes/types'
 import { useBackstage } from '../../stores/backstageStore'
-import { useTeam } from '../../stores/teamStore'
+import { useTeam, type LinkOutcome } from '../../stores/teamStore'
 import { MAX_CONNECTIONS, findWorker, type Worker } from '../../agents/workers'
 
 interface Props {
@@ -52,7 +52,16 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
   const [zoom, setZoom] = useState(2)
   const [dragging, setDragging] = useState(false)
   const [linking, setLinking] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ text: string; tone: 'error' | 'info' } | null>(
+    null
+  )
+  /** A connection the user clicked, and where to put its menu. */
+  const [linkMenu, setLinkMenu] = useState<{
+    a: string
+    b: string
+    left: number
+    top: number
+  } | null>(null)
 
   const views = useSyncExternalStore(engine.subscribeViews, engine.getViews)
   const setChatTarget = useBackstage((s) => s.setChatTarget)
@@ -71,11 +80,26 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
     engine.setSelected(selected)
   }, [engine, selected])
 
-  /** A short-lived message for a refused gesture. */
-  const say = useCallback((text: string) => {
-    setNotice(text)
-    window.setTimeout(() => setNotice((n) => (n === text ? null : n)), 2600)
+  /**
+   * A short-lived message about a gesture.
+   *
+   * Carries its own tone, because "that is not allowed" and "that worked, and
+   * here is what it changed" must not look the same.
+   */
+  const say = useCallback((text: string, tone: 'error' | 'info' = 'error') => {
+    const next = { text, tone }
+    setNotice(next)
+    window.setTimeout(() => setNotice((n) => (n === next ? null : n)), 3200)
   }, [])
+
+  /** Report whichever of the two a link operation produced. */
+  const report = useCallback(
+    (outcome: LinkOutcome) => {
+      if (outcome.error) say(outcome.error, 'error')
+      else if (outcome.notice) say(outcome.notice, 'info')
+    },
+    [say]
+  )
 
   /*
    * Linking two workers, whichever kind they are.
@@ -86,22 +110,22 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
    * component above has to know there are two stores.
    */
   const link = useCallback(
-    async (aId: string, bId: string, join: boolean): Promise<string | null> => {
+    async (aId: string, bId: string, join: boolean): Promise<LinkOutcome> => {
       const a = findWorker(workers, aId)
       const b = findWorker(workers, bId)
-      if (!a || !b) return 'That worker is no longer here.'
+      if (!a || !b) return { error: 'That worker is no longer here.' }
       if (a.kind !== b.kind) {
-        return 'An agent and a CLI session cannot be connected.'
+        return { error: 'An agent and a CLI session cannot be connected.' }
       }
 
       if (a.kind === 'cli') {
-        if (!a.sessionId || !b.sessionId) return 'That session has ended.'
+        if (!a.sessionId || !b.sessionId) return { error: 'That session has ended.' }
         const result = join
           ? await window.backstage.sessions.connect(a.sessionId, b.sessionId)
           : await window.backstage.sessions.disconnect(a.sessionId, b.sessionId)
         // Sessions are mirrored by their own change event, so nothing to
         // refresh here; the store updates when the main process announces it.
-        return result.ok ? null : (result.error ?? 'Could not change that link.')
+        return result.ok ? {} : { error: result.error ?? 'Could not change that link.' }
       }
 
       return join ? connect(aId, bId) : disconnect(aId, bId)
@@ -329,9 +353,31 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
       const p = local(e)
       const s = engine.toScene(p.x, p.y)
       const hit = engine.hitTest(s.x, s.y)
-      const next = hit?.id ?? null
-      if (next) setChatTarget(next)
-      else selectAgent(null)
+
+      if (hit) {
+        setLinkMenu(null)
+        setChatTarget(hit.id)
+        return finish()
+      }
+
+      /*
+       * No character, so try the connection lines. Asked second on purpose: a
+       * link passing behind somebody must never steal the click on them.
+       */
+      const onLink = engine.hitTestLink(s.x, s.y)
+      if (onLink) {
+        const cam = engine.getCamera()
+        setLinkMenu({
+          a: onLink.a,
+          b: onLink.b,
+          left: Math.round((onLink.x - cam.x) * cam.scale),
+          top: Math.round((onLink.y - cam.y) * cam.scale)
+        })
+        return finish()
+      }
+
+      setLinkMenu(null)
+      selectAgent(null)
       return finish()
     }
 
@@ -356,9 +402,7 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
           )
         } else {
           // The main process decides; a refusal is reported, never hidden.
-          void link(g.from, over.id, true).then((error) => {
-            if (error) say(error)
-          })
+          void link(g.from, over.id, true).then(report)
         }
       }
     }
@@ -446,18 +490,60 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
           />
         )}
 
+        {/*
+          The menu for a connection the user clicked. Anchored to the middle
+          of the line so it is obvious which relationship it belongs to when
+          several are on screen.
+        */}
+        {linkMenu &&
+          (() => {
+            const a = findWorker(workers, linkMenu.a)
+            const b = findWorker(workers, linkMenu.b)
+            if (!a || !b) return null
+            return (
+              <div
+                className="absolute z-30 -translate-x-1/2 -translate-y-full border-2 border-ink bg-cream shadow-[3px_3px_0_0_var(--color-ink)]"
+                style={{ left: linkMenu.left, top: linkMenu.top - 6 }}
+              >
+                <p className="border-b-2 border-rule px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink">
+                  {a.name} ↔ {b.name}
+                </p>
+                <div className="flex">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void link(linkMenu.a, linkMenu.b, false).then(report)
+                      setLinkMenu(null)
+                    }}
+                    className="flex-1 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-rust transition-colors hover:bg-rust hover:text-cream"
+                  >
+                    Remove
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLinkMenu(null)}
+                    aria-label="Close"
+                    className="border-l-2 border-rule px-2 py-1 font-mono text-[10px] text-ink-3 transition-colors hover:text-ink"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+
         {/* Why a gesture was refused, said where the gesture happened. */}
         {(notice || linking) && (
           <div className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2">
             <p
               className={[
                 'border-2 px-2 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.08em]',
-                notice
+                notice?.tone === 'error'
                   ? 'border-rust bg-paper text-rust'
                   : 'border-ink bg-brand text-ink'
               ].join(' ')}
             >
-              {notice ?? 'Connecting… drop on a teammate'}
+              {notice?.text ?? 'Connecting… drop on a teammate'}
             </p>
           </div>
         )}
@@ -543,16 +629,10 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
                 void cancel(selectedWorker.id)
               }
             }}
-            onConnect={(otherId) => {
-              void link(selectedWorker.id, otherId, true).then((error) => {
-                if (error) say(error)
-              })
-            }}
-            onDisconnect={(otherId) => {
-              void link(selectedWorker.id, otherId, false).then((error) => {
-                if (error) say(error)
-              })
-            }}
+            onConnect={(otherId) => void link(selectedWorker.id, otherId, true).then(report)}
+            onDisconnect={(otherId) =>
+              void link(selectedWorker.id, otherId, false).then(report)
+            }
             onRename={(name) => {
               if (selectedWorker.kind !== 'cli' || !selectedWorker.sessionId) return
               void window.backstage.sessions

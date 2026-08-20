@@ -318,10 +318,33 @@ export function connectAgents(aId: string, bId: string): LinkResult {
 
   if (!a.canTalkTo.includes(bId)) a.canTalkTo.push(bId)
   if (!b.canTalkTo.includes(aId)) b.canTalkTo.push(aId)
+
+  /*
+   * Connecting also grants the ability to talk.
+   *
+   * `canTalkTo` decides *who* an agent may contact, but the tools that do the
+   * contacting only exist for an agent holding `agents.talk` — so a link
+   * without it produced a relationship the UI showed, the prompt described,
+   * and the agent could not act on. Asked to pass something to a teammate it
+   * would answer, correctly and uselessly, that it had no way to.
+   *
+   * Granting it here is not an escalation the user did not ask for: drawing a
+   * line between two characters *is* the request for them to be able to talk,
+   * and this is the least privilege that satisfies it. It reaches no files,
+   * no shell and no network — only the teammates now named in `canTalkTo`,
+   * which is the same list this call just wrote.
+   */
+  const granted: string[] = []
+  for (const agent of [a, b]) {
+    if (agent.capabilities.includes('agents.talk')) continue
+    agent.capabilities = [...agent.capabilities, 'agents.talk']
+    granted.push(agent.name)
+  }
+
   a.updatedAt = Date.now()
   b.updatedAt = Date.now()
   persist()
-  return { ok: true }
+  return { ok: true, granted }
 }
 
 /** Remove a connection, in both directions. */

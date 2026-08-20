@@ -40,6 +40,14 @@ export interface Linkable {
 export interface LinkResult {
   ok: boolean
   error?: string
+  /**
+   * Agents that were given the ability to talk as part of this connection.
+   *
+   * Surfaced rather than done silently: it is a permission change the user
+   * implied but did not spell out, and they should be told which agents it
+   * touched.
+   */
+  granted?: string[]
 }
 
 /**

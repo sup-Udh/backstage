@@ -49,8 +49,14 @@ export function TeamHeader({ theme, workers, onSpawn }: Props) {
         <h1 className="font-pixel text-sm font-bold uppercase tracking-[0.06em] text-ink">
           Your Team
         </h1>
+        {/*
+          The roster size, not an activity count. It sat directly above the
+          "0 WORKING" tally reading "5 WORKING", which is the same two words
+          saying opposite things a line apart.
+        */}
         <span className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-ink-3">
-          <span className="text-ink">{workers.length}</span> working
+          <span className="text-ink">{workers.length}</span>{' '}
+          {workers.length === 1 ? 'worker' : 'workers'}
         </span>
       </div>
 
