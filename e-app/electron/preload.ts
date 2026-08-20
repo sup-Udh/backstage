@@ -1,10 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
-  AgentRuntimeEvent,
   AgentSession,
+  ApprovalRequest,
   BackstageApi,
   FileChange,
   RunTaskParams,
+  RuntimeEvent,
   TerminalSession
 } from '../src/shared/providerApi'
 
@@ -53,24 +54,56 @@ const api: BackstageApi = {
     list: () => ipcRenderer.invoke('agents:list'),
     save: (agent) => ipcRenderer.invoke('agents:save', agent),
     remove: (agentId) => ipcRenderer.invoke('agents:remove', agentId),
-    toolFamilies: () => ipcRenderer.invoke('agents:toolFamilies'),
+    capabilities: () => ipcRenderer.invoke('agents:capabilities'),
+    validate: (agentId) => ipcRenderer.invoke('agents:validate', agentId),
+
+    spawn: (agentId) => ipcRenderer.invoke('agents:spawn', agentId),
+    despawn: (agentId) => ipcRenderer.invoke('agents:despawn', agentId),
+    states: () => ipcRenderer.invoke('agents:states'),
+
     run: (params: RunTaskParams) => ipcRenderer.invoke('agents:run', params),
-    loadChat: (workspaceId, agentId) => ipcRenderer.invoke('agents:loadChat', workspaceId, agentId),
-    appendChat: (workspaceId, agentId, message) => ipcRenderer.invoke('agents:appendChat', workspaceId, agentId, message),
-    clearChat: (workspaceId, agentId) => ipcRenderer.invoke('agents:clearChat', workspaceId, agentId),
+    cancel: (agentId) => ipcRenderer.invoke('agents:cancel', agentId),
+    stopAll: () => ipcRenderer.invoke('agents:stopAll'),
+    retry: (taskId) => ipcRenderer.invoke('agents:retry', taskId),
+    tasks: (agentId) => ipcRenderer.invoke('agents:tasks', agentId),
+
+    loadChat: (workspaceId, agentId) =>
+      ipcRenderer.invoke('agents:loadChat', workspaceId, agentId),
+    appendChat: (workspaceId, agentId, message) =>
+      ipcRenderer.invoke('agents:appendChat', workspaceId, agentId, message),
+    clearChat: (workspaceId, agentId) =>
+      ipcRenderer.invoke('agents:clearChat', workspaceId, agentId),
+
+    collaboration: (agentId) => ipcRenderer.invoke('agents:collaboration', agentId),
+    awareness: () => ipcRenderer.invoke('agents:awareness'),
 
     /*
-     * Events are pushed while a task runs. The listener is wrapped so the
+     * Events are pushed while tasks run. The listener is wrapped so the
      * renderer only ever sees the payload, never the IpcRendererEvent — which
      * would hand it a `sender` it has no business holding.
      */
-    onEvent: (handler: (event: AgentRuntimeEvent) => void) => {
-      const listener = (_e: unknown, payload: AgentRuntimeEvent) => handler(payload)
-      ipcRenderer.on('agent:event', listener)
-      return () => {
-        ipcRenderer.removeListener('agent:event', listener)
-      }
-    }
+    onEvent: (handler: (event: RuntimeEvent) => void) =>
+      subscribe<RuntimeEvent>('agent:event', handler)
+  },
+
+  automation: {
+    settings: () => ipcRenderer.invoke('automation:settings'),
+    updateSettings: (patch) => ipcRenderer.invoke('automation:updateSettings', patch),
+    listTriggers: () => ipcRenderer.invoke('automation:listTriggers'),
+    saveTrigger: (trigger) => ipcRenderer.invoke('automation:saveTrigger', trigger),
+    removeTrigger: (triggerId) =>
+      ipcRenderer.invoke('automation:removeTrigger', triggerId)
+  },
+
+  /*
+   * Approvals. The renderer can answer a request and list what is outstanding,
+   * but it cannot invent one — a prompt only ever originates from a tool call
+   * the main process is actually holding open.
+   */
+  approvals: {
+    pending: () => ipcRenderer.invoke('approvals:pending'),
+    resolve: (id, approved) => ipcRenderer.invoke('approvals:resolve', id, approved),
+    onRequest: (handler) => subscribe<ApprovalRequest>('agent:approval', handler)
   },
 
   /*

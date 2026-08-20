@@ -1,9 +1,13 @@
 import { create } from 'zustand'
 import { defaultThemeId, isKnownTheme } from '../themes'
-import type { AgentEvent } from '../agents/agentEvents'
 import type {
+  AgentRuntimeState,
   AgentSession,
+  ApprovalRequest,
+  ChatMessage,
+  CollaborationMessage,
   ProviderStatus,
+  RuntimeEvent,
   TerminalSession
 } from '../shared/providerApi'
 
@@ -14,68 +18,37 @@ import type {
  * character positions and animation state stay inside the world engine,
  * because putting them here would re-render the tree sixty times a second.
  *
- * The world and the command centre both read from this, which is what keeps
- * the two panels describing the same office — the agent selected in the world
- * is the agent the command centre is addressed to, and the session shown in
- * the terminal is the session whose character is working on screen.
+ * Everything about an agent is keyed by agentId. There is no current
+ * conversation, no current task and no current status — only `chatTarget`,
+ * which is a view preference and changes nothing about what any agent is
+ * doing. That distinction is what makes switching agents free: it moves which
+ * conversation is on screen and touches nothing else.
  */
 
 export type AppView = 'landing' | 'app'
-/**
- * How tasks are executed. `fake` replays the scripted timeline, which is what
- * you want while working on the world without spending API credits; `real`
- * calls the connected provider.
- */
-export type ExecutionMode = 'real' | 'fake'
 
 /**
  * Which surface the command centre is showing.
  *
  * Always exactly one — the panel is a tool with tabs, not a stack of drawers,
- * so there is no "closed" state to represent. Activity is deliberately absent:
- * it is no longer a destination. It is shown in context inside the session and
- * task surfaces that produced it.
+ * so there is no "closed" state to represent.
  */
 export type TabId = 'messages' | 'files' | 'git' | 'terminal' | 'tasks' | 'commands'
 
-export type PageId = 'home' | 'cases' | 'agents' | 'themes' | 'account'
+export type PageId = 'home' | 'cases' | 'agents' | 'automations' | 'themes' | 'account'
 
-export interface ChatMessage {
-  id: number
-  kind: 'user' | 'agent' | 'system'
-  /** Set on agent lines, so the UI can resolve the current theme's name. */
-  agentId?: string
-  text: string
-  at: number
-}
+/** The target that means "everyone who is in the office". */
+export const ALL_AGENTS = 'all'
 
 export interface ActivityEntry {
-  id: number
+  id: string
   agentId?: string
   agentName?: string
   text: string
   at: number
 }
 
-export interface TaskState {
-  id: number
-  title: string
-  status: 'running' | 'complete' | 'failed'
-  startedAt: number
-  /** The closing summary, once the task finishes. */
-  result?: string
-}
-
 const THEME_KEY = 'backstage.theme'
-const MODE_KEY = 'backstage.mode'
-
-function loadMode(): ExecutionMode {
-  try {
-    return window.localStorage.getItem(MODE_KEY) === 'fake' ? 'fake' : 'real'
-  } catch {
-    return 'real'
-  }
-}
 
 function loadThemeId(): string {
   try {
@@ -87,6 +60,11 @@ function loadThemeId(): string {
   return defaultThemeId
 }
 
+/** How many activity lines to keep per agent. */
+const ACTIVITY_LIMIT = 80
+/** How many collaboration entries to keep on screen. */
+const COLLAB_LIMIT = 120
+
 interface BackstageState {
   view: AppView
   page: PageId
@@ -94,17 +72,24 @@ interface BackstageState {
   /** True while the world is veiled mid-theme-swap. */
   switching: boolean
 
-  /** Per-agent chat history. Keyed by agentId. */
+  /** Private per-agent transcripts. Keyed by agentId. */
   agentMessages: Record<string, ChatMessage[]>
   /** Per-agent activity feeds. Keyed by agentId. */
   agentActivity: Record<string, ActivityEntry[]>
-  /** Per-agent current task. Keyed by agentId. */
-  agentTasks: Record<string, TaskState | null>
+  /** Live per-agent runtime state, mirrored from the main process. */
+  agentStates: Record<string, AgentRuntimeState>
+  /** Shared agent-to-agent activity. Not private memory. */
+  collaboration: CollaborationMessage[]
+  /** Dangerous tool calls waiting on the user. */
+  approvals: ApprovalRequest[]
 
   /** Mirror of the main process's provider state. Never holds a key. */
-  provider: ProviderStatus | null
-  mode: ExecutionMode
-  /** Which agent the chat is addressed to, or 'all' for the team. */
+  providers: ProviderStatus[]
+  /**
+   * Which agent the chat is addressed to, or ALL_AGENTS.
+   *
+   * A view preference. Changing it never starts, stops or interrupts work.
+   */
   chatTarget: string
   /**
    * The character highlighted in the world.
@@ -140,7 +125,7 @@ interface BackstageState {
   setPage: (page: PageId) => void
   switchTheme: (id: string) => void
 
-  setProvider: (status: ProviderStatus | null) => void
+  setProviders: (statuses: ProviderStatus[]) => void
   setChatTarget: (target: string) => void
   selectAgent: (agentId: string | null) => void
   setTab: (tab: TabId) => void
@@ -151,16 +136,30 @@ interface BackstageState {
   requestSession: (id: string | null) => void
   queueCommand: (command: string | null) => void
   markTerminalOpened: () => void
-  setMode: (mode: ExecutionMode) => void
-  pushUserMessage: (text: string) => void
-  pushSystemMessage: (text: string) => void
+
+  setAgentStates: (states: AgentRuntimeState[]) => void
+  setCollaboration: (messages: CollaborationMessage[]) => void
+  setApprovals: (requests: ApprovalRequest[]) => void
+  addApproval: (request: ApprovalRequest) => void
+  removeApproval: (id: string) => void
+
+  /** Append a line to one agent's transcript. */
+  pushMessage: (agentId: string, message: ChatMessage) => void
+  /** Append the same line to several agents at once, for a broadcast. */
+  pushToMany: (agentIds: string[], make: (agentId: string) => ChatMessage) => void
+  /** Fold a runtime event into the transcripts, feeds and state. */
+  ingestEvent: (event: RuntimeEvent) => void
   loadConversation: (workspaceId: string, agentId: string) => Promise<void>
-  /** Fold a runtime event into the transcript, feed and task state. */
-  ingestEvent: (event: AgentEvent) => void
-  clearConversation: () => void
+  clearConversation: (workspaceId: string, agentId: string) => Promise<void>
 }
 
-let nextId = 1
+let localSeq = 0
+
+/** Ids for lines this side created, kept distinct from the runtime's. */
+export function localId(prefix = 'local'): string {
+  localSeq += 1
+  return `${prefix}_${Date.now().toString(36)}_${localSeq}`
+}
 
 export const useBackstage = create<BackstageState>((set, get) => ({
   view: 'landing',
@@ -170,10 +169,12 @@ export const useBackstage = create<BackstageState>((set, get) => ({
 
   agentMessages: {},
   agentActivity: {},
-  agentTasks: {},
-  provider: null,
-  mode: loadMode(),
-  chatTarget: 'jane',
+  agentStates: {},
+  collaboration: [],
+  approvals: [],
+
+  providers: [],
+  chatTarget: ALL_AGENTS,
   selectedAgentId: null,
 
   tab: 'messages',
@@ -207,166 +208,234 @@ export const useBackstage = create<BackstageState>((set, get) => ({
     }, 220)
   },
 
-  setProvider: (provider) => set({ provider }),
+  setProviders: (providers) => set({ providers }),
 
   /*
    * Choosing who to talk to also rings them in the world. The two surfaces
    * describe the same office, so they must never disagree about who is in
-   * focus.
+   * focus. Nothing else happens: no task is started or stopped by this.
    */
   setChatTarget: (chatTarget) =>
-    set({ chatTarget, selectedAgentId: chatTarget === 'all' ? null : chatTarget }),
+    set({
+      chatTarget,
+      selectedAgentId: chatTarget === ALL_AGENTS ? null : chatTarget
+    }),
 
   selectAgent: (selectedAgentId) => set({ selectedAgentId }),
-
   setTab: (tab) => set({ tab }),
-
   setOpenFile: (openFile) => set({ openFile, tab: 'files' }),
-
   setAgentSessions: (agentSessions) => set({ agentSessions }),
-
   setTerminalSessions: (terminalSessions) => set({ terminalSessions }),
-
   setActiveTerminal: (activeTerminalId) => set({ activeTerminalId }),
-
   requestSession: (requestedSessionId) => set({ requestedSessionId }),
-
   queueCommand: (pendingCommand) => set({ pendingCommand }),
-
   markTerminalOpened: () => set({ terminalEverOpened: true }),
 
-  setMode: (mode) => {
-    try {
-      window.localStorage.setItem(MODE_KEY, mode)
-    } catch {
-      // Persisting the preference is a convenience, not a requirement.
-    }
-    set({ mode })
-  },
-
-  pushSystemMessage: (text) =>
-    set((s) => {
-      const target = s.chatTarget
-      const current = s.agentMessages[target] || []
-      return {
-        agentMessages: {
-          ...s.agentMessages,
-          [target]: [
-            ...current,
-            { id: nextId++, kind: 'system', text, at: Date.now() }
-          ]
-        }
-      }
+  setAgentStates: (states) =>
+    set(() => {
+      const agentStates: Record<string, AgentRuntimeState> = {}
+      for (const state of states) agentStates[state.agentId] = state
+      return { agentStates }
     }),
 
-  pushUserMessage: (text) =>
-    set((s) => {
-      const target = s.chatTarget
-      const current = s.agentMessages[target] || []
-      return {
-        agentMessages: {
-          ...s.agentMessages,
-          [target]: [
-            ...current,
-            { id: nextId++, kind: 'user', text, at: Date.now() }
-          ]
-        }
+  setCollaboration: (collaboration) =>
+    set({ collaboration: collaboration.slice(-COLLAB_LIMIT) }),
+
+  setApprovals: (approvals) => set({ approvals }),
+
+  addApproval: (request) =>
+    set((s) =>
+      s.approvals.some((a) => a.id === request.id)
+        ? s
+        : { approvals: [...s.approvals, request] }
+    ),
+
+  removeApproval: (id) =>
+    set((s) => ({ approvals: s.approvals.filter((a) => a.id !== id) })),
+
+  pushMessage: (agentId, message) =>
+    set((s) => ({
+      agentMessages: {
+        ...s.agentMessages,
+        [agentId]: [...(s.agentMessages[agentId] ?? []), message]
       }
+    })),
+
+  pushToMany: (agentIds, make) =>
+    set((s) => {
+      const agentMessages = { ...s.agentMessages }
+      for (const agentId of agentIds) {
+        agentMessages[agentId] = [...(agentMessages[agentId] ?? []), make(agentId)]
+      }
+      return { agentMessages }
     }),
 
+  /**
+   * Fold one runtime event into the renderer's state.
+   *
+   * Everything lands under the agent that produced it. An event with no agent
+   * — a file change, a git update — goes only to the activity feeds that ask
+   * for it, never into somebody's conversation.
+   */
   ingestEvent: (event) =>
     set((s) => {
-      const target = event.agentId || s.chatTarget
       const next: Partial<BackstageState> = {}
+      const agentId = event.agentId
 
-      if (event.activity) {
-        const currentActivity = s.agentActivity[target] || []
+      if (event.type === 'agent.state' && event.state) {
+        next.agentStates = { ...s.agentStates, [event.state.agentId]: event.state }
+      }
+
+      if (event.activity && agentId) {
+        const current = s.agentActivity[agentId] ?? []
         next.agentActivity = {
           ...s.agentActivity,
-          [target]: [
-            ...currentActivity,
+          [agentId]: [
+            ...current,
             {
               id: event.id,
-              agentId: event.agentId,
+              agentId,
               agentName: event.agentName,
               text: event.activity,
               at: event.at
             }
-          ].slice(-60)
+          ].slice(-ACTIVITY_LIMIT)
         }
       }
 
-      if (event.message) {
-        const currentMessages = s.agentMessages[target] || []
+      /*
+       * Only what the agent actually said to the user. `agent.completed`
+       * repeats the final text of `task.completed`, so exactly one of the two
+       * may write a line or every answer would appear twice.
+       */
+      if (event.message && agentId && SPOKEN.has(event.type)) {
+        const current = s.agentMessages[agentId] ?? []
+        const already = current.some((m) => m.id === event.id)
+        if (!already) {
+          next.agentMessages = {
+            ...s.agentMessages,
+            [agentId]: [
+              ...current,
+              {
+                id: event.id,
+                kind: 'agent',
+                agentId,
+                text: event.message,
+                at: event.at,
+                taskId: event.taskId
+              }
+            ]
+          }
+        }
+      }
+
+      if (event.type === 'task.failed' && agentId && event.reason) {
+        const current = next.agentMessages?.[agentId] ?? s.agentMessages[agentId] ?? []
         next.agentMessages = {
-          ...s.agentMessages,
-          [target]: [
-            ...currentMessages,
+          ...(next.agentMessages ?? s.agentMessages),
+          [agentId]: [
+            ...current,
             {
               id: event.id,
-              kind: 'agent',
-              agentId: event.agentId,
-              text: event.message,
-              at: event.at
+              kind: 'system',
+              agentId,
+              text: event.reason,
+              at: event.at,
+              taskId: event.taskId
             }
           ]
         }
       }
 
-      if (event.type === 'task.created' && event.task) {
-        next.agentTasks = {
-          ...s.agentTasks,
-          [target]: {
+      // Agent-to-agent traffic is shared activity, kept out of both agents'
+      // private transcripts and shown as collaboration instead.
+      if (COLLABORATIVE.has(event.type) && agentId && event.targetAgentId) {
+        next.collaboration = [
+          ...s.collaboration,
+          {
             id: event.id,
-            title: event.task,
-            status: 'running',
-            startedAt: event.at
+            senderAgentId: agentId,
+            senderName: event.agentName ?? agentId,
+            receiverAgentId: event.targetAgentId,
+            receiverName: event.targetAgentName ?? event.targetAgentId,
+            message: event.message ?? '',
+            reason: event.reason ?? '',
+            taskId: event.taskId ?? null,
+            correlationId: event.correlationId ?? '',
+            depth: event.depth ?? 0,
+            kind: event.type === 'trigger.fired' ? 'trigger' : 'delegation',
+            at: event.at
           }
-        }
-      }
-
-      const currentTask = s.agentTasks[target]
-      if (event.type === 'task.failed' && currentTask) {
-        next.agentTasks = {
-          ...s.agentTasks,
-          [target]: { ...currentTask, status: 'failed' }
-        }
-      }
-
-      if (event.type === 'task.completed' && currentTask) {
-        // The closing summary is whichever line the lead agent just spoke.
-        const currentMessages = (next.agentMessages ? next.agentMessages[target] : s.agentMessages[target]) || []
-        const lastAgentLine = [...currentMessages]
-          .reverse()
-          .find((m) => m.kind === 'agent')
-        
-        next.agentTasks = {
-          ...s.agentTasks,
-          [target]: {
-            ...currentTask,
-            status: 'complete',
-            result: lastAgentLine?.text
-          }
-        }
+        ].slice(-COLLAB_LIMIT)
       }
 
       return next
     }),
 
-  clearConversation: () => set((s) => ({
-    agentMessages: { ...s.agentMessages, [s.chatTarget]: [] },
-    agentActivity: { ...s.agentActivity, [s.chatTarget]: [] },
-    agentTasks: { ...s.agentTasks, [s.chatTarget]: null }
-  })),
-
-  loadConversation: async (workspaceId: string, agentId: string) => {
+  loadConversation: async (workspaceId, agentId) => {
     if (!window.backstage?.agents) return
     const messages = await window.backstage.agents.loadChat(workspaceId, agentId)
+    set((s) => ({ agentMessages: { ...s.agentMessages, [agentId]: messages } }))
+  },
+
+  clearConversation: async (workspaceId, agentId) => {
+    await window.backstage?.agents.clearChat(workspaceId, agentId)
     set((s) => ({
-      agentMessages: {
-        ...s.agentMessages,
-        [agentId]: messages
-      }
+      agentMessages: { ...s.agentMessages, [agentId]: [] },
+      agentActivity: { ...s.agentActivity, [agentId]: [] }
     }))
   }
 }))
+
+/**
+ * Events whose `message` is something the agent said to the user.
+ *
+ * `task.completed` deliberately is not here: it carries the same text as
+ * `agent.completed`, and letting both write would print every answer twice.
+ */
+const SPOKEN = new Set<RuntimeEvent['type']>(['agent.message', 'agent.completed'])
+
+/** Events that represent one agent contacting another. */
+const COLLABORATIVE = new Set<RuntimeEvent['type']>([
+  'agent.delegated',
+  'agent.message.sent',
+  'trigger.fired'
+])
+
+/* --------------------------------------------------------------- selectors -- */
+
+/**
+ * The transcript on screen.
+ *
+ * For one agent it is that agent's own memory. For ALL AGENTS it is every
+ * spawned agent's lines merged in time order — which is what makes a broadcast
+ * readable as three separate replies rather than one invented consensus.
+ */
+export function transcriptFor(
+  state: { agentMessages: Record<string, ChatMessage[]> },
+  target: string,
+  everyone: string[]
+): ChatMessage[] {
+  if (target !== ALL_AGENTS) return state.agentMessages[target] ?? []
+
+  const merged: ChatMessage[] = []
+  const seenUserLines = new Set<string>()
+
+  for (const agentId of everyone) {
+    for (const message of state.agentMessages[agentId] ?? []) {
+      /*
+       * One broadcast writes the same prompt into every recipient's memory.
+       * Showing it once keeps the merged view readable; agent replies are
+       * never collapsed, because those genuinely are different answers.
+       */
+      if (message.kind === 'user') {
+        const key = `${message.text}@${Math.round(message.at / 1000)}`
+        if (seenUserLines.has(key)) continue
+        seenUserLines.add(key)
+      }
+      merged.push(message)
+    }
+  }
+
+  return merged.sort((a, b) => a.at - b.at)
+}

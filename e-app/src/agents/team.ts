@@ -1,23 +1,14 @@
-import { FakeAgentRuntime } from './fakeAgentRuntime'
-import { useBackstage } from '../stores/backstageStore'
+import { LiveTeamRuntime } from './LiveTeamRuntime'
 
 /**
  * The team.
  *
- * One runtime for the whole application, holding what each agent is *doing*.
+ * One runtime for the whole workspace, holding what each agent is *doing*.
  * Who each agent *is* lives in the main process and is persisted; this side is
- * told about them at startup and whenever the roster changes.
+ * told about them at startup and whenever the roster or a runtime state
+ * changes.
  *
- * It starts empty on purpose: the office fills up as agents are given work,
- * and they stay once they have arrived.
+ * It starts empty on purpose. The office fills up when the user spawns
+ * agents — presence is a decision, not a side effect of opening the app.
  */
-export const teamRuntime = new FakeAgentRuntime([])
-
-/**
- * Wire the runtime's events into the store exactly once. Every event lands in
- * the transcript, the activity feed and the task state through this single
- * path, so the command centre never has to listen to the runtime directly.
- */
-teamRuntime.events.subscribe((event) => {
-  useBackstage.getState().ingestEvent(event)
-})
+export const teamRuntime = new LiveTeamRuntime()

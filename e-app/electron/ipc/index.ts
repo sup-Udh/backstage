@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { registerProviderHandlers, primeProviders } from './providers'
 import { registerWorkspaceHandlers } from './workspace'
-import { registerAgentHandlers } from './agents'
+import { registerAgentHandlers, disposeAgentHandlers } from './agents'
 import { registerTerminalHandlers } from './terminal'
 import { registerProjectHandlers } from './project'
 import { loadWorkspace } from '../workspace/WorkspaceManager'
@@ -30,6 +30,9 @@ export function registerIpcHandlers(): void {
    * leave orphaned shells behind every time the app closes.
    */
   app.on('before-quit', () => {
+    // Stop Backstage's own executions first, so nothing is mid-tool-call
+    // against a workspace whose watchers are about to go away.
+    disposeAgentHandlers()
     terminals.disposeAll()
     agentSessions.dispose()
     fileWatcher.stop()

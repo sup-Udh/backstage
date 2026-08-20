@@ -5,6 +5,7 @@ const PAGES: { id: PageId; label: string }[] = [
   { id: 'home', label: 'Home' },
   { id: 'cases', label: 'Cases' },
   { id: 'agents', label: 'Agents' },
+  { id: 'automations', label: 'Automations' },
   { id: 'themes', label: 'Themes' }
 ]
 

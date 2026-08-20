@@ -12,6 +12,7 @@ import {
   filesystemSearch
 } from '../tools/filesystem'
 import { gitDiff, gitLog, gitStatus } from '../tools/git'
+import type { ToolContext } from '../tools/types'
 
 /**
  * Files, git and project commands for the UI panels.
@@ -77,7 +78,7 @@ export function registerProjectHandlers(): void {
   ipcMain.handle('files:read', async (_e, relPath: unknown) => {
     const res = await filesystemRead.execute(
       { path: String(relPath ?? '') },
-      { workspaceRoot: getWorkspaceRoot() ?? '', agentId: 'ui', taskId: 'ui' }
+      ctx()
     )
     return { success: res.success, content: res.output, error: res.error }
   })
@@ -85,7 +86,7 @@ export function registerProjectHandlers(): void {
   ipcMain.handle('files:search', async (_e, query: unknown, filenames: unknown) => {
     const res = await filesystemSearch.execute(
       { query: String(query ?? ''), filenames: Boolean(filenames), maxResults: 80 },
-      { workspaceRoot: getWorkspaceRoot() ?? '', agentId: 'ui', taskId: 'ui' }
+      ctx()
     )
     return { success: res.success, output: res.output, error: res.error }
   })
@@ -174,6 +175,22 @@ export function registerProjectHandlers(): void {
   })
 }
 
-function ctx() {
-  return { workspaceRoot: getWorkspaceRoot() ?? '', agentId: 'ui', taskId: 'ui' }
+/**
+ * The tool context for a call the *interface* made, not an agent.
+ *
+ * The panels read files and git through the same tools the agents use, so what
+ * the user sees is exactly what an agent would see. It is marked as 'ui' so
+ * anything correlating work back to an agent cannot mistake a panel refresh
+ * for agent activity.
+ */
+function ctx(): ToolContext {
+  return {
+    workspaceRoot: getWorkspaceRoot() ?? '',
+    agentId: 'ui',
+    agentName: 'Backstage',
+    taskId: 'ui',
+    executionId: 'ui',
+    correlationId: 'ui',
+    depth: 0
+  }
 }

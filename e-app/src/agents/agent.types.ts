@@ -1,21 +1,20 @@
-/**
- * The agent runtime layer.
- *
- * This layer knows NOTHING about pixels, themes, sprites or the office.
- * It only models "what is this AI agent currently doing". Today the values
- * are produced by a fake runtime; later they will be produced by real
- * provider events. Nothing downstream needs to change when that happens.
- */
+import type { AgentLifecycle } from '../shared/agents'
 
-/** What an agent is doing. This is *intent*, not animation. */
-export type AgentStatus =
-  | 'idle'
-  | 'working'
-  | 'thinking'
-  | 'talking'
-  | 'waiting'
-  | 'success'
-  | 'error'
+/**
+ * The renderer's view of an agent.
+ *
+ * This layer knows nothing about providers, tools or prompts. It models "what
+ * is this agent doing" so the world can draw a body doing it.
+ *
+ * The status vocabulary is not invented here. It is the main process's
+ * lifecycle, imported, plus exactly one addition: `success`, a brief
+ * celebration the world plays when a task lands. That is a visual flourish
+ * with no runtime meaning, which is why it is the only thing this side adds —
+ * everything else would be a second state machine drifting from the first.
+ */
+export type AgentStatus = AgentLifecycle | 'success'
+
+export type { AgentLifecycle }
 
 export interface Agent {
   /** Stable id, matching the persisted configuration. */
@@ -36,27 +35,32 @@ export interface Agent {
    * Claude or Codex wherever it runs, so it keeps its name.
    */
   useOwnName?: boolean
-  /** Which model powers this agent, e.g. "Claude Opus". */
+  /** Which model powers this agent, e.g. "gpt-5-mini". */
   model: string
+  /** Provider label, for the badge. */
+  provider: string
   status: AgentStatus
-  /** Human readable current task, shown in tooltips. */
+  /** What it is doing right now, in specific terms. Shown in tooltips. */
   task: string | null
-  /** Specific execution/task ID the agent is currently working on. */
+  /** The execution this status belongs to, so stale events can be ignored. */
   taskId: string | null
   executionId: string | null
-  /**
-   * Whether this agent is configured and available at all.
-   */
+  /** How many tasks are waiting behind the current one. */
+  queued: number
+  /** Configured and not disabled. */
   active: boolean
-  /** Whether the agent has been actively spawned into the workspace. */
+  /**
+   * Brought into the workspace by the user.
+   *
+   * Deliberately distinct from "is working". A spawned agent with nothing to
+   * do is present and idle, which is exactly what an office looks like.
+   */
   spawned: boolean
   /**
-   * Whether the agent is physically present in the world right now.
+   * Whether the agent has a body in the world right now.
    *
-   * Deliberately separate from `status`: an agent can be idle and visible
-   * (mid-task, between steps) or idle and hidden (not on a task at all). The
-   * world renders exactly the agents assigned to live work, so a big roster
-   * does not permanently crowd the office.
+   * Follows `spawned` for configured agents. External CLI sessions set it
+   * directly, because they have no configuration to spawn from.
    */
   visible: boolean
 }
@@ -64,8 +68,11 @@ export interface Agent {
 export type AgentListener = (agents: Agent[]) => void
 
 /**
- * The contract the world renders against. A real Claude/OpenAI-backed
- * runtime can implement this same interface and the world will not notice.
+ * The contract the world renders against.
+ *
+ * Both the live team and the landing page's simulation implement it, which is
+ * why the renderer cannot tell them apart — and why the showcase can keep its
+ * ambient scheduler without that behaviour ever reaching a real agent.
  */
 export interface AgentRuntime {
   getAgents(): Agent[]

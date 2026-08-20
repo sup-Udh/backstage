@@ -51,5 +51,5 @@ export interface TaskRequest {
   depth?: number
   parentTaskId?: string | null
   /** Prior turns to seed the model with. Trimmed again before the request. */
-  history?: { role: 'user' | 'assistant'; content: string }[]
+  history?: import('../providers/provider.types').Turn[]
 }

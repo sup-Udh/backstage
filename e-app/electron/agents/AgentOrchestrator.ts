@@ -4,7 +4,7 @@ import { getAgent, listAgents } from './agentStore'
 import { agentRegistry } from './AgentRegistry'
 import { systemBus } from './EventBus'
 import { makeId } from './persist'
-import { Execution, CancelledError } from './Execution'
+import { Execution, CancelledError } from './Executor'
 import { conversationStore } from './conversationStore'
 import { getWorkspaceRoot } from '../workspace/WorkspaceManager'
 import {
@@ -39,6 +39,24 @@ interface Queued {
   history: Turn[]
 }
 
+/**
+ * Why a submission was refused.
+ *
+ * A distinct field rather than `{ error }`: AgentTask carries an `error` of
+ * its own for a task that ran and failed, so testing for that key could not
+ * tell a rejected request apart from a completed-but-failed one.
+ */
+export interface Rejected {
+  rejected: true
+  error: string
+}
+
+export type SubmitResult = AgentTask | Rejected
+
+export function wasRejected(result: SubmitResult): result is Rejected {
+  return 'rejected' in result
+}
+
 interface Lane {
   queue: Queued[]
   current: Execution | null
@@ -71,18 +89,21 @@ export class AgentOrchestrator {
    * gets an acknowledgement and follows the event stream, which is what lets
    * the world animate while an agent works rather than freezing on a promise.
    */
-  submit(request: TaskRequest): AgentTask | { error: string } {
-    if (this.disposed) return { error: 'The runtime is shutting down.' }
+  submit(request: TaskRequest): SubmitResult {
+    if (this.disposed) return { rejected: true, error: 'The runtime is shutting down.' }
 
     const agent = getAgent(request.agentId)
-    if (!agent) return { error: 'That agent no longer exists.' }
-    if (!agent.enabled) return { error: `${agent.name} is disabled.` }
+    if (!agent) return { rejected: true, error: 'That agent no longer exists.' }
+    if (!agent.enabled) return { rejected: true, error: `${agent.name} is disabled.` }
     if (!agent.spawned) {
-      return { error: `${agent.name} has not been spawned into the workspace.` }
+      return {
+        rejected: true,
+        error: `${agent.name} has not been spawned into the workspace.`
+      }
     }
 
     const prompt = request.prompt.trim()
-    if (!prompt) return { error: 'Empty prompt.' }
+    if (!prompt) return { rejected: true, error: 'Empty prompt.' }
 
     const correlationId = request.correlationId ?? makeId('chain')
     const depth = request.depth ?? 0
@@ -90,7 +111,7 @@ export class AgentOrchestrator {
     // Loop protection, applied before anything is queued rather than after
     // money has been spent on it.
     const guard = this.guardChain(agent, prompt, correlationId, depth, request.origin)
-    if (guard) return { error: guard }
+    if (guard) return { rejected: true, error: guard }
 
     const task: AgentTask = {
       id: makeId('task'),
@@ -150,7 +171,7 @@ export class AgentOrchestrator {
 
     for (const agentId of agentIds) {
       const result = this.submit({ agentId, prompt, origin, correlationId })
-      if ('error' in result) errors.push({ agentId, error: result.error })
+      if (wasRejected(result)) errors.push({ agentId, error: result.error })
       else tasks.push(result)
     }
     return { tasks, errors }
@@ -354,11 +375,11 @@ export class AgentOrchestrator {
   }
 
   /** Re-run a task that failed, as a new execution. */
-  retry(taskId: string): AgentTask | { error: string } {
+  retry(taskId: string): SubmitResult {
     const task = listTasks(200).find((t) => t.id === taskId)
-    if (!task) return { error: 'That task is no longer in the log.' }
+    if (!task) return { rejected: true, error: 'That task is no longer in the log.' }
     if (task.status === 'running' || task.status === 'queued') {
-      return { error: 'That task has not finished yet.' }
+      return { rejected: true, error: 'That task has not finished yet.' }
     }
     agentRegistry.clearError(task.agentId)
     return this.submit({
@@ -427,7 +448,7 @@ export class AgentOrchestrator {
       history: this.historyFor(to.id)
     })
 
-    if ('error' in result) {
+    if (wasRejected(result)) {
       systemBus.emit({
         type: 'trigger.blocked',
         agentId: from.id,

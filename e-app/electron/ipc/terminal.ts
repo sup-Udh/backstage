@@ -1,7 +1,9 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { terminals } from '../terminal/TerminalSessionManager'
 import { agentSessions } from '../terminal/AgentSessionManager'
-import { fileWatcher } from '../workspace/FileWatcher'
+import { fileWatcher, type FileChange } from '../workspace/FileWatcher'
+import { systemBus } from '../agents/EventBus'
+import { refreshGit } from '../workspace/awareness'
 
 /**
  * Terminal IPC.
@@ -14,6 +16,12 @@ import { fileWatcher } from '../workspace/FileWatcher'
  * Output is streamed as it arrives rather than buffered to the end, because a
  * long-running `npm run dev` or an interactive CLI has no end to wait for.
  */
+
+/** How many file changes from one burst reach the bus. Panels still get all. */
+const BUS_FILE_LIMIT = 6
+
+/** Last seen status per PTY, so start and exit are each announced once. */
+const knownTerminals = new Map<string, string>()
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -36,7 +44,53 @@ export function registerTerminalHandlers(): void {
   )
   agentSessions.on('ended', (session) => broadcast('agentSession:ended', session))
 
-  fileWatcher.on('changes', (payload) => broadcast('workspace:fileChanges', payload))
+  /*
+   * Workspace and session activity also go onto the central bus, which is what
+   * lets an automation react to a file change or a session ending. The
+   * renderer still gets its own direct channel: the panels want every change,
+   * while the bus is capped so one noisy build cannot flood it.
+   */
+  fileWatcher.on('changes', (payload: { changes: FileChange[]; total: number }) => {
+    broadcast('workspace:fileChanges', payload)
+
+    for (const change of payload.changes.slice(0, BUS_FILE_LIMIT)) {
+      systemBus.emit({
+        type: `file.${change.kind}`,
+        path: change.path,
+        at: change.at,
+        activity: `${change.kind} ${change.path}`
+      })
+    }
+
+    // A file change is usually a git change too, and the awareness layer's
+    // cache would otherwise report the branch state from before the edit.
+    void refreshGit().then((git) => {
+      if (git.branch === null) return
+      systemBus.emit({
+        type: 'git.changed',
+        activity: `git: ${git.dirty} uncommitted change${git.dirty === 1 ? '' : 's'} on ${git.branch}`
+      })
+    })
+  })
+
+  terminals.on('changed', (sessions: { id: string; status: string; title: string }[]) => {
+    for (const session of sessions) {
+      const seen = knownTerminals.get(session.id)
+      if (seen === session.status) continue
+      knownTerminals.set(session.id, session.status)
+      if (seen === undefined) {
+        systemBus.emit({
+          type: 'terminal.started',
+          activity: `terminal "${session.title}" started`
+        })
+      } else if (session.status === 'exited') {
+        systemBus.emit({
+          type: 'terminal.exited',
+          activity: `terminal "${session.title}" exited`
+        })
+      }
+    }
+  })
 
   ipcMain.handle('terminal:list', () => terminals.list())
 

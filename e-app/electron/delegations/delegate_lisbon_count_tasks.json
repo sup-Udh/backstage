@@ -1,9 +1,0 @@
-{
-  "type": "agent.delegated",
-  "at": 1703050000000,
-  "taskId": "delegate-1703050000000",
-  "agentId": "jane",
-  "agentName": "Jane",
-  "targetAgentId": "lisbon",
-  "message": "Write a haiku (three lines, 5-7-5 syllables) about counting tasks. Keep it concise and evocative; mention counting, tasks, or numbers."
-}
