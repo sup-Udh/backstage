@@ -147,18 +147,32 @@ export function ChatIdentity({
   }
 
   if (isBroadcast) {
+    const isTeamRunning = recipients.some(a => {
+      const state = states[a.id];
+      return state && ['queued', 'thinking', 'working', 'talking', 'waiting'].includes(state.status);
+    })
+
     return (
       <div className="shrink-0 border-b-2 border-rule bg-brand-pale px-3 py-2">
         <div className="flex items-baseline justify-between gap-2">
           <p className="font-pixel text-[12px] font-bold uppercase tracking-[0.08em] text-ink">
             All agents
           </p>
+          {isTeamRunning && (
+            <button
+              type="button"
+              onClick={() => onStop('all')}
+              className="shrink-0 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
+            >
+              Stop Team
+            </button>
+          )}
           <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-ink">
             {recipients.length} recipient{recipients.length === 1 ? '' : 's'}
           </p>
         </div>
         <p className="mt-0.5 font-ui text-[11px] leading-snug text-ink-3">
-          {recipients.map(characterName).join(', ')} — each answers separately.
+          {recipients.map(characterName).join(', ')} — team responds sequentially.
         </p>
       </div>
     )

@@ -87,8 +87,8 @@ export interface GenerationTurn {
 export interface RunTaskParams {
   prompt: string
   history?: GenerationTurn[]
-  /** A specific agent id, or 'all' to involve every spawned, enabled agent. */
-  target?: string
+  /** A specific agent id, or an array of agent ids for a sequential team execution. */
+  target?: string | string[]
 }
 
 export interface RunTaskAck {

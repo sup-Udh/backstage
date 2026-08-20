@@ -32,6 +32,7 @@ import {
 } from '../agents/threads'
 import { agentRegistry, validateAgent } from '../agents/AgentRegistry'
 import { orchestrator, wasRejected } from '../agents/AgentOrchestrator'
+import { teamOrchestrator } from '../agents/TeamOrchestrator'
 import { initTriggerEngine } from '../agents/TriggerEngine'
 import { systemBus } from '../agents/EventBus'
 import { conversationStore } from '../agents/conversationStore'
@@ -82,10 +83,14 @@ function workspaceId(): string {
  * each as its own independent task, because three agents answering is three
  * pieces of work, not one.
  */
-function recipients(target: string | undefined): AgentConfig[] {
+function recipients(target: string | string[] | undefined): AgentConfig[] {
   const spawned = listAgents().filter((a) => a.enabled && a.spawned)
 
   if (!target || target === 'all') return spawned
+
+  if (Array.isArray(target)) {
+    return target.map((id) => getAgent(id)).filter((a): a is AgentConfig => a !== undefined)
+  }
 
   const wanted = getAgent(target)
   return wanted ? [wanted] : []
@@ -181,6 +186,33 @@ export function registerAgentHandlers(): void {
     const prompt = typeof params?.prompt === 'string' ? params.prompt.trim() : ''
     if (!prompt) return { accepted: false, error: 'Empty prompt.' }
 
+    // Keep git fresh so the awareness block in the prompt is not stale.
+    void refreshGit()
+    
+    // Team / Broadcast execution
+    if (Array.isArray(params?.target)) {
+      if (params.target.length === 0) {
+        return { accepted: false, error: 'No agents are spawned.' }
+      }
+      
+      const teamExecutionId = teamOrchestrator.runTeam(params.target, prompt, 'user')
+      
+      // Persist the user prompt in each recipient's conversation history
+      for (const agentId of params.target) {
+        if (!agentId.startsWith('cli-')) {
+          conversationStore.append(workspaceId(), agentId, {
+            id: makeId('msg'),
+            kind: 'user',
+            agentId,
+            text: prompt,
+            at: Date.now()
+          })
+        }
+      }
+      
+      return teamExecutionId
+    }
+
     const targets = recipients(params?.target)
     if (targets.length === 0) {
       return {
@@ -191,9 +223,6 @@ export function registerAgentHandlers(): void {
             : 'No agents are spawned. Spawn one from the Agents page.'
       }
     }
-
-    // Keep git fresh so the awareness block in the prompt is not stale.
-    void refreshGit()
 
     /*
      * The user's line is written to each recipient's own memory before the
@@ -260,7 +289,10 @@ export function registerAgentHandlers(): void {
     orchestrator.cancel(String(agentId ?? ''))
   )
 
-  ipcMain.handle('agents:stopAll', (): number => orchestrator.stopAll())
+  ipcMain.handle('agents:stopAll', async (): Promise<number> => {
+    teamOrchestrator.cancelAllTeams?.()
+    return orchestrator.stopAll()
+  })
 
   ipcMain.handle('agents:retry', (_e, taskId: unknown): RunTaskAck => {
     const result = orchestrator.retry(String(taskId ?? ''))

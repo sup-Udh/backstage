@@ -295,7 +295,8 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
       (agentId) => ({ id: localId('user'), kind: 'user', agentId, text, at })
     )
 
-    void window.backstage.agents.run({ prompt: text, target }).then((ack) => {
+    const runTarget = isBroadcast ? recipients.map(w => w.id) : target
+    void window.backstage.agents.run({ prompt: text, target: runTarget }).then((ack) => {
       if (!ack.accepted) {
         pushToMany(
           recipients.map((a) => a.id),
@@ -424,6 +425,10 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
           providerName={providerName}
           modelName={modelName}
           onStop={(agentId) => {
+            if (agentId === 'all') {
+              void window.backstage.agents.stopAll()
+              return
+            }
             const worker = findWorker(workers, agentId)
             if (worker?.kind === 'cli' && worker.sessionId) {
               void window.backstage.sessions.interrupt(worker.sessionId)
