@@ -1,14 +1,14 @@
 import type { WorkspaceInfo } from '../workspace/WorkspaceManager'
 import type { AgentConfig } from './agent.types'
-
-import { getWorkspaceContext } from '../workspace/context'
+import { getAgent } from './agentStore'
+import { awarenessFor } from '../workspace/awareness'
 
 /**
  * Agent instructions.
  *
- * A prompt is composed from four layers rather than written per agent:
+ * A prompt is composed from five layers rather than written per agent:
  *
- *   Backstage base rules  +  this agent's instructions  +  workspace  +  tools
+ *   base rules + identity + workspace + team awareness + tools
  *
  * The base layer exists because the failure mode of a tool-using agent is not
  * refusing to answer — it is answering confidently about files it never
@@ -52,6 +52,43 @@ How to write the final answer:
   conversation.
 - Never reveal hidden reasoning or internal chain-of-thought.`
 
+/**
+ * How this agent may work with the others.
+ *
+ * Stated explicitly, in both directions, because a model told only that a tool
+ * exists will use it on everyone. Naming exactly who is reachable is what
+ * turns the permission list into behaviour rather than a rejected tool call.
+ */
+function teamRules(agent: AgentConfig, canDelegate: boolean): string {
+  if (!canDelegate) {
+    return `You are working alone on this. You have no way to contact other agents; do not claim to have asked anyone for help.`
+  }
+
+  if (agent.canTalkTo.length === 0) {
+    return `You have team tools, but the user has not permitted you to contact anyone yet. Do the work yourself.`
+  }
+
+  const names = agent.canTalkTo
+    .map((id) => {
+      const other = getAgent(id)
+      return other ? `${other.id} (${other.name}, ${other.role})` : null
+    })
+    .filter((x): x is string => x !== null)
+
+  if (names.length === 0) {
+    return `You have team tools, but nobody you were permitted to contact still exists. Do the work yourself.`
+  }
+
+  return `You may contact these agents, and only these: ${names.join('; ')}.
+
+Use delegate_task only for work that genuinely belongs to their role, and give
+them complete instructions — they cannot see your conversation. Use
+agent_message to pass along a finding without assigning work. You do not wait
+for them; they work independently and report in their own session. Never
+delegate the whole task you were given, and never delegate back something that
+was just delegated to you.`
+}
+
 /** The full system prompt for one agent, in one workspace, with these tools. */
 export function systemPromptFor(
   agent: AgentConfig,
@@ -59,17 +96,21 @@ export function systemPromptFor(
   toolNames: string[]
 ): string {
   const workspaceBlock = workspace.root
-    ? `Workspace: ${workspace.name}\nRoot: ${workspace.root}\n\n${getWorkspaceContext()}\nAll file and terminal paths are relative to this root. You cannot reach outside it.`
+    ? `Workspace: ${workspace.name}
+Root: ${workspace.root}
+All file and terminal paths are relative to this root. You cannot reach outside it.`
     : `No workspace folder is open, so you have no access to the user's files or
 terminal. If the task needs the project, say a workspace must be opened first —
 do not guess at its contents.`
 
-  const relationships = agent.canTalkTo && agent.canTalkTo.length > 0
-    ? `You can delegate tasks to the following agents on your team using the delegate_task tool: ${agent.canTalkTo.join(', ')}.`
-    : `You are working alone. You cannot delegate tasks to any other agents.`
+  const canDelegate = toolNames.includes('delegate_task')
 
-  const identity = `You are ${agent.name}. Your role is ${agent.role}.
-${relationships}
+  const identity = `You are ${agent.name}${
+    agent.displayName && agent.displayName !== agent.name
+      ? ` (shown to the user as ${agent.displayName})`
+      : ''
+  }. Your id is ${agent.id}. Your role is ${agent.role}.
+
 ${agent.instructions.trim()}`
 
   return `${BASE}
@@ -79,6 +120,12 @@ ${identity}
 
 --- your workspace ---
 ${workspaceBlock}
+
+--- your team ---
+${teamRules(agent, canDelegate)}
+
+--- what is happening right now ---
+${awarenessFor(agent.id)}
 
 --- your tools ---
 ${toolNames.length > 0 ? toolNames.join(', ') : 'none'}`

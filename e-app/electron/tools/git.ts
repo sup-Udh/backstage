@@ -95,4 +95,49 @@ export const gitLog: AgentTool = {
   }
 }
 
-export const gitTools = [gitStatus, gitDiff, gitLog]
+/**
+ * The one git tool that writes.
+ *
+ * Separated from the read-only three and gated behind its own capability,
+ * because committing is the point at which an agent changes something the user
+ * cannot trivially undo. It always requires approval, and it never invents a
+ * message.
+ */
+export const gitCommit: AgentTool = {
+  name: 'git_commit',
+  label: 'Committing changes',
+  description:
+    'Stage and commit changes in the workspace repository. Provide a clear commit message. Only use this when the user has asked for a commit.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      message: { type: 'string', description: 'The commit message.' },
+      paths: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Paths to stage. Omit to commit everything already staged in the index.'
+      }
+    },
+    required: ['message']
+  },
+  requiresApproval: true,
+  describe: (i) => `Committed: ${String(i.message ?? '').slice(0, 48)}`,
+  execute: async (input) => {
+    const message = typeof input.message === 'string' ? input.message.trim() : ''
+    if (!message) return { success: false, error: 'A commit message is required.' }
+
+    const paths = Array.isArray(input.paths)
+      ? input.paths.filter((p): p is string => typeof p === 'string' && p.trim() !== '')
+      : []
+
+    if (paths.length > 0) {
+      const staged = await git(['add', '--', ...paths], 4_000)
+      if (!staged.success) return staged
+    }
+
+    return git(['commit', '-m', message], 8_000)
+  }
+}
+
+export const gitTools = [gitStatus, gitDiff, gitLog, gitCommit]

@@ -10,7 +10,17 @@
 export interface ToolContext {
   workspaceRoot: string
   agentId: string
+  agentName: string
   taskId: string
+  executionId: string
+  /**
+   * Ties everything descended from one originating request together. Carried
+   * into any agent-to-agent message a tool sends, so a chain can be counted
+   * and capped however far it branches.
+   */
+  correlationId: string
+  /** How many agent-to-agent hops deep this execution already is. */
+  depth: number
   /** Emitted by tools that change the workspace, for the activity feed. */
   onFileChange?: (kind: 'created' | 'modified' | 'deleted', path: string) => void
 }
