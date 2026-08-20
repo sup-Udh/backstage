@@ -51,8 +51,11 @@ const TABS: { id: TabId; label: string }[] = [
  * That is what lets the user hand Michael a task while Jane is mid-investigation
  * and have both keep going.
  */
-export function CommandCenter({ theme }: Props) {
+export function CommandCenter({ theme, workers, onSpawn }: Props) {
   const target = useBackstage((s) => s.chatTarget)
+  const threadTarget = useBackstage((s) => s.threadTarget)
+  const thread = useBackstage((s) => s.thread)
+  const refreshThread = useBackstage((s) => s.refreshThread)
   const pushMessage = useBackstage((s) => s.pushMessage)
   const pushToMany = useBackstage((s) => s.pushToMany)
   const agentStates = useBackstage((s) => s.agentStates)
@@ -85,6 +88,18 @@ export function CommandCenter({ theme }: Props) {
   const present = spawnedAgents(agents)
   const recipients = recipientsFor(agents, target)
   const isBroadcast = target === ALL_AGENTS
+
+  /*
+   * Which of the three conversations is on screen.
+   *
+   * A group thread, a CLI session, or an agent's own transcript. They are
+   * genuinely different destinations — one posts to a shared thread, one
+   * writes to a PTY, one queues a task — so the send path is chosen here
+   * rather than every surface below working it out again.
+   */
+  const activeWorker = findWorker(workers, target)
+  const isSession = activeWorker?.kind === 'cli'
+  const inThread = threadTarget !== null && thread !== null
 
   /* Once opened the terminal stays mounted, or its scrollback dies with it. */
   useEffect(() => {
