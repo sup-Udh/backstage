@@ -30,16 +30,23 @@ import type {
 /**
  * Which surface is on screen.
  *
- * `loading` and `setup` are the way into a project, and they are view states
- * rather than routes because there is nothing to route to yet: until a project
- * exists there is no workspace, no roster and no theme for a page to render.
+ * `loading`, `projects` and `setup` are the way into a project, and they are
+ * view states rather than routes because there is nothing to route to yet:
+ * until a project exists there is no workspace, no roster and no theme for a
+ * page to render.
  *
  *   landing   the shop window
  *   loading   entering: real initialisation, shown as a walk to the office
+ *   projects  which piece of work is this, of the ones already set up
  *   setup     choosing a folder, a world, a cast and a team lead
  *   app       inside a project
+ *
+ * `projects` exists because the app used to reopen whatever was last active
+ * and say nothing about it. A project is a folder that agents write into, so
+ * silently picking one is the app choosing which repository to edit on the
+ * user's behalf — it asks now, every time, even when there is only one answer.
  */
-export type AppView = 'landing' | 'loading' | 'setup' | 'app'
+export type AppView = 'landing' | 'loading' | 'projects' | 'setup' | 'app'
 
 /**
  * Which surface the command centre is showing.
@@ -193,7 +200,9 @@ interface BackstageState {
 
   /** Get Started: begin entering, which is a real initialisation. */
   enterApp: () => void
-  /** Initialisation finished and there is no project yet. */
+  /** Initialisation finished and there are projects to choose between. */
+  showProjects: () => void
+  /** Create a project: no projects exist, or the user asked for a new one. */
   showSetup: () => void
   /** A project is open; show it. */
   openProject: () => void
@@ -274,6 +283,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   terminalEverOpened: false,
 
   enterApp: () => set({ view: 'loading' }),
+  showProjects: () => set({ view: 'projects' }),
   showSetup: () => set({ view: 'setup' }),
   openProject: () => set({ view: 'app', page: 'home' }),
   exitToLanding: () => set({ view: 'landing' }),
