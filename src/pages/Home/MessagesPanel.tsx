@@ -6,12 +6,15 @@ import {
   useBackstage
 } from '../../stores/backstageStore'
 import { useTeam, spawnedAgents } from '../../stores/teamStore'
-import type { ChatMessage } from '../../shared/providerApi'
+import type { ChatMessage, SessionLine } from '../../shared/providerApi'
 import { activityLine, blocksFrom, type ToolBlock as Block } from '../../agents/toolActivity'
+import { findWorker, type Worker } from '../../agents/workers'
 import { ToolBlock } from './ToolBlock'
+import { SessionBlock } from './SessionBlock'
 
 interface Props {
   theme: Theme
+  workers: Worker[]
   onSubmit: (text: string) => void
 }
 
@@ -33,6 +36,15 @@ const SUGGESTIONS = [
 type Entry =
   | { kind: 'message'; at: number; key: string; message: ChatMessage }
   | { kind: 'tools'; at: number; key: string; agentId: string; block: Block }
+  /** A run of consecutive lines from one CLI session's real output. */
+  | {
+      kind: 'session'
+      at: number
+      key: string
+      lines: SessionLine[]
+      /** Which session printed them, for a group where two are interleaved. */
+      who: string
+    }
 
 /**
  * The transcript.
@@ -44,8 +56,11 @@ type Entry =
  * flattening them into one voice would be inventing a consensus none of them
  * reached.
  */
-export function MessagesPanel({ theme, onSubmit }: Props) {
+export function MessagesPanel({ theme, workers, onSubmit }: Props) {
   const target = useBackstage((s) => s.chatTarget)
+  const thread = useBackstage((s) => s.thread)
+  const threadMessages = useBackstage((s) => s.threadMessages)
+  const sessionLines = useBackstage((s) => s.sessionLines)
   const agentMessages = useBackstage((s) => s.agentMessages)
   const agentTools = useBackstage((s) => s.agentTools)
   const streaming = useBackstage((s) => s.streaming)
@@ -64,11 +79,18 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
     [isBroadcast, present, target]
   )
 
+  const activeWorker = findWorker(workers, target)
+  const session = activeWorker?.kind === 'cli' ? activeWorker : null
+
   /*
    * The configured name loses to the character's: this is the user's agent,
-   * wearing whichever costume the active world provides.
+   * wearing whichever costume the active world provides. The worker list
+   * already resolves that, and also knows about CLI sessions, which have no
+   * roster entry to look up.
    */
   const nameFor = (agentId?: string) => {
+    const worker = findWorker(workers, agentId ?? null)
+    if (worker) return worker.name
     const config = agents.find((a) => a.id === agentId)
     if (!config) return 'Agent'
     const cast = theme.characters
@@ -86,10 +108,19 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
     return [provider?.name, model].filter(Boolean).join(' · ')
   }
 
-  const messages = useMemo(
-    () => transcriptFor({ agentMessages }, target, present.map((a) => a.id)),
-    [agentMessages, target, present]
-  )
+  /*
+   * Which transcript is on screen.
+   *
+   * Three genuinely different sources, chosen here rather than merged: a
+   * group's shared thread, a CLI session's reconstructed output, or the
+   * agents' own private memory. They are never combined — that separation is
+   * the guarantee that a private conversation cannot leak into a group one.
+   */
+  const messages = useMemo(() => {
+    if (thread) return threadMessages[thread.id] ?? []
+    if (session) return []
+    return transcriptFor({ agentMessages }, target, present.map((a) => a.id))
+  }, [thread, threadMessages, session, agentMessages, target, present])
 
   /*
    * Messages and tool blocks, interleaved by time.
@@ -100,6 +131,70 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
    * render and the next.
    */
   const entries = useMemo<Entry[]>(() => {
+    /*
+     * A group of CLI sessions has no stored conversation — it is two real
+     * processes, and what they "said" is what they printed. So the thread is
+     * their transcripts merged in time order and attributed, which is an
+     * honest account of the exchange rather than a synthesised dialogue.
+     */
+    const sessionGroup = thread?.id.startsWith('session-thread:') ? thread : null
+    if (sessionGroup) {
+      const merged = sessionGroup.members.flatMap((memberId, i) =>
+        (sessionLines[memberId] ?? []).map((line) => ({
+          line,
+          who: sessionGroup.names[i] ?? memberId
+        }))
+      )
+      merged.sort((a, b) => a.line.at - b.line.at)
+
+      const list: Entry[] = []
+      for (const { line, who } of merged) {
+        const last = list[list.length - 1]
+        if (
+          line.kind === 'output' &&
+          last?.kind === 'session' &&
+          last.who === who &&
+          last.lines[0].kind === 'output'
+        ) {
+          last.lines.push(line)
+          continue
+        }
+        list.push({ kind: 'session', at: line.at, key: line.id, lines: [line], who })
+      }
+      return list
+    }
+
+    /*
+     * A single CLI session's transcript is reconstructed output, not
+     * messages, and has no tool ledger behind it — the process runs its own
+     * tools and does not report them to Backstage. Consecutive output lines
+     * are gathered into one block so a hundred lines of build output is one
+     * thing to scroll past rather than a hundred.
+     */
+    if (session?.sessionId) {
+      const lines = sessionLines[session.sessionId] ?? []
+      const list: Entry[] = []
+      for (const line of lines) {
+        const last = list[list.length - 1]
+        if (
+          line.kind === 'output' &&
+          last?.kind === 'session' &&
+          last.lines[0].kind === 'output'
+        ) {
+          last.lines.push(line)
+          continue
+        }
+        list.push({
+          kind: 'session',
+          at: line.at,
+          key: line.id,
+          lines: [line],
+          who: session.name
+        })
+      }
+      return list
+    }
+
     const list: Entry[] = messages.map((m) => ({
       kind: 'message',
       at: m.at,
@@ -107,15 +202,22 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
       message: m
     }))
 
-    for (const agentId of shown) {
-      for (const block of blocksFrom(agentTools[agentId] ?? [])) {
-        list.push({
-          kind: 'tools',
-          at: block.at,
-          key: `${agentId}:${block.id}`,
-          agentId,
-          block
-        })
+    /*
+     * Tool blocks belong to an agent's own conversation. A group thread shows
+     * what the members said to each other, not every file each of them read
+     * getting there — that detail belongs in their individual sessions.
+     */
+    if (!thread) {
+      for (const agentId of shown) {
+        for (const block of blocksFrom(agentTools[agentId] ?? [])) {
+          list.push({
+            kind: 'tools',
+            at: block.at,
+            key: `${agentId}:${block.id}`,
+            agentId,
+            block
+          })
+        }
       }
     }
 
@@ -123,7 +225,7 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
       .map((entry, i) => ({ entry, i }))
       .sort((a, b) => a.entry.at - b.entry.at || a.i - b.i)
       .map(({ entry }) => entry)
-  }, [messages, agentTools, shown])
+  }, [messages, agentTools, shown, session, sessionLines, thread])
 
   /*
    * Stay pinned to the newest line, but only when the user is already there.
@@ -173,6 +275,14 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
         ) : (
           <ol className="flex flex-col gap-3">
             {entries.map((entry) => {
+              if (entry.kind === 'session') {
+                return (
+                  <li key={entry.key}>
+                    <SessionBlock lines={entry.lines} name={entry.who} />
+                  </li>
+                )
+              }
+
               if (entry.kind === 'tools') {
                 return (
                   <li key={entry.key}>

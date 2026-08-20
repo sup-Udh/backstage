@@ -57,24 +57,26 @@ export function AgentInspector({
     if (renaming) renameRef.current?.select()
   }, [renaming])
 
-  /*
-   * Only agents can be connected. A CLI session has no persisted
-   * configuration to record a relationship in, so offering the control would
-   * be offering something that could not be honoured.
-   */
-  const connectable = worker.kind === 'agent'
   const atLimit = connections.length >= MAX_CONNECTIONS
 
-  /** Who this agent could still be connected to. */
+  /**
+   * Who this worker could still be connected to.
+   *
+   * Like connects to like. An agent's relationships are persisted
+   * configuration and a session's are a property of two running processes, so
+   * there is no store that could hold a link between one of each — offering
+   * it would be offering something that could not be honoured.
+   */
   const candidates = useMemo(
     () =>
       others.filter(
         (o) =>
-          o.kind === 'agent' &&
+          o.kind === worker.kind &&
           o.id !== worker.id &&
-          !connections.some((c) => c.id === o.id)
+          !connections.some((c) => c.id === o.id) &&
+          o.connections.length < MAX_CONNECTIONS
       ),
-    [others, worker.id, connections]
+    [others, worker.id, worker.kind, connections]
   )
 
   const commitRename = () => {
@@ -168,7 +170,7 @@ export function AgentInspector({
           </p>
         </div>
 
-        {connectable && (
+        {
           <div>
             <Label>
               Connections ({connections.length}/{MAX_CONNECTIONS})
@@ -229,11 +231,15 @@ export function AgentInspector({
                 disabled={candidates.length === 0}
                 className="mt-1 w-full border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand disabled:text-dim disabled:hover:border-ink-3"
               >
-                {candidates.length === 0 ? 'Nobody to connect to' : '+ Connect agent'}
+                {candidates.length === 0
+                  ? 'Nobody to connect to'
+                  : worker.kind === 'cli'
+                    ? '+ Connect session'
+                    : '+ Connect agent'}
               </button>
             )}
           </div>
-        )}
+        }
 
         <div className="flex flex-col gap-1.5">
           <button

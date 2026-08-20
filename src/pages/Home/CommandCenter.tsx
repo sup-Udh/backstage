@@ -208,13 +208,26 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
      * member's private session with the user.
      */
     if (inThread && thread) {
-      void window.backstage.threads.post(threadTarget!, text).then((result) => {
+      const groupTarget = threadTarget!
+      const worker = findWorker(workers, groupTarget)
+
+      /*
+       * A group of CLI sessions is not a stored conversation — it is two real
+       * processes — so the message goes to each of their stdin rather than
+       * into a transcript the app owns.
+       */
+      const posting =
+        worker?.kind === 'cli' && worker.sessionId
+          ? window.backstage.sessions.postGroup(worker.sessionId, text)
+          : window.backstage.threads.post(groupTarget, text)
+
+      void posting.then((result) => {
         void refreshThread()
         if (!result.accepted && result.error) {
-          pushMessage(threadTarget!, {
+          pushMessage(groupTarget, {
             id: localId('sys'),
             kind: 'system',
-            agentId: threadTarget!,
+            agentId: groupTarget,
             text: result.error,
             at: Date.now()
           })

@@ -161,6 +161,8 @@ export interface AgentSession {
   name: string
   /** Which of the active theme's characters stands in for this session. */
   characterSlot: number
+  /** Other live sessions this one is connected to. */
+  connections: string[]
 }
 
 /**
@@ -373,6 +375,20 @@ export interface BackstageApi {
     interrupt(sessionId: string): Promise<boolean>
     rename(sessionId: string, name: string): Promise<OkResult>
     setCharacter(sessionId: string, slot: number): Promise<boolean>
+
+    /**
+     * Links between two live sessions.
+     *
+     * Same limits as agent connections, enforced in the main process. Held in
+     * memory rather than persisted: a relationship between two processes
+     * cannot outlive them.
+     */
+    connect(a: string, b: string): Promise<OkResult>
+    disconnect(a: string, b: string): Promise<OkResult>
+    group(sessionId: string): Promise<ThreadInfo | null>
+    /** Send one message to every session in the group's real stdin. */
+    postGroup(sessionId: string, text: string): Promise<ThreadPostResult>
+
     onChanged(handler: (sessions: AgentSession[]) => void): () => void
     onLine(handler: (line: SessionLine) => void): () => void
   }

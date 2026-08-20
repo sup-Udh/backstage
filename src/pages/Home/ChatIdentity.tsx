@@ -34,16 +34,94 @@ interface Props {
  */
 export function ChatIdentity({
   theme,
+  workers,
   recipients,
   isBroadcast,
   states,
+  thread,
   providerName,
   modelName,
-  onStop
+  onStop,
+  onLeaveThread
 }: Props) {
+  const target = useBackstage((s) => s.chatTarget)
+
   const characterName = (agent: AgentConfig) => {
     const cast = theme.characters
     return cast[((agent.characterSlot % cast.length) + cast.length) % cast.length].name
+  }
+
+  /*
+   * A group conversation, named as one. The point of the banner here is that
+   * the user can never mistake the shared thread for a private session — they
+   * hold different messages and are sent to differently, so they must not
+   * look alike.
+   */
+  if (thread) {
+    return (
+      <div className="shrink-0 border-b-2 border-brand-deep bg-brand-pale px-3 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate font-pixel text-[12px] font-bold uppercase tracking-[0.08em] text-ink">
+            {thread.names.join(' ↔ ')}
+          </p>
+          <button
+            type="button"
+            onClick={onLeaveThread}
+            className="shrink-0 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-brand"
+          >
+            Leave group
+          </button>
+        </div>
+        <p className="mt-0.5 font-ui text-[11px] leading-snug text-ink-3">
+          Collaboration thread. Separate from each agent&rsquo;s own conversation
+          — nothing said here is part of those.
+        </p>
+      </div>
+    )
+  }
+
+  /*
+   * A CLI session. Named after the process rather than the character, and
+   * marked as a real session so the user knows their message is going to a
+   * program they started rather than into Backstage's own runtime.
+   */
+  const sessionWorker = findWorker(workers, target)
+  if (sessionWorker?.kind === 'cli') {
+    return (
+      <div className="shrink-0 border-b-2 border-rule bg-cream-2 px-3 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate font-pixel text-[12px] font-bold uppercase tracking-[0.08em] text-ink">
+            {sessionWorker.name}
+            <span className="ml-2 font-normal text-ink-3">{sessionWorker.role}</span>
+          </p>
+          {sessionWorker.canStop && (
+            <button
+              type="button"
+              onClick={() => onStop(sessionWorker.id)}
+              title="Interrupt the current turn. The session stays open."
+              className="shrink-0 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
+            >
+              Stop
+            </button>
+          )}
+        </div>
+
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+            Live session
+            <span className="mx-1 text-rule">·</span>
+            <span className="text-ink">{sessionWorker.model}</span>
+          </p>
+          <StatusChip status={sessionWorker.status} />
+        </div>
+
+        {sessionWorker.action && (
+          <p className="mt-0.5 truncate font-ui text-[11px] leading-snug text-ink-3">
+            {sessionWorker.action}
+          </p>
+        )}
+      </div>
+    )
   }
 
   if (recipients.length === 0) {

@@ -39,6 +39,8 @@ export interface AgentSession {
   name: string
   /** Which of the active theme's characters stands in for this session. */
   characterSlot: number
+  /** Other sessions this one is connected to. Derived, never stored. */
+  connections: string[]
 }
 
 /**
@@ -87,7 +89,8 @@ class AgentSessions extends EventEmitter {
         status: 'starting',
         startedAt: Date.now(),
         name: `${kind.replace(/^./, (c) => c.toUpperCase())} ${n}`,
-        characterSlot: CLI_SLOT_BASE + this.slots++
+        characterSlot: CLI_SLOT_BASE + this.slots++,
+        connections: []
       }
       this.sessions.set(session.id, session)
       this.lastOutputAt.set(session.id, Date.now())
@@ -116,6 +119,9 @@ class AgentSessions extends EventEmitter {
       // A dead process must never be shown as working.
       session.status = exitCode === 0 ? 'exited' : 'error'
       session.endedAt = Date.now()
+      // A connection to a process that has stopped is not a connection. It
+      // would otherwise keep occupying a slot on whoever it was linked to.
+      this.unlinkAll(session.id)
       this.emit('ended', session)
       this.emit('changed', this.list())
     })
@@ -147,12 +153,15 @@ class AgentSessions extends EventEmitter {
   }
 
   list(): AgentSession[] {
-    return [...this.sessions.values()].map((s) => ({ ...s }))
+    return [...this.sessions.values()].map((s) => ({
+      ...s,
+      connections: this.connectionsOf(s.id)
+    }))
   }
 
   get(id: string): AgentSession | undefined {
     const s = this.sessions.get(id)
-    return s ? { ...s } : undefined
+    return s ? { ...s, connections: this.connectionsOf(s.id) } : undefined
   }
 
   /** Sessions still attached to a live process. */
@@ -231,10 +240,108 @@ class AgentSessions extends EventEmitter {
     let changed = false
     for (const s of this.sessions.values()) {
       if (s.terminalSessionId !== terminalId) continue
+      this.unlinkAll(s.id)
       this.sessions.delete(s.id)
       changed = true
     }
     if (changed) this.emit('changed', this.list())
+  }
+
+  /* ------------------------------------------------------ collaboration -- */
+
+  /**
+   * Which sessions are connected to which.
+   *
+   * In memory, like the names, and for the same reason: a link between two
+   * processes cannot outlive them. Persisting one would mean restoring a
+   * relationship between two things that no longer exist.
+   *
+   * Deliberately a separate store from the agents' `canTalkTo` rather than a
+   * shared one. An agent's connections are configuration the user owns and
+   * expects to find again; a session's are a property of two running
+   * processes. Forcing both into one persisted list would mean either
+   * inventing configuration for sessions or throwing away the user's.
+   */
+  private links = new Map<string, Set<string>>()
+
+  private linksOf(id: string): Set<string> {
+    let set = this.links.get(id)
+    if (!set) {
+      set = new Set()
+      this.links.set(id, set)
+    }
+    return set
+  }
+
+  /** Everyone this session is connected to, that is still running. */
+  connectionsOf(id: string): string[] {
+    return [...this.linksOf(id)].filter((other) => {
+      const session = this.sessions.get(other)
+      return session !== undefined && session.status !== 'exited'
+    })
+  }
+
+  /** Everyone reachable through connections, including this session. */
+  groupOf(id: string): string[] {
+    if (!this.sessions.has(id)) return []
+    const seen = new Set([id])
+    const queue = [id]
+    while (queue.length > 0) {
+      const next = queue.shift()!
+      for (const other of this.connectionsOf(next)) {
+        if (seen.has(other)) continue
+        seen.add(other)
+        queue.push(other)
+      }
+    }
+    return [...seen].sort()
+  }
+
+  connect(
+    aId: string,
+    bId: string,
+    maxConnections: number,
+    maxGroup: number
+  ): { ok: boolean; error?: string } {
+    if (aId === bId) return { ok: false, error: 'A session cannot connect to itself.' }
+    const a = this.sessions.get(aId)
+    const b = this.sessions.get(bId)
+    if (!a || a.status === 'exited') return { ok: false, error: 'That session has ended.' }
+    if (!b || b.status === 'exited') return { ok: false, error: 'That session has ended.' }
+
+    if (this.connectionsOf(aId).includes(bId)) return { ok: true }
+
+    if (this.connectionsOf(aId).length >= maxConnections) {
+      return { ok: false, error: `${a.name} already has ${maxConnections} connections.` }
+    }
+    if (this.connectionsOf(bId).length >= maxConnections) {
+      return { ok: false, error: `${b.name} already has ${maxConnections} connections.` }
+    }
+
+    const merged = new Set([...this.groupOf(aId), ...this.groupOf(bId)])
+    if (merged.size > maxGroup) {
+      return {
+        ok: false,
+        error: `That would make a group of ${merged.size}. The most that can work together is ${maxGroup}.`
+      }
+    }
+
+    this.linksOf(aId).add(bId)
+    this.linksOf(bId).add(aId)
+    this.emit('changed', this.list())
+    return { ok: true }
+  }
+
+  disconnect(aId: string, bId: string): { ok: boolean } {
+    this.linksOf(aId).delete(bId)
+    this.linksOf(bId).delete(aId)
+    this.emit('changed', this.list())
+    return { ok: true }
+  }
+
+  private unlinkAll(id: string): void {
+    for (const other of this.linksOf(id)) this.linksOf(other).delete(id)
+    this.links.delete(id)
   }
 
   dispose(): void {

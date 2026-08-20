@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { terminals } from '../terminal/TerminalSessionManager'
 import { agentSessions } from '../terminal/AgentSessionManager'
 import { sessionTranscripts } from '../terminal/sessionTranscript'
+import { MAX_CONNECTIONS, MAX_GROUP } from '../agents/agentStore'
 import { fileWatcher, type FileChange } from '../workspace/FileWatcher'
 import { systemBus } from '../agents/EventBus'
 import { refreshGit } from '../workspace/awareness'
@@ -189,5 +190,71 @@ export function registerTerminalHandlers(): void {
       `${message}${String.fromCharCode(13)}`
     )
     return sent ? { ok: true } : { ok: false, error: 'Could not reach that session.' }
+  })
+
+  /* ------------------------------------------- session to session links -- */
+
+  ipcMain.handle('agentSession:connect', (_e, a: unknown, b: unknown) =>
+    agentSessions.connect(String(a ?? ''), String(b ?? ''), MAX_CONNECTIONS, MAX_GROUP)
+  )
+
+  ipcMain.handle('agentSession:disconnect', (_e, a: unknown, b: unknown) =>
+    agentSessions.disconnect(String(a ?? ''), String(b ?? ''))
+  )
+
+  ipcMain.handle('agentSession:group', (_e, id: unknown) => {
+    const members = agentSessions.groupOf(String(id ?? ''))
+    if (members.length < 2) return null
+    return {
+      id: `session-thread:${members.join('+')}`,
+      members,
+      names: members.map((m) => agentSessions.get(m)?.name ?? m)
+    }
+  })
+
+  /**
+   * Post one message to every session in a group.
+   *
+   * Written to each session's real stdin, one at a time. There is deliberately
+   * no relaying of one session's output into another's input: two CLI agents
+   * left to answer each other would keep going until somebody noticed, and
+   * each round of that is billed. The user drives the exchange; Backstage
+   * carries the message.
+   */
+  ipcMain.handle('agentSession:postGroup', (_e, id: unknown, text: unknown) => {
+    const message = String(text ?? '').trim()
+    if (!message) return { accepted: false, error: 'Empty message.' }
+
+    const members = agentSessions.groupOf(String(id ?? ''))
+    if (members.length < 2) {
+      return { accepted: false, error: 'That session is not connected to anyone.' }
+    }
+
+    const rejected: { agentId: string; error: string }[] = []
+    let delivered = 0
+
+    for (const memberId of members) {
+      const session = agentSessions.get(memberId)
+      if (!session || session.status === 'exited') {
+        rejected.push({ agentId: memberId, error: 'That session has ended.' })
+        continue
+      }
+      sessionTranscripts.recordInput(memberId, message)
+      const sent = terminals.write(
+        session.terminalSessionId,
+        `${message}${String.fromCharCode(13)}`
+      )
+      if (sent) delivered++
+      else rejected.push({ agentId: memberId, error: 'Could not reach that session.' })
+    }
+
+    if (delivered === 0) {
+      return {
+        accepted: false,
+        error: rejected[0]?.error ?? 'Could not reach those sessions.',
+        rejected
+      }
+    }
+    return { accepted: true, rejected }
   })
 }

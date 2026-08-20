@@ -57,7 +57,6 @@ export function WorldPanel({ engine, switching, workers }: Props) {
   const setTab = useBackstage((s) => s.setTab)
   const setThread = useBackstage((s) => s.setThreadTarget)
   const collaboration = useBackstage((s) => s.collaboration)
-  const agents = useTeam((s) => s.agents)
   const connect = useTeam((s) => s.connect)
   const disconnect = useTeam((s) => s.disconnect)
   const cancel = useTeam((s) => s.cancel)
@@ -75,6 +74,38 @@ export function WorldPanel({ engine, switching, workers }: Props) {
     window.setTimeout(() => setNotice((n) => (n === text ? null : n)), 2600)
   }, [])
 
+  /*
+   * Linking two workers, whichever kind they are.
+   *
+   * Agents and sessions keep their relationships in different places — one
+   * persisted with the roster, one in memory beside the processes — so the
+   * call differs even though the gesture does not. Resolved here, once, so no
+   * component above has to know there are two stores.
+   */
+  const link = useCallback(
+    async (aId: string, bId: string, join: boolean): Promise<string | null> => {
+      const a = findWorker(workers, aId)
+      const b = findWorker(workers, bId)
+      if (!a || !b) return 'That worker is no longer here.'
+      if (a.kind !== b.kind) {
+        return 'An agent and a CLI session cannot be connected.'
+      }
+
+      if (a.kind === 'cli') {
+        if (!a.sessionId || !b.sessionId) return 'That session has ended.'
+        const result = join
+          ? await window.backstage.sessions.connect(a.sessionId, b.sessionId)
+          : await window.backstage.sessions.disconnect(a.sessionId, b.sessionId)
+        // Sessions are mirrored by their own change event, so nothing to
+        // refresh here; the store updates when the main process announces it.
+        return result.ok ? null : (result.error ?? 'Could not change that link.')
+      }
+
+      return join ? connect(aId, bId) : disconnect(aId, bId)
+    },
+    [workers, connect, disconnect]
+  )
+
   /* ------------------------------------------------------------- links -- */
 
   /**
@@ -87,30 +118,35 @@ export function WorldPanel({ engine, switching, workers }: Props) {
   const links = useMemo<WorldLink[]>(() => {
     const now = Date.now()
     const recent = collaboration.filter((m) => now - m.at < 4000)
+    const present = new Set(workers.map((w) => w.id))
     const seen = new Set<string>()
     const out: WorldLink[] = []
 
-    for (const agent of agents) {
-      if (!agent.spawned || !agent.enabled) continue
-      for (const otherId of agent.canTalkTo) {
-        const other = agents.find((a) => a.id === otherId)
-        if (!other?.spawned || !other.enabled) continue
-        const key = [agent.id, otherId].sort().join('|')
+    /*
+     * Built from the worker list rather than from the roster, so agent links
+     * and session links are drawn by the same code. Both ends have to be in
+     * the room: a connection to somebody who is not here is not something the
+     * office can show.
+     */
+    for (const worker of workers) {
+      for (const otherId of worker.connections) {
+        if (!present.has(otherId)) continue
+        const key = [worker.id, otherId].sort().join('|')
         if (seen.has(key)) continue
         seen.add(key)
         out.push({
-          a: agent.id,
+          a: worker.id,
           b: otherId,
           active: recent.some(
             (m) =>
-              (m.senderAgentId === agent.id && m.receiverAgentId === otherId) ||
-              (m.senderAgentId === otherId && m.receiverAgentId === agent.id)
+              (m.senderAgentId === worker.id && m.receiverAgentId === otherId) ||
+              (m.senderAgentId === otherId && m.receiverAgentId === worker.id)
           )
         })
       }
     }
     return out
-  }, [agents, collaboration])
+  }, [workers, collaboration])
 
   useEffect(() => {
     engine.setLinks(links)
@@ -136,19 +172,21 @@ export function WorldPanel({ engine, switching, workers }: Props) {
   const droppableFor = useCallback(
     (fromId: string): string[] => {
       if ((degree.get(fromId) ?? 0) >= MAX_CONNECTIONS) return []
-      const from = agents.find((a) => a.id === fromId)
+      const from = findWorker(workers, fromId)
       if (!from) return []
       return workers
         .filter(
           (w) =>
-            w.kind === 'agent' &&
+            // Like connects to like: there is no store that could hold a link
+            // between a persisted agent and a running process.
+            w.kind === from.kind &&
             w.id !== fromId &&
-            !from.canTalkTo.includes(w.id) &&
+            !from.connections.includes(w.id) &&
             (degree.get(w.id) ?? 0) < MAX_CONNECTIONS
         )
         .map((w) => w.id)
     },
-    [agents, workers, degree]
+    [workers, degree]
   )
 
   /* ------------------------------------------------------------ canvas -- */
@@ -220,7 +258,7 @@ export function WorldPanel({ engine, switching, workers }: Props) {
     const hit = engine.hitTest(s.x, s.y)
     const worker = findWorker(workers, hit?.id ?? null)
 
-    if (hit && worker?.kind === 'agent') {
+    if (hit && worker) {
       gesture.current = { kind: 'link', from: hit.id, x: p.x, y: p.y, moved: false }
     } else {
       gesture.current = { kind: 'pan', x: p.x, y: p.y, moved: false }
@@ -300,10 +338,12 @@ export function WorldPanel({ engine, switching, workers }: Props) {
       const over = engine.hitTest(s.x, s.y)
 
       if (over && over.id !== g.from) {
+        const from = findWorker(workers, g.from)
         const target = findWorker(workers, over.id)
         const allowed = droppableFor(g.from)
-        if (target?.kind !== 'agent') {
-          say('CLI sessions cannot be connected.')
+
+        if (from && target && from.kind !== target.kind) {
+          say('An agent and a CLI session cannot be connected.')
         } else if (!allowed.includes(over.id)) {
           say(
             (degree.get(g.from) ?? 0) >= MAX_CONNECTIONS ||
@@ -313,7 +353,7 @@ export function WorldPanel({ engine, switching, workers }: Props) {
           )
         } else {
           // The main process decides; a refusal is reported, never hidden.
-          void connect(g.from, over.id).then((error) => {
+          void link(g.from, over.id, true).then((error) => {
             if (error) say(error)
           })
         }
@@ -347,13 +387,11 @@ export function WorldPanel({ engine, switching, workers }: Props) {
 
   /** The teammates of whoever is selected, as workers. */
   const connections = useMemo(() => {
-    if (!selectedWorker || selectedWorker.kind !== 'agent') return []
-    const config = agents.find((a) => a.id === selectedWorker.id)
-    if (!config) return []
-    return config.canTalkTo
+    if (!selectedWorker) return []
+    return selectedWorker.connections
       .map((id) => findWorker(workers, id))
       .filter((w): w is Worker => w !== null)
-  }, [selectedWorker, agents, workers])
+  }, [selectedWorker, workers])
 
   return (
     <section className="relative flex h-full min-h-0 min-w-0 flex-col">
@@ -477,12 +515,12 @@ export function WorldPanel({ engine, switching, workers }: Props) {
               }
             }}
             onConnect={(otherId) => {
-              void connect(selectedWorker.id, otherId).then((error) => {
+              void link(selectedWorker.id, otherId, true).then((error) => {
                 if (error) say(error)
               })
             }}
             onDisconnect={(otherId) => {
-              void disconnect(selectedWorker.id, otherId).then((error) => {
+              void link(selectedWorker.id, otherId, false).then((error) => {
                 if (error) say(error)
               })
             }}

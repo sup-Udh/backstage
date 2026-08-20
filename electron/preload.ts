@@ -149,6 +149,11 @@ const api: BackstageApi = {
       ipcRenderer.invoke('agentSession:rename', sessionId, name),
     setCharacter: (sessionId, slot) =>
       ipcRenderer.invoke('agentSession:setCharacter', sessionId, slot),
+    connect: (a, b) => ipcRenderer.invoke('agentSession:connect', a, b),
+    disconnect: (a, b) => ipcRenderer.invoke('agentSession:disconnect', a, b),
+    group: (sessionId) => ipcRenderer.invoke('agentSession:group', sessionId),
+    postGroup: (sessionId, text) =>
+      ipcRenderer.invoke('agentSession:postGroup', sessionId, text),
     onChanged: (handler) =>
       subscribe<AgentSession[]>('agentSession:changed', handler),
     onLine: (handler) => subscribe<SessionLine>('agentSession:line', handler)

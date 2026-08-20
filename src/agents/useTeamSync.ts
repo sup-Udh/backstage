@@ -22,6 +22,22 @@ import type { AgentConfig, RuntimeEvent } from '../shared/providerApi'
  * Agents page, and a component that unmounts must not take the team's event
  * feed with it.
  */
+/**
+ * Events that can add a line to a group conversation.
+ *
+ * A completion may be an answer to something posted in a thread; an
+ * agent-to-agent message between members is the thread's own traffic. The
+ * main process decides which of those actually belong — this only decides
+ * when it is worth asking.
+ */
+const THREAD_CHANGING = new Set<RuntimeEvent['type']>([
+  'agent.completed',
+  'agent.delegated',
+  'agent.message.sent',
+  'agent.connected',
+  'agent.disconnected'
+])
+
 export function useTeamSync(): void {
   const ingestEvent = useBackstage((s) => s.ingestEvent)
   const setAgentStates = useBackstage((s) => s.setAgentStates)
@@ -76,13 +92,26 @@ export function useTeamSync(): void {
         teamRuntime.applyStates([event.state])
       }
 
-      // Spawning and despawning change the roster, not just a status.
+      // Spawning, despawning and connecting change the roster, not just a
+      // status. The world draws links from it, so it has to be re-read.
       if (
         event.type === 'agent.spawned' ||
         event.type === 'agent.despawned' ||
+        event.type === 'agent.connected' ||
+        event.type === 'agent.disconnected' ||
         event.type === 'trigger.fired'
       ) {
         void useTeam.getState().refresh()
+      }
+
+      /*
+       * A group conversation is stored in the main process, so unlike an
+       * agent's own transcript it is not built from the event stream — it has
+       * to be re-read when something lands in it. Only when one is actually
+       * open: reloading a thread nobody is looking at is pure cost.
+       */
+      if (THREAD_CHANGING.has(event.type) && useBackstage.getState().threadTarget) {
+        void useBackstage.getState().refreshThread()
       }
     })
   }, [ingestEvent])

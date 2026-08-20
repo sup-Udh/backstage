@@ -307,19 +307,38 @@ export const useBackstage = create<BackstageState>((set, get) => ({
       thread: null
     }),
 
-  setThreadTarget: async (agentId) => {
-    if (!agentId) {
+  setThreadTarget: async (workerId) => {
+    if (!workerId) {
       set({ threadTarget: null, thread: null })
       return
     }
-    const thread = await window.backstage?.threads.for(agentId)
+
+    /*
+     * Two kinds of group, resolved from two places.
+     *
+     * An agent group has a stored transcript in the main process; a session
+     * group has none, because its conversation is the sessions' own output,
+     * which the renderer already holds. So a session thread is identified but
+     * carries no messages of its own — the panel merges the members' lines.
+     */
+    if (workerId.startsWith('cli-')) {
+      const sessions = get().agentSessions
+      const session = sessions.find((s) => `cli-${s.terminalSessionId}` === workerId)
+      const thread = session
+        ? await window.backstage?.sessions.group(session.id)
+        : null
+      set({ threadTarget: thread ? workerId : null, thread: thread ?? null })
+      return
+    }
+
+    const thread = await window.backstage?.threads.for(workerId)
     if (!thread) {
       set({ threadTarget: null, thread: null })
       return
     }
     const messages = await window.backstage.threads.load(thread.id)
     set((s) => ({
-      threadTarget: agentId,
+      threadTarget: workerId,
       thread,
       threadMessages: { ...s.threadMessages, [thread.id]: messages }
     }))

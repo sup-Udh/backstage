@@ -190,7 +190,16 @@ export function buildWorkers({
       // Interrupting a session at its prompt does nothing worth offering.
       canStop: session.status === 'working' || session.status === 'starting',
       characterSlot: session.characterSlot,
-      connections: [],
+      /*
+       * Session links are held as session ids in the main process, but every
+       * surface above this line addresses workers. Translated once here so a
+       * connection between two Claude sessions and one between two agents are
+       * the same shape to everything that draws or edits them.
+       */
+      connections: session.connections
+        .map((id) => sessions.find((s) => s.id === id))
+        .filter((s): s is AgentSession => s !== undefined)
+        .map(workerIdFor),
       sessionId: session.id,
       terminalSessionId: session.terminalSessionId
     })

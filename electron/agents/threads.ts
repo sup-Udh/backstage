@@ -185,10 +185,16 @@ export function initThreads(): void {
       const thread = threadFor(agentId)
       if (!thread || !thread.members.includes(event.targetAgentId)) return
 
+      /*
+       * Stored against the *receiver*, with the sender in `fromName`. That is
+       * the shape the transcript renders as "Jane → Lisbon", and it means a
+       * collaboration line resolves to two real agents rather than to the
+       * thread itself, which has no character and no name of its own.
+       */
       append(thread.id, {
         id: event.id,
         kind: 'collaboration',
-        agentId: thread.id,
+        agentId: event.targetAgentId,
         fromAgentId: agentId,
         fromName: event.agentName ?? getAgent(agentId)?.name ?? agentId,
         text: event.message,
