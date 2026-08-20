@@ -1,13 +1,24 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CharacterDef } from '../../characters/character.types'
-import type { AgentView } from '../../world/world.types'
 import { CharacterSprite } from '../../world/CharacterSprite'
 import { STATUS_GLYPH, STATUS_LABEL } from '../../characters/character.states'
+import { MAX_CONNECTIONS, type Worker } from '../../agents/workers'
 
 interface Props {
-  agent: AgentView
+  worker: Worker
   character: CharacterDef
+  /** Every other worker, for the connect picker. */
+  others: Worker[]
+  /** Resolved names for this worker's existing connections. */
+  connections: Worker[]
   onFocus: () => void
   onClose: () => void
+  onOpenChat: () => void
+  onOpenThread: () => void
+  onStop: () => void
+  onConnect: (otherId: string) => void
+  onDisconnect: (otherId: string) => void
+  onRename: (name: string) => void
 }
 
 const ACTIVE = ['working', 'thinking', 'talking', 'success']
@@ -15,47 +26,119 @@ const ACTIVE = ['working', 'thinking', 'talking', 'success']
 /**
  * The panel for a character the user has clicked.
  *
- * Unlike the hover card this sticks around, so it can carry the thing the
- * user actually wants: what this agent is working on right now, which model
- * is behind it, and a way to follow it around the room.
+ * Unlike the hover card this sticks around, so it carries the things the user
+ * actually wants to do to an agent: see what it is working on, talk to it,
+ * connect it to a teammate, and stop it. Every control acts on the real
+ * runtime — Stop cancels the execution or interrupts the session, and Connect
+ * writes a relationship the main process has to accept.
  */
-export function AgentInspector({ agent, character, onFocus, onClose }: Props) {
-  const active = ACTIVE.includes(agent.status)
+export function AgentInspector({
+  worker,
+  character,
+  others,
+  connections,
+  onFocus,
+  onClose,
+  onOpenChat,
+  onOpenThread,
+  onStop,
+  onConnect,
+  onDisconnect,
+  onRename
+}: Props) {
+  const active = ACTIVE.includes(worker.status)
+  const [connecting, setConnecting] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [draft, setDraft] = useState(worker.name)
+  const renameRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => setDraft(worker.name), [worker.name])
+  useEffect(() => {
+    if (renaming) renameRef.current?.select()
+  }, [renaming])
+
+  /*
+   * Only agents can be connected. A CLI session has no persisted
+   * configuration to record a relationship in, so offering the control would
+   * be offering something that could not be honoured.
+   */
+  const connectable = worker.kind === 'agent'
+  const atLimit = connections.length >= MAX_CONNECTIONS
+
+  /** Who this agent could still be connected to. */
+  const candidates = useMemo(
+    () =>
+      others.filter(
+        (o) =>
+          o.kind === 'agent' &&
+          o.id !== worker.id &&
+          !connections.some((c) => c.id === o.id)
+      ),
+    [others, worker.id, connections]
+  )
+
+  const commitRename = () => {
+    const next = draft.trim()
+    setRenaming(false)
+    if (next && next !== worker.name) onRename(next)
+    else setDraft(worker.name)
+  }
 
   return (
-    <aside className="absolute bottom-4 left-4 z-20 w-[268px] border-[3px] border-brand bg-ink shadow-[4px_4px_0_0_rgba(27,27,42,0.5)]">
+    <aside className="absolute bottom-4 left-4 z-20 w-[280px] border-[3px] border-brand bg-ink shadow-[4px_4px_0_0_rgba(27,27,42,0.5)]">
       <header className="flex items-start gap-3 border-b-2 border-ink-3 p-3">
         <div className="shrink-0 border-2 border-ink-3 bg-ink-2 p-1">
           <CharacterSprite
             appearance={character.appearance}
-            state={agent.status === 'idle' ? 'idle' : 'working'}
+            state={worker.status === 'idle' ? 'idle' : 'working'}
             scale={2}
           />
         </div>
 
         <div className="min-w-0 flex-1">
-          {/*
-            The name comes from the view, not the costume. A configured agent
-            is re-cast by the theme and answers to the character's name; an
-            external CLI session is Claude or Codex in every world, and the
-            view is the thing that already knows which of those applies.
-          */}
-          <p className="font-pixel text-base font-bold uppercase leading-none tracking-[0.06em] text-brand">
-            {agent.name}
-          </p>
+          {renaming ? (
+            <input
+              ref={renameRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') {
+                  setDraft(worker.name)
+                  setRenaming(false)
+                }
+              }}
+              className="w-full border-2 border-brand bg-ink-2 px-1 py-0.5 font-pixel text-sm font-bold uppercase tracking-[0.06em] text-brand outline-none"
+            />
+          ) : (
+            <p className="flex items-baseline gap-1.5">
+              <span className="font-pixel text-base font-bold uppercase leading-none tracking-[0.06em] text-brand">
+                {worker.name}
+              </span>
+              {/*
+                Only CLI sessions are renameable here. An agent's name is its
+                configuration and belongs in the editor, where the rest of its
+                configuration is; a session has no editor to send anyone to.
+              */}
+              {worker.kind === 'cli' && (
+                <button
+                  type="button"
+                  onClick={() => setRenaming(true)}
+                  title="Rename this session"
+                  className="font-mono text-[10px] text-dim transition-colors hover:text-brand"
+                >
+                  ✎
+                </button>
+              )}
+            </p>
+          )}
+
           <p className="mt-1.5 font-ui text-xs leading-none text-cream-2">
-            {agent.role}
+            {worker.role}
           </p>
-          <p className="mt-2 flex items-center gap-1.5 font-pixel text-xs font-semibold uppercase tracking-[0.06em]">
-            <span
-              aria-hidden
-              className={active ? 'blink text-brand' : 'text-dim'}
-            >
-              {STATUS_GLYPH[agent.status]}
-            </span>
-            <span className={active ? 'text-brand' : 'text-dim'}>
-              {STATUS_LABEL[agent.status]}
-            </span>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-dim">
+            {worker.provider} · {worker.model}
           </p>
         </div>
 
@@ -69,27 +152,140 @@ export function AgentInspector({ agent, character, onFocus, onClose }: Props) {
         </button>
       </header>
 
-      <div className="p-3">
-        <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-dim">
-          Working on
-        </p>
-        <p className="mt-1 font-ui text-[13px] leading-snug text-cream">
-          {agent.task ?? 'Nothing right now.'}
-        </p>
+      <div className="flex flex-col gap-3 p-3">
+        <div>
+          <Label>Status</Label>
+          <p className="mt-1 flex items-center gap-1.5 font-pixel text-xs font-semibold uppercase tracking-[0.06em]">
+            <span aria-hidden className={active ? 'blink text-brand' : 'text-dim'}>
+              {STATUS_GLYPH[worker.status]}
+            </span>
+            <span className={active ? 'text-brand' : 'text-dim'}>
+              {STATUS_LABEL[worker.status]}
+            </span>
+          </p>
+          <p className="mt-1 font-ui text-[12px] leading-snug text-cream">
+            {worker.action ?? worker.task ?? 'Nothing right now.'}
+          </p>
+        </div>
 
-        <p className="mt-3 flex items-baseline gap-2 font-mono text-[11px] leading-none">
-          <span className="uppercase tracking-[0.08em] text-dim">Model</span>
-          <span className="font-medium text-cream">{agent.model}</span>
-        </p>
+        {connectable && (
+          <div>
+            <Label>
+              Connections ({connections.length}/{MAX_CONNECTIONS})
+            </Label>
 
-        <button
-          type="button"
-          onClick={onFocus}
-          className="mt-3 w-full border-2 border-brand-shadow bg-brand px-2 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
-        >
-          Centre on {agent.name}
-        </button>
+            {connections.length > 0 && (
+              <ul className="mt-1 flex flex-col gap-1">
+                {connections.map((other) => (
+                  <li
+                    key={other.id}
+                    className="flex items-center gap-1.5 border-2 border-ink-3 bg-ink-2 px-1.5 py-0.5"
+                  >
+                    <span aria-hidden className="font-mono text-[10px] text-brand">
+                      ↔
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-cream">
+                      {other.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onDisconnect(other.id)}
+                      title={`Remove the connection to ${other.name}`}
+                      className="shrink-0 font-mono text-[10px] text-dim transition-colors hover:text-rust-lite"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {atLimit ? (
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-dim">
+                Max connections reached
+              </p>
+            ) : connecting ? (
+              <select
+                autoFocus
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) onConnect(e.target.value)
+                  setConnecting(false)
+                }}
+                onBlur={() => setConnecting(false)}
+                className="mt-1 w-full border-2 border-brand bg-ink-2 px-1.5 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-cream outline-none"
+              >
+                <option value="">Connect to…</option>
+                {candidates.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConnecting(true)}
+                disabled={candidates.length === 0}
+                className="mt-1 w-full border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand disabled:text-dim disabled:hover:border-ink-3"
+              >
+                {candidates.length === 0 ? 'Nobody to connect to' : '+ Connect agent'}
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={onOpenChat}
+            className="w-full border-2 border-brand-shadow bg-brand px-2 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
+          >
+            Open chat
+          </button>
+
+          {connections.length > 0 && (
+            <button
+              type="button"
+              onClick={onOpenThread}
+              className="w-full border-2 border-ink-3 bg-ink-2 px-2 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand"
+            >
+              Group chat ({connections.length + 1})
+            </button>
+          )}
+
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={onStop}
+              disabled={!worker.canStop}
+              title={
+                worker.kind === 'cli'
+                  ? 'Interrupt the current turn. The session stays open.'
+                  : 'Cancel this execution and clear the queue.'
+              }
+              className="flex-1 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-rust hover:text-rust-lite disabled:text-dim disabled:hover:border-ink-3 disabled:hover:text-dim"
+            >
+              Stop
+            </button>
+            <button
+              type="button"
+              onClick={onFocus}
+              className="flex-1 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand"
+            >
+              Centre
+            </button>
+          </div>
+        </div>
       </div>
     </aside>
+  )
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-dim">
+      {children}
+    </p>
   )
 }

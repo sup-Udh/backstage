@@ -140,7 +140,26 @@ export class Execution {
 
       let result
       try {
-        result = await provider.generateTurn({ model, system, turns, tools: specs })
+        /*
+         * Deltas are forwarded straight out as events. Nothing accumulates
+         * them here: the provider returns the complete text when the call
+         * resolves, and that is what gets remembered and acted on. Treating
+         * the assembled fragments as the answer would mean the transcript
+         * depended on every chunk having arrived, which is not something a
+         * network can promise.
+         */
+        result = await provider.generateTurn({
+          model,
+          system,
+          turns,
+          tools: specs,
+          onDelta: (chunk) => {
+            // A cancelled execution stops narrating immediately, even though
+            // the request it is attached to cannot be recalled mid-flight.
+            if (this.cancelled) return
+            this.send('agent.message.delta', { message: chunk, model })
+          }
+        })
       } catch (err) {
         throw new Error(def.normalise(err).message)
       }

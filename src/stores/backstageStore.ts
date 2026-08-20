@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { defaultThemeId, isKnownTheme } from '../themes'
+import { groupForTool, type ToolRun } from '../agents/toolActivity'
 import type {
   AgentRuntimeState,
   AgentSession,
@@ -8,6 +9,7 @@ import type {
   CollaborationMessage,
   ProviderStatus,
   RuntimeEvent,
+  SessionLine,
   TerminalSession
 } from '../shared/providerApi'
 
@@ -64,6 +66,16 @@ function loadThemeId(): string {
 const ACTIVITY_LIMIT = 80
 /** How many collaboration entries to keep on screen. */
 const COLLAB_LIMIT = 120
+/**
+ * How many tool calls to keep per agent.
+ *
+ * Deliberately generous: these are the evidence behind an agent's answer, and
+ * a deep investigation can legitimately make dozens of calls. They are cheap
+ * — a name, a line of text and a status — and they are never persisted.
+ */
+const TOOL_LIMIT = 200
+/** How many reconstructed lines to keep per CLI session. */
+const SESSION_LINE_LIMIT = 400
 
 interface BackstageState {
   view: AppView
@@ -76,6 +88,41 @@ interface BackstageState {
   agentMessages: Record<string, ChatMessage[]>
   /** Per-agent activity feeds. Keyed by agentId. */
   agentActivity: Record<string, ActivityEntry[]>
+  /**
+   * Every tool call each agent has made this session, in order.
+   *
+   * Ephemeral by design. It is a record of what happened while the app was
+   * open, not part of the agent's memory — the conversation store holds what
+   * was *said*, and mixing a hundred tool lines into that would both bloat
+   * the transcript on disk and feed them back to the model as if they were
+   * dialogue.
+   */
+  agentTools: Record<string, ToolRun[]>
+  /**
+   * Prose an agent is still in the middle of saying, keyed by agentId.
+   *
+   * Provisional, and never written anywhere else. The moment the runtime
+   * reports the finished text — as `agent.message` or `agent.completed` — the
+   * entry is dropped and the real, complete line takes its place. The
+   * conversation is therefore built from what the agent actually said, not
+   * from whatever fragments happened to arrive, so a dropped chunk shows as a
+   * flicker rather than as a permanently truncated answer.
+   *
+   * Keyed by agent rather than execution because an agent runs one execution
+   * at a time, which is the same guarantee everything else in this store
+   * relies on.
+   */
+  streaming: Record<string, string>
+  /**
+   * Readable transcripts for CLI sessions, keyed by AgentSession id.
+   *
+   * Separate from `agentMessages` because it is a different kind of thing: an
+   * agent's transcript is its memory, loaded from disk and fed back to the
+   * model, while this is a reconstruction of what a process printed. Mixing
+   * them would mean the app trying to persist, and eventually re-send, the
+   * output of a program it does not own.
+   */
+  sessionLines: Record<string, SessionLine[]>
   /** Live per-agent runtime state, mirrored from the main process. */
   agentStates: Record<string, AgentRuntimeState>
   /** Shared agent-to-agent activity. Not private memory. */
@@ -131,6 +178,10 @@ interface BackstageState {
   setTab: (tab: TabId) => void
   setOpenFile: (path: string | null) => void
   setAgentSessions: (sessions: AgentSession[]) => void
+  /** Replace a session's transcript, e.g. when a panel opens mid-conversation. */
+  setSessionLines: (sessionId: string, lines: SessionLine[]) => void
+  /** Append one reconstructed line as it arrives. */
+  pushSessionLine: (line: SessionLine) => void
   setTerminalSessions: (sessions: TerminalSession[]) => void
   setActiveTerminal: (id: string | null) => void
   requestSession: (id: string | null) => void
@@ -169,6 +220,9 @@ export const useBackstage = create<BackstageState>((set, get) => ({
 
   agentMessages: {},
   agentActivity: {},
+  agentTools: {},
+  streaming: {},
+  sessionLines: {},
   agentStates: {},
   collaboration: [],
   approvals: [],
@@ -225,6 +279,25 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   setTab: (tab) => set({ tab }),
   setOpenFile: (openFile) => set({ openFile, tab: 'files' }),
   setAgentSessions: (agentSessions) => set({ agentSessions }),
+
+  setSessionLines: (sessionId, lines) =>
+    set((s) => ({
+      sessionLines: { ...s.sessionLines, [sessionId]: lines.slice(-SESSION_LINE_LIMIT) }
+    })),
+
+  pushSessionLine: (line) =>
+    set((s) => {
+      const current = s.sessionLines[line.sessionId] ?? []
+      // The main process replays on request, so a duplicate is possible when a
+      // panel opens at the same moment a line arrives.
+      if (current.some((l) => l.id === line.id)) return s
+      return {
+        sessionLines: {
+          ...s.sessionLines,
+          [line.sessionId]: [...current, line].slice(-SESSION_LINE_LIMIT)
+        }
+      }
+    }),
   setTerminalSessions: (terminalSessions) => set({ terminalSessions }),
   setActiveTerminal: (activeTerminalId) => set({ activeTerminalId }),
   requestSession: (requestedSessionId) => set({ requestedSessionId }),
@@ -284,6 +357,92 @@ export const useBackstage = create<BackstageState>((set, get) => ({
 
       if (event.type === 'agent.state' && event.state) {
         next.agentStates = { ...s.agentStates, [event.state.agentId]: event.state }
+      }
+
+      /*
+       * Streaming prose. Fragments build up a provisional line; anything that
+       * ends the turn clears it, because by then either the finished text has
+       * arrived or the execution stopped and the fragments describe an answer
+       * that will never exist.
+       */
+      if (event.type === 'agent.message.delta' && agentId && event.message) {
+        next.streaming = {
+          ...s.streaming,
+          [agentId]: (s.streaming[agentId] ?? '') + event.message
+        }
+      } else if (agentId && ENDS_STREAM.has(event.type) && s.streaming[agentId] !== undefined) {
+        const streaming = { ...s.streaming }
+        delete streaming[agentId]
+        next.streaming = streaming
+      }
+
+      /*
+       * Tool calls, folded into a per-agent ledger.
+       *
+       * `started` and `completed` describe the same call in different tenses
+       * — "Reading auth.ts" then "Read auth.ts" — so they cannot be matched
+       * on their text. They are matched on the tool name against the most
+       * recent still-running call instead, which is exact because an
+       * execution runs its tools one at a time and awaits each one.
+       */
+      if (event.type === 'agent.tool.started' && agentId && event.tool) {
+        const current = s.agentTools[agentId] ?? []
+        next.agentTools = {
+          ...s.agentTools,
+          [agentId]: [
+            ...current,
+            {
+              id: event.id,
+              agentId,
+              taskId: event.taskId,
+              tool: event.tool,
+              group: groupForTool(event.tool),
+              action: event.action ?? event.tool,
+              status: 'running' as const,
+              at: event.at
+            }
+          ].slice(-TOOL_LIMIT)
+        }
+      }
+
+      if (
+        (event.type === 'agent.tool.completed' || event.type === 'agent.tool.failed') &&
+        agentId &&
+        event.tool
+      ) {
+        const current = s.agentTools[agentId] ?? []
+        const i = findLastRunning(current, event.tool)
+        if (i !== -1) {
+          const updated = [...current]
+          updated[i] = {
+            ...updated[i],
+            status: event.type === 'agent.tool.completed' ? 'ok' : 'failed',
+            // The past-tense description reads better once it has happened.
+            action: event.action ?? updated[i].action
+          }
+          next.agentTools = { ...s.agentTools, [agentId]: updated }
+        }
+      }
+
+      /*
+       * A cancelled or finished execution can leave a call marked running
+       * forever — the tool it was waiting on never reported back. Closing
+       * them out here means the transcript never shows a spinner for work
+       * that stopped minutes ago.
+       */
+      if (
+        (event.type === 'agent.idle' || event.type === 'agent.cancelled') &&
+        agentId
+      ) {
+        const current = next.agentTools?.[agentId] ?? s.agentTools[agentId] ?? []
+        if (current.some((r) => r.status === 'running')) {
+          next.agentTools = {
+            ...(next.agentTools ?? s.agentTools),
+            [agentId]: current.map((r) =>
+              r.status === 'running' ? { ...r, status: 'failed' as const } : r
+            )
+          }
+        }
       }
 
       if (event.activity && agentId) {
@@ -407,10 +566,20 @@ export const useBackstage = create<BackstageState>((set, get) => ({
     await window.backstage?.agents.clearChat(workspaceId, agentId)
     set((s) => ({
       agentMessages: { ...s.agentMessages, [agentId]: [] },
-      agentActivity: { ...s.agentActivity, [agentId]: [] }
+      agentActivity: { ...s.agentActivity, [agentId]: [] },
+      agentTools: { ...s.agentTools, [agentId]: [] },
+      streaming: { ...s.streaming, [agentId]: '' }
     }))
   }
 }))
+
+/** The most recent unfinished call of this tool, or -1. */
+function findLastRunning(runs: ToolRun[], tool: string): number {
+  for (let i = runs.length - 1; i >= 0; i--) {
+    if (runs[i].tool === tool && runs[i].status === 'running') return i
+  }
+  return -1
+}
 
 /**
  * Events whose `message` is something the agent said to the user.
@@ -419,6 +588,23 @@ export const useBackstage = create<BackstageState>((set, get) => ({
  * `agent.completed`, and letting both write would print every answer twice.
  */
 const SPOKEN = new Set<RuntimeEvent['type']>(['agent.message', 'agent.completed'])
+
+/**
+ * Events after which a provisional streamed line is no longer wanted.
+ *
+ * `agent.message` and `agent.completed` carry the finished text that replaces
+ * it; the rest mean the turn ended without one, and leaving a half-sentence
+ * on screen would be showing an answer the agent never gave.
+ */
+const ENDS_STREAM = new Set<RuntimeEvent['type']>([
+  'agent.message',
+  'agent.completed',
+  'agent.failed',
+  'agent.cancelled',
+  'agent.idle',
+  'task.failed',
+  'task.cancelled'
+])
 
 /** Events that represent one agent contacting another. */
 const COLLABORATIVE = new Set<RuntimeEvent['type']>([

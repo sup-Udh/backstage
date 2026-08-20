@@ -35,19 +35,26 @@ interface LabelSpec {
  * At this zoom a label is exactly its base size; elsewhere it is scaled from
  * here and then clamped.
  */
-const REFERENCE_ZOOM = 3
+const REFERENCE_ZOOM = 2
 
 /**
  * Names are the thing the user is scanning for, so they carry the largest
  * floor. Status is secondary and sits a step below it. Nothing is allowed
- * under 11px, which is roughly where Pixelify Sans stops being able to hold a
+ * under 8px, which is roughly where Pixelify Sans stops being able to hold a
  * legible stroke.
+ *
+ * These are deliberately small. A label is an identification tag on somebody
+ * working in a room, not a caption for the room — at the previous sizes a
+ * name plate was wider than the character wearing it and the status beneath
+ * it was the brightest thing on the floor, so six agents produced a wall of
+ * text with an office faintly visible behind it. The ceiling matters as much
+ * as the floor: zooming in must not turn a name into a banner.
  */
 export const LABEL_SPEC: Record<WorldLabelKind, LabelSpec> = {
-  'character-name': { base: 10, min: 9, max: 14 },
-  'character-status': { base: 9, min: 8, max: 12 },
-  'world-marker': { base: 13, min: 11, max: 18 },
-  interaction: { base: 13, min: 12, max: 18 }
+  'character-name': { base: 9, min: 8, max: 11 },
+  'character-status': { base: 8, min: 7, max: 10 },
+  'world-marker': { base: 12, min: 10, max: 15 },
+  interaction: { base: 11, min: 10, max: 14 }
 }
 
 /**

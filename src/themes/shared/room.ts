@@ -1,7 +1,6 @@
 import type { Op } from '../../world/pixel/ops'
 import { makeRng } from '../../world/pixel/ops'
 import type { SceneDef } from '../types'
-import { DESK_BASE, SEAT_DX, SEAT_DY } from './props'
 
 /**
  * The shell every world is built inside: wall, skirting and floor.
@@ -9,6 +8,9 @@ import { DESK_BASE, SEAT_DX, SEAT_DY } from './props'
  * Themes describe their room rather than drawing it, so a new world is a
  * configuration object plus a handful of signature props - never a new code
  * path in the renderer.
+ *
+ * Where things *go* inside that shell is `office.ts`'s job, not this file's.
+ * This one only knows how to make a surface.
  */
 
 export type FloorStyle = 'planks' | 'tiles' | 'carpet' | 'concrete'
@@ -62,11 +64,26 @@ function floorSurface(spec: BackdropSpec): Op[] {
   const ops: Op[] = [[0, h, w, hh - h, 'floor']]
 
   if (floorStyle === 'planks') {
-    for (let y = h + 7; y < hh; y += 9) ops.push([0, y, w, 1, 'floorLine'])
+    /*
+     * Boards, not brickwork.
+     *
+     * A butt-joint every 52 pixels on a strict half-offset grid is exactly
+     * what masonry looks like, and at this room's size that is precisely how
+     * it read — a tiled wall lying on the ground. Real boards run long and
+     * their joints fall where they fall, so the runs are irregular and much
+     * longer than they are tall, and alternate rows carry a faint tone shift
+     * so the eye follows the timber rather than the grid.
+     */
+    const rng = makeRng(8171)
     for (let y = h, row = 0; y < hh; y += 9, row++) {
-      for (let x = (row % 2) * 26; x < w; x += 52) {
-        ops.push([x, y, 1, 8, 'floorAlt'])
+      if (row % 2 === 1) ops.push([0, y, w, 8, 'floorAlt'])
+      // Joints, spaced 90-170px apart and never aligned with the row above.
+      let x = Math.floor(rng() * 120)
+      while (x < w) {
+        ops.push([x, y, 1, 8, 'floorLine'])
+        x += 90 + Math.floor(rng() * 80)
       }
+      ops.push([0, y + 8, w, 1, 'floorLine'])
     }
   } else if (floorStyle === 'tiles') {
     // Checker, which reads instantly as a workplace or a diner.
@@ -79,7 +96,14 @@ function floorSurface(spec: BackdropSpec): Op[] {
     for (let y = h; y < hh; y += t) ops.push([0, y, w, 1, 'floorLine'])
   } else if (floorStyle === 'carpet') {
     const rng = makeRng(4242)
-    for (let i = 0; i < 900; i++) {
+    /*
+     * Speck count follows the floor's area rather than being a fixed number.
+     * It was tuned for a room a third this size, and reusing it here would
+     * have left the enlarged floor looking washed out — the same texture has
+     * to read at the same density however big the room gets.
+     */
+    const specks = Math.round((w * (hh - h)) / 90)
+    for (let i = 0; i < specks; i++) {
       ops.push([
         Math.floor(rng() * w),
         h + Math.floor(rng() * (hh - h)),
@@ -92,6 +116,19 @@ function floorSurface(spec: BackdropSpec): Op[] {
     // Concrete: broad slabs with expansion joints.
     for (let y = h + 12; y < hh; y += 24) ops.push([0, y, w, 1, 'floorLine'])
     for (let x = 40; x < w; x += 80) ops.push([x, h, 1, hh - h, 'floorLine'])
+  }
+
+  /*
+   * A band of shadow where the floor meets the wall.
+   *
+   * Several worlds use a floor only a shade darker than their wall — the warm
+   * cream identity leaves little room between them — and across a room this
+   * wide the junction simply disappeared, so the office read as one flat
+   * surface with furniture stuck to it. Grounding the first few rows gives
+   * the horizon back without touching either palette.
+   */
+  for (let s = 0; s < 5; s++) {
+    ops.push([0, h + s, w, 1, s < 2 ? 'floorShadow' : 'floorLine'])
   }
 
   // Light falling from windows: shallow steps in a tint just above the floor.
@@ -129,108 +166,3 @@ export type SceneLayout = Pick<
   | 'laneY'
   | 'deskBaseY'
 >
-
-export interface LayoutSpec {
-  /** Left edge x of each work surface. One seat per station. */
-  stations: number[]
-  /** Top of the work surface. */
-  stationY?: number
-  /** Positions where an agent stands and studies something. */
-  focus?: number[]
-  focusY?: number
-  /** Centre x of the break area on the right. */
-  breakX?: number
-  /** Width of the room. Defaults to 480. */
-  roomWidth?: number
-  /** Height of the room. Defaults to 240. */
-  roomHeight?: number
-}
-
-/**
- * The behavioural skeleton every world shares: a row of work surfaces along
- * the back, a clear walking corridor, a couple of places to stand and think,
- * pairs of facing spots for conversations, and somewhere to loiter.
- *
- * Worlds differ in what is *drawn* at these positions - a desk, a lab bench,
- * a kitchen counter - not in how agents move between them. That is what keeps
- * the director and the renderer free of per-theme branching.
- */
-export function standardLayout(spec: LayoutSpec): SceneLayout {
-  const stationY = spec.stationY ?? 100
-  const focusY = spec.focusY ?? 86
-  const w = spec.roomWidth ?? 480
-  const h = spec.roomHeight ?? 240
-  const bx = spec.breakX ?? Math.floor(w * 0.8)
-
-  const focusSpots = spec.focus ?? [
-    Math.floor(w * 0.3),
-    Math.floor(w * 0.4),
-    Math.floor(w * 0.5)
-  ]
-
-  const wanderSpots = []
-  for (let i = 0; i < 16; i++) {
-    wanderSpots.push({
-      x: Math.floor(w * (0.1 + (i % 4) * 0.25) + (i % 2) * 10),
-      y: Math.floor(stationY + 40 + Math.floor(i / 4) * 20),
-      facing: ['up', 'down', 'left', 'right'][i % 4] as 'up' | 'down' | 'left' | 'right'
-    })
-  }
-
-  return {
-    desks: spec.stations.map((x) => ({
-      x: x + SEAT_DX,
-      y: stationY + SEAT_DY,
-      facing: 'down' as const
-    })),
-    deskBaseY: stationY + DESK_BASE,
-
-    // Far enough apart that people at the board do not overlap.
-    boardSpots: focusSpots.map(fx => ({
-      x: fx,
-      y: focusY,
-      facing: 'up' as const
-    })),
-
-    /*
-     * Conversation pairs stand 24px apart. The sprite is 20 wide, so the old
-     * 16px spacing overlapped once the characters gained shoulders.
-     */
-    talkSpots: [
-      [
-        { x: Math.floor(w * 0.7) - 12, y: stationY + 38, facing: 'right' },
-        { x: Math.floor(w * 0.7) + 12, y: stationY + 38, facing: 'left' }
-      ],
-      [
-        { x: Math.floor(w * 0.2) - 12, y: h - 48, facing: 'right' },
-        { x: Math.floor(w * 0.2) + 12, y: h - 48, facing: 'left' }
-      ],
-      [
-        { x: Math.floor(w * 0.4) - 12, y: h - 44, facing: 'right' },
-        { x: Math.floor(w * 0.4) + 12, y: h - 44, facing: 'left' }
-      ],
-      [
-        { x: Math.floor(w * 0.6) - 12, y: h - 50, facing: 'right' },
-        { x: Math.floor(w * 0.6) + 12, y: h - 50, facing: 'left' }
-      ],
-      [
-        { x: Math.floor(w * 0.8) - 12, y: h - 46, facing: 'right' },
-        { x: Math.floor(w * 0.8) + 12, y: h - 46, facing: 'left' }
-      ]
-    ],
-
-    coffeeSpots: [
-      { x: bx - 14, y: 106, facing: 'up' },
-      { x: bx + 12, y: 106, facing: 'up' },
-      { x: bx + 38, y: 106, facing: 'up' }
-    ],
-
-    /*
-     * Loitering room for a full roster, kept clear of the board and desks so
-     * a busy office does not pile characters on top of one another.
-     */
-    wanderSpots,
-
-    laneY: stationY + 65
-  }
-}

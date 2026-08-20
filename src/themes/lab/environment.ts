@@ -1,8 +1,37 @@
-import type { Prop, SceneDef, ThemePalette } from '../types'
 import type { Op } from '../../world/pixel/ops'
-import { backdrop } from '../shared/room'
-import { cabinet, clockFace, deskUnit, wallSign } from '../shared/props'
-import { barrel, glassware, labBench, poster, waterCooler } from '../shared/furniture'
+import type { Prop, SceneDef, ThemePalette } from '../types'
+import {
+  composeOffice,
+  type OfficeGrid,
+  type StationSlot,
+  type WallSlot,
+  type ZoneFurnishing,
+  type ZoneRect
+} from '../shared/office'
+import {
+  cabinet,
+  chairBack,
+  coffeeStation,
+  DESK_BASE,
+  DESK_W,
+  plant,
+  wallSign,
+  whiteboard,
+  windowUnit,
+  type DeskParts
+} from '../shared/props'
+import {
+  barrel,
+  doorway,
+  glassware,
+  labBench,
+  lockers,
+  noticeBoard,
+  poster,
+  serverRack,
+  stool,
+  waterCooler
+} from '../shared/furniture'
 
 /** An industrial lab: pale institutional walls, concrete, acid green. */
 export const labPalette: ThemePalette = {
@@ -56,179 +85,145 @@ export const labPalette: ThemePalette = {
   steelDark: '#7F8484'
 }
 
-const STATIONS = [32, 96, 160, 224, 288, 352]
-const STATION_Y = 84
-const HORIZON = 72
-const WIDTH = 480
-const HEIGHT = 240
-const DESK_BASE = 22
-const SEAT_DX = 30
-const SEAT_DY = 5
+/**
+ * A lab bench, standing in for the office desk.
+ *
+ * Deliberately built to the same footprint and seat offset as `deskUnit`: the
+ * grid places it, the director seats a character at it, and the renderer
+ * animates its screen — all of which only work because the contract is
+ * identical whatever the surface is made of. Only the material changes.
+ */
+function labStation(slot: StationSlot): DeskParts {
+  const { x, y } = slot
+  const ops: Op[] = []
 
-const desks = STATIONS.map((x, i) => deskUnit(x, STATION_Y, 610 + i * 29))
+  // The bench itself.
+  ops.push(...labBench(x, y, DESK_W))
 
-function fumeHood(x: number, y: number, w: number): Op[] {
-  return [
-    // Back interior
-    [x, y - 50, w, 50, 'screen'],
-    // Glass sash (half open)
-    [x, y - 50, w, 20, 'screenLite'],
-    // Work surface
-    ...labBench(x, y, w),
-    // Side panels
-    [x - 2, y - 50, 2, 50, 'steelDark'],
-    [x + w, y - 50, 2, 50, 'steelDark'],
-    // Top vent
-    [x, y - 60, w, 10, 'steel']
-  ]
+  // A monitor at the left end, where a desk would have one.
+  ops.push([x + 10, y - 3, 3, 3, 'ink'])
+  ops.push([x + 7, y - 1, 9, 2, 'ink'])
+  ops.push([x + 2, y - 18, 19, 16, 'ink'])
+  ops.push([x + 3, y - 17, 17, 13, 'screen'])
+  ops.push([x + 3, y - 17, 17, 1, 'screenLite'])
+
+  // Glassware in place of desk clutter, varied per station.
+  ops.push(...glassware(x + 24, y - 1, slot.seed))
+
+  return {
+    ops,
+    baseY: y + DESK_BASE,
+    monitors: [{ x: x + 3, y: y - 17 }],
+    led: { x: x + 17, y: y - 4 }
+  }
 }
 
-function safetyShower(x: number, y: number): Op[] {
-  return [
-    // Pipe up the wall
-    [x, y - 60, 2, 60, 'steel'],
-    // Shower head
-    [x - 6, y - 60, 14, 4, 'steelDark'],
-    [x - 4, y - 56, 10, 2, 'steel'],
-    // Pull handle
-    [x + 4, y - 56, 1, 30, 'steel'],
-    [x + 2, y - 26, 5, 4, 'brand'] // yellow pull base
-  ]
+/** Safety notices, a fume-hood window and the containment board. */
+function wall(slot: WallSlot): Op[] {
+  switch (slot.index) {
+    case 0:
+    case 4:
+      return windowUnit(slot.x, slot.y, slot.w, slot.h)
+    case 2:
+      return whiteboard(slot.x + 6, slot.y, slot.w - 12, slot.h - 4)
+    case 1:
+      return noticeBoard(slot.x, slot.y, slot.w, slot.h, 112)
+    default:
+      return poster(slot.x + 14, slot.y, slot.w - 28, slot.h, 134)
+  }
 }
 
-function props(): Prop[] {
+function zone(z: ZoneRect): ZoneFurnishing {
+  // Left: wet chemistry, with the steam that goes with it.
+  if (z.index === 0) {
+    return {
+      props: [
+        { id: 'bench', ops: labBench(z.cx - 56, z.baseY, 112), baseY: z.baseY },
+        { id: 'glass-1', ops: glassware(z.cx - 46, z.baseY - 19, 137), baseY: z.baseY + 0.5 },
+        { id: 'glass-2', ops: glassware(z.cx - 4, z.baseY - 19, 149), baseY: z.baseY + 0.5 },
+        { id: 'stool-1', ops: stool(z.cx - 30, z.baseY + 22), baseY: z.baseY + 22 },
+        { id: 'stool-2', ops: stool(z.cx + 18, z.baseY + 22), baseY: z.baseY + 22 }
+      ],
+      steam: [
+        { x: z.cx - 40, y: z.baseY - 24, baseY: z.baseY },
+        { x: z.cx + 2, y: z.baseY - 24, baseY: z.baseY }
+      ]
+    }
+  }
+
+  // Middle: hazardous storage, kept clear of the walkways on both sides.
+  if (z.index === 1) {
+    return {
+      props: [
+        { id: 'barrel-1', ops: barrel(z.cx - 48, z.baseY), baseY: z.baseY },
+        { id: 'barrel-2', ops: barrel(z.cx - 30, z.baseY - 6), baseY: z.baseY - 6 },
+        { id: 'barrel-3', ops: barrel(z.cx - 39, z.baseY + 12), baseY: z.baseY + 12 },
+        { id: 'cabinet', ops: cabinet(z.cx + 6, z.baseY), baseY: z.baseY },
+        { id: 'plant-mid', ops: plant(z.cx + 44, z.baseY, 199), baseY: z.baseY }
+      ]
+    }
+  }
+
+  // Right: the machine room, plus the only coffee in the building.
+  const coffee = coffeeStation(z.cx - 30, z.baseY)
+  const rack = serverRack(z.cx + 30, z.baseY, 46)
+  return {
+    props: [
+      { id: 'coffee', ops: coffee.ops, baseY: z.baseY },
+      { id: 'rack', ops: rack.ops, baseY: z.baseY },
+      { id: 'cooler', ops: waterCooler(z.cx + 64, z.baseY), baseY: z.baseY }
+    ],
+    steam: [{ x: coffee.steam.x, y: coffee.steam.y, baseY: z.baseY }],
+    leds: rack.leds
+  }
+}
+
+function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
-  
-  // Posters and signs on the top wall
-  list.push({ id: 'poster-1', ops: poster(18, 12, 36, 30, 101), baseY: 0 })
-  list.push({ id: 'sign-1', ops: wallSign(112, 22), baseY: 0 })
-  list.push({ id: 'poster-2', ops: poster(160, 12, 32, 30, 112), baseY: 0 })
-  list.push({ id: 'poster-3', ops: poster(244, 14, 40, 26, 123), baseY: 0 })
-  list.push({ id: 'poster-4', ops: poster(320, 16, 28, 28, 134), baseY: 0 })
-  list.push({ id: 'clock', ops: clockFace(450, 24, 7), baseY: 0 })
 
-  desks.forEach((d, i) => list.push({ id: `desk-${i}`, ops: d.ops, baseY: d.baseY }))
+  const doorX = Math.round((grid.wall[0].x + grid.wall[0].w + grid.wall[1].x) / 2) - 17
+  list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
-  // Fume hood area on the far right top wall
-  list.push({ id: 'fume-hood', ops: fumeHood(410, 84, 50), baseY: 84 })
-  
-  // Hazmat storage cabinet on far left top wall
-  list.push({ id: 'hazmat-cabinet', ops: cabinet(8, 100), baseY: 100 })
-  
-  // Safety shower near fume hood
-  list.push({ id: 'safety-shower', ops: safetyShower(470, 84), baseY: 84 })
+  list.push({
+    id: 'sign',
+    ops: wallSign(grid.wall[2].cx, grid.wall[2].y + grid.wall[2].h + 16),
+    baseY: 0
+  })
 
-  // Middle benches
-  list.push({ id: 'bench-mid', ops: labBench(80, 136, 120), baseY: 136 })
-  list.push({ id: 'glass-mid-1', ops: glassware(88, 118, 137), baseY: 136.5 })
-  list.push({ id: 'glass-mid-2', ops: glassware(140, 118, 149), baseY: 136.5 })
+  for (const slot of grid.stations) {
+    const seat = { x: slot.x + 30, y: slot.y + 5 }
+    list.push({
+      id: `chair-${slot.index}`,
+      ops: chairBack(seat.x, seat.y),
+      baseY: seat.y - 6
+    })
+  }
 
-  list.push({ id: 'bench-mid-2', ops: labBench(260, 136, 100), baseY: 136 })
-  list.push({ id: 'glass-mid-3', ops: glassware(270, 118, 155), baseY: 136.5 })
-  list.push({ id: 'glass-mid-4', ops: glassware(310, 118, 166), baseY: 136.5 })
+  const [left, right] = grid.flanks
+  list.push({ id: 'lockers', ops: lockers(left.x, left.y, 3), baseY: left.y })
+  list.push({
+    id: 'notice-r',
+    ops: noticeBoard(right.x - 4, right.y - 58, 46, 42, 166),
+    baseY: right.y
+  })
+  list.push({ id: 'barrel-r', ops: barrel(right.x + 10, right.y), baseY: right.y })
 
-  // Lower benches
-  list.push({ id: 'bench-low', ops: labBench(140, 210, 160), baseY: 210 })
-  list.push({ id: 'glass-low-1', ops: glassware(150, 192, 177), baseY: 210.5 })
-  list.push({ id: 'glass-low-2', ops: glassware(200, 192, 188), baseY: 210.5 })
-  list.push({ id: 'glass-low-3', ops: glassware(250, 192, 199), baseY: 210.5 })
-
-  // Additional barrels and hazmat feel
-  list.push({ id: 'barrel-1', ops: barrel(20, 210), baseY: 210 })
-  list.push({ id: 'barrel-2', ops: barrel(44, 206), baseY: 206 })
-  list.push({ id: 'barrel-3', ops: barrel(32, 222), baseY: 222 })
-  
-  list.push({ id: 'barrel-4', ops: barrel(420, 200), baseY: 200 })
-  list.push({ id: 'barrel-5', ops: barrel(444, 210), baseY: 210 })
-
-  list.push({ id: 'cooler', ops: waterCooler(450, 140), baseY: 140 })
+  list.push({ id: 'barrel-l', ops: barrel(16, grid.laneY + 20), baseY: grid.laneY + 20 })
+  list.push({
+    id: 'plant-r',
+    ops: plant(grid.width - 26, grid.height - 24, 33),
+    baseY: grid.height - 24
+  })
 
   return list
 }
 
-export const labScene: SceneDef = {
-  width: WIDTH,
-  height: HEIGHT,
-  horizon: HORIZON,
-  background: backdrop({
-    width: WIDTH,
-    height: HEIGHT,
-    horizon: HORIZON,
-    floorStyle: 'concrete',
-    wallStyle: 'brick'
-  }),
-  props: props(),
-  
-  desks: STATIONS.map((x) => ({
-    x: x + SEAT_DX,
-    y: STATION_Y + SEAT_DY,
-    facing: 'down'
-  })),
-  deskBaseY: STATION_Y + DESK_BASE,
-  
-  boardSpots: [
-    { x: 410, y: 104, facing: 'up' },
-    { x: 430, y: 104, facing: 'up' },
-    { x: 450, y: 104, facing: 'up' }
-  ],
-  
-  talkSpots: [
-    [
-      { x: 60, y: 160, facing: 'right' },
-      { x: 84, y: 160, facing: 'left' }
-    ],
-    [
-      { x: 220, y: 160, facing: 'right' },
-      { x: 244, y: 160, facing: 'left' }
-    ],
-    [
-      { x: 380, y: 160, facing: 'right' },
-      { x: 404, y: 160, facing: 'left' }
-    ],
-    [
-      { x: 100, y: 220, facing: 'right' },
-      { x: 124, y: 220, facing: 'left' }
-    ],
-    [
-      { x: 340, y: 220, facing: 'right' },
-      { x: 364, y: 220, facing: 'left' }
-    ]
-  ],
-  
-  coffeeSpots: [
-    { x: 430, y: 154, facing: 'right' },
-    { x: 466, y: 154, facing: 'left' },
-    { x: 450, y: 166, facing: 'up' }
-  ],
-  
-  wanderSpots: [
-    { x: 40, y: 120, facing: 'down' },
-    { x: 210, y: 110, facing: 'down' },
-    { x: 380, y: 110, facing: 'right' },
-    { x: 50, y: 175, facing: 'right' },
-    { x: 140, y: 170, facing: 'up' },
-    { x: 260, y: 175, facing: 'left' },
-    { x: 360, y: 170, facing: 'up' },
-    { x: 420, y: 175, facing: 'left' },
-    { x: 80, y: 190, facing: 'down' },
-    { x: 320, y: 190, facing: 'down' },
-    { x: 440, y: 190, facing: 'up' },
-    { x: 160, y: 230, facing: 'right' },
-    { x: 280, y: 230, facing: 'left' }
-  ],
-  
-  laneY: 175,
-  
-  monitors: desks.map((d) => d.monitor),
-  steamVents: [
-    { x: 420, y: 72, baseY: 84 },
-    { x: 440, y: 72, baseY: 84 },
-    { x: 100, y: 124, baseY: 136 },
-    { x: 160, y: 124, baseY: 136 },
-    { x: 280, y: 124, baseY: 136 },
-    { x: 180, y: 198, baseY: 210 },
-    { x: 240, y: 198, baseY: 210 }
-  ],
-  leds: [...desks.map((d) => d.led), { x: 420, y: 92 }],
-  clock: { x: 450, y: 24, r: 7 }
-}
+export const labScene: SceneDef = composeOffice({
+  floorStyle: 'concrete',
+  wallStyle: 'brick',
+  wall,
+  zone,
+  accents,
+  station: labStation,
+  clock: { slot: 3, r: 8 }
+})

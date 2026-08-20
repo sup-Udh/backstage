@@ -30,9 +30,11 @@ export class WorldEngine {
   /** Viewport size in CSS pixels, kept in step with the canvas. */
   private viewW = 0
   private viewH = 0
-  private cam: Camera = { x: 0, y: 0, scale: 3 }
+  private cam: Camera = { x: 0, y: 0, scale: DEFAULT_ZOOM }
   /** Characters already in the world, so reserves are spawned only once. */
   private placed = new Set<string>()
+  /** Whether the opening camera has been aimed yet. */
+  private framed = false
   private views: AgentView[] = []
   private viewListeners = new Set<(v: AgentView[]) => void>()
   private unsubscribe: (() => void) | null = null
@@ -196,7 +198,7 @@ export class WorldEngine {
   /** Largest whole-number zoom at which the whole room fits the viewport. */
   private fitScale(): number {
     const scene = this.theme.scene
-    if (this.viewW === 0 || this.viewH === 0) return 3
+    if (this.viewW === 0 || this.viewH === 0) return DEFAULT_ZOOM
     return Math.max(
       1,
       Math.min(
@@ -205,6 +207,23 @@ export class WorldEngine {
         Math.floor(this.viewH / scene.height)
       )
     )
+  }
+
+  /**
+   * The zoom the room opens at.
+   *
+   * Deliberately not the fit scale. The office is larger than a typical panel
+   * can show at a legible zoom, and opening at "everything visible" would
+   * mean opening at 1x — the whole floor plan on screen, every character ten
+   * pixels tall, and nothing readable. Opening one step in shows most of the
+   * room with the desks and the people at them clearly resolved, and the fit
+   * control is one click away for anyone who wants the overview.
+   *
+   * On a display large enough to fit the room at a higher zoom, that wins:
+   * there is no reason to leave space unused.
+   */
+  private openingZoom(): number {
+    return Math.max(DEFAULT_ZOOM, this.fitScale())
   }
 
   /**
@@ -238,6 +257,17 @@ export class WorldEngine {
      */
     if (this.cam.scale < this.fitScale()) this.cam.scale = this.fitScale()
     this.clampCamera()
+    if (!this.framed) {
+      /*
+       * The first real viewport is the first chance to aim the camera. The
+       * room is larger than the view, so leaving it at the origin would open
+       * every world on its top-left corner — a stretch of wall. Centring on
+       * the desks puts the work where the user is already looking.
+       */
+      this.framed = true
+      this.cam.scale = this.openingZoom()
+      this.centreOnWork()
+    }
   }
 
   getCamera(): Camera {
@@ -288,6 +318,32 @@ export class WorldEngine {
   /** Reset to the whole room, centred. */
   fit(): void {
     this.cam.scale = this.fitScale()
+    this.clampCamera()
+  }
+
+  /**
+   * Aim the camera at the working half of the room.
+   *
+   * The desks are the reason anyone opens this panel, so the opening view is
+   * framed on them rather than on the room's geometric centre — which in a
+   * room with a tall wall band and a break area at the bottom is a patch of
+   * empty floor between the two.
+   */
+  private centreOnWork(): void {
+    const scene = this.theme.scene
+    const seats = scene.desks
+    if (seats.length === 0) {
+      this.clampCamera()
+      return
+    }
+    let sx = 0
+    let sy = 0
+    for (const seat of seats) {
+      sx += seat.x
+      sy += seat.y
+    }
+    this.cam.x = sx / seats.length - this.viewW / this.cam.scale / 2
+    this.cam.y = sy / seats.length - this.viewH / this.cam.scale / 2
     this.clampCamera()
   }
 
@@ -374,6 +430,20 @@ export class WorldEngine {
     for (const c of this.chars) {
       const agent = this.runtime.get(c.agentId)
       if (!agent) continue
+
+      /*
+       * Re-cast if the agent has been moved onto a different character.
+       *
+       * The body is chosen by slot when it first appears, and a CLI session
+       * can be reassigned while it is running. Casting only on arrival meant
+       * the change was accepted, stored and reflected everywhere except the
+       * one place it was supposed to show.
+       */
+      const cast = castFor(this.theme, agent.slot)
+      if (cast.id !== c.def.id) {
+        c.def = cast
+        this.rebuildViews()
+      }
 
       if (agent.status !== c.lastStatus) {
         this.director.onStatusChange(c, agent.status, this.chars)
@@ -507,11 +577,26 @@ export interface LabelAnchor {
 const MARGIN = 12
 
 /**
+ * The zoom a world opens at.
+ *
+ * Whole-number, like every other zoom in this engine: a fractional scale puts
+ * sprite edges between device pixels, which is the one thing the whole
+ * rendering approach exists to avoid.
+ */
+const DEFAULT_ZOOM = 2
+
+/**
  * Slack around the sprite that still counts as clicking the character, in
  * scene pixels. Applied on every side, and below the feet as well, so the
  * shadow and the floor ring are part of the target rather than a dead zone.
+ *
+ * Grew when the cast shrank. The target is deliberately decoupled from the
+ * sprite: a hit box that scaled with the art would have made clicking an
+ * agent progressively harder every time the characters were made smaller,
+ * and picking someone out of a crowded office is already the fiddliest thing
+ * the panel asks of anyone.
  */
-const HIT_PAD = 5
+const HIT_PAD = 7
 const HIT_W = WORLD_SPRITE_W + HIT_PAD * 2
 const HIT_H = WORLD_SPRITE_H + HIT_PAD * 2
 

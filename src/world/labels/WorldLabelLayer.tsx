@@ -16,8 +16,14 @@ interface Props {
 /** Statuses that read as "this agent is doing something". */
 const ACTIVE: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
 
-/** Clearance between a label and the character it belongs to, in CSS pixels. */
-const GAP = 4
+/**
+ * Clearance between a label and the character it belongs to, in CSS pixels.
+ *
+ * Small, because the pair has to read as one unit — name, character, status
+ * stacked tightly enough that a crowded room still shows which label belongs
+ * to whom.
+ */
+const GAP = 3
 /** Clearance from the edge of the viewport. */
 const EDGE = 2
 

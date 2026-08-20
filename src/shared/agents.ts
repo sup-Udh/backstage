@@ -214,10 +214,23 @@ export type RuntimeEventType =
   | 'agent.tool.failed'
   // What the agent says to the user
   | 'agent.message'
+  /**
+   * A fragment of prose, as the model produces it.
+   *
+   * Carries `message` (the fragment, not the whole text so far) and the
+   * `executionId` it belongs to. Deliberately separate from `agent.message`:
+   * a delta is provisional and is never written to memory, while a message
+   * is something the agent has finished saying. A consumer that ignores
+   * deltas entirely still shows a complete, correct conversation.
+   */
+  | 'agent.message.delta'
   // Agent to agent
   | 'agent.message.sent'
   | 'agent.message.received'
   | 'agent.delegated'
+  /** A collaboration link was created or removed between two agents. */
+  | 'agent.connected'
+  | 'agent.disconnected'
   // Automation
   | 'trigger.fired'
   | 'trigger.blocked'

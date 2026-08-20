@@ -138,7 +138,7 @@ export class GeminiProvider implements AIProvider {
       if (turn.content) contents.push({ role: 'user', parts: [{ text: turn.content }] })
     }
 
-    const response = await this.client.models.generateContent({
+    const params = {
       model: req.model,
       contents,
       config: {
@@ -153,18 +153,52 @@ export class GeminiProvider implements AIProvider {
           }
         ]
       }
-    })
+    }
 
-    const toolCalls: ToolCall[] = (response.functionCalls ?? []).map((c, i) => ({
-      // Gemini does not issue call ids; the loop only needs them to be unique.
-      id: c.id ?? `gemini_${Date.now()}_${i}`,
-      name: c.name ?? '',
-      arguments: (c.args ?? {}) as Record<string, unknown>
-    }))
+    const toolCalls: ToolCall[] = []
+    let text = ''
 
-    const text = (response.text ?? '').trim()
-    if (toolCalls.length > 0) return { text: text || undefined, toolCalls }
-    return { text }
+    if (req.onDelta) {
+      /*
+       * Streaming, assembled by hand.
+       *
+       * Gemini yields whole response chunks rather than text deltas, and each
+       * one may carry prose, a function call, or both. Text is forwarded as
+       * it arrives and concatenated; calls are only collected, never
+       * announced — a tool call is a decision, and half of one is not
+       * something the runtime or the user could act on.
+       */
+      const stream = await this.client.models.generateContentStream(params)
+      for await (const chunk of stream) {
+        const part = chunk.text ?? ''
+        if (part) {
+          text += part
+          req.onDelta(part)
+        }
+        for (const [i, c] of (chunk.functionCalls ?? []).entries()) {
+          toolCalls.push({
+            id: c.id ?? `gemini_${Date.now()}_${toolCalls.length + i}`,
+            name: c.name ?? '',
+            arguments: (c.args ?? {}) as Record<string, unknown>
+          })
+        }
+      }
+    } else {
+      const response = await this.client.models.generateContent(params)
+      for (const [i, c] of (response.functionCalls ?? []).entries()) {
+        // Gemini does not issue call ids; the loop only needs them to be unique.
+        toolCalls.push({
+          id: c.id ?? `gemini_${Date.now()}_${i}`,
+          name: c.name ?? '',
+          arguments: (c.args ?? {}) as Record<string, unknown>
+        })
+      }
+      text = response.text ?? ''
+    }
+
+    const trimmed = text.trim()
+    if (toolCalls.length > 0) return { text: trimmed || undefined, toolCalls }
+    return { text: trimmed }
   }
 }
 

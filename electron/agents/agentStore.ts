@@ -281,3 +281,160 @@ export function mayTalkTo(fromId: string, toId: string): boolean {
   const from = getAgent(fromId)
   return !!from && from.canTalkTo.includes(toId)
 }
+
+/* --------------------------------------------------------- relationships -- */
+
+/**
+ * How many other agents one agent may be connected to.
+ *
+ * A hard cap rather than a suggestion. Every connection is a route along which
+ * one agent can hand work to another, and an unbounded graph is one where a
+ * single task can fan out across the whole roster and spend real money doing
+ * it. Two keeps a group to at most three agents in a chain — enough for a
+ * genuine hand-off, small enough that the user can hold the whole shape of it
+ * in their head.
+ */
+export const MAX_CONNECTIONS = 2
+
+/**
+ * How many agents may end up in one collaboration group.
+ *
+ * Two connections each does not on its own bound a group: A–B, B–C, C–D is a
+ * chain where nobody exceeds two links and yet four agents share a thread,
+ * and it can keep growing. The group cap is what actually holds the
+ * conversation to a size a person can follow, and it is the guarantee the
+ * shared thread is designed around — three voices in a transcript is a
+ * discussion, seven is a log.
+ */
+export const MAX_GROUP = 3
+
+export interface LinkResult {
+  ok: boolean
+  error?: string
+}
+
+/**
+ * Connect two agents, in both directions.
+ *
+ * Collaboration is mutual: a link the user draws between two characters means
+ * they can talk, not that one may lecture the other. The underlying
+ * `canTalkTo` is directional because a trigger may legitimately be one-way,
+ * so a link is stored as the pair of directions and both are checked here.
+ *
+ * The cap is enforced in this function specifically because this is the only
+ * place a link can be created. Checking it in the UI as well is a courtesy to
+ * the user — it lets a button grey out rather than fail — but a check that
+ * lives only there is one an unrelated code path can walk straight past.
+ */
+export function connectAgents(aId: string, bId: string): LinkResult {
+  if (aId === bId) return { ok: false, error: 'An agent cannot be connected to itself.' }
+
+  const a = getAgent(aId)
+  const b = getAgent(bId)
+  if (!a) return { ok: false, error: 'That agent no longer exists.' }
+  if (!b) return { ok: false, error: 'That agent no longer exists.' }
+
+  if (a.canTalkTo.includes(bId) && b.canTalkTo.includes(aId)) return { ok: true }
+
+  // Counted per agent, not per direction: a half-formed link from an earlier
+  // build still occupies a slot and still lets work flow.
+  if (connectionsOf(a).length >= MAX_CONNECTIONS && !connectionsOf(a).includes(bId)) {
+    return { ok: false, error: `${a.name} already has ${MAX_CONNECTIONS} connections.` }
+  }
+  if (connectionsOf(b).length >= MAX_CONNECTIONS && !connectionsOf(b).includes(aId)) {
+    return { ok: false, error: `${b.name} already has ${MAX_CONNECTIONS} connections.` }
+  }
+
+  /*
+   * Joining two groups must not produce one larger than the cap. Checked on
+   * the union of both sides rather than on either alone, because each can be
+   * within its own limit while the merge is not.
+   */
+  const merged = new Set([...groupOf(aId), ...groupOf(bId)])
+  if (merged.size > MAX_GROUP) {
+    return {
+      ok: false,
+      error: `That would make a group of ${merged.size}. The most that can work together is ${MAX_GROUP}.`
+    }
+  }
+
+  if (!a.canTalkTo.includes(bId)) a.canTalkTo.push(bId)
+  if (!b.canTalkTo.includes(aId)) b.canTalkTo.push(aId)
+  a.updatedAt = Date.now()
+  b.updatedAt = Date.now()
+  persist()
+  return { ok: true }
+}
+
+/** Remove a connection, in both directions. */
+export function disconnectAgents(aId: string, bId: string): LinkResult {
+  const a = getAgent(aId)
+  const b = getAgent(bId)
+  if (!a || !b) return { ok: false, error: 'That agent no longer exists.' }
+
+  const before = a.canTalkTo.length + b.canTalkTo.length
+  a.canTalkTo = a.canTalkTo.filter((x) => x !== bId)
+  b.canTalkTo = b.canTalkTo.filter((x) => x !== aId)
+  if (a.canTalkTo.length + b.canTalkTo.length === before) return { ok: true }
+
+  a.updatedAt = Date.now()
+  b.updatedAt = Date.now()
+  persist()
+  return { ok: true }
+}
+
+/**
+ * Everyone this agent is connected to, in either direction.
+ *
+ * A link written by an earlier build, or by editing the agent directly, can be
+ * one-way. Treating it as a connection is the safe reading: it is a route work
+ * can travel along, so it counts against the cap and it is shown to the user.
+ */
+export function connectionsOf(agent: AgentConfig): string[] {
+  const live = new Set(loadAgents().map((a) => a.id))
+  const out = new Set(agent.canTalkTo.filter((id) => live.has(id)))
+  for (const other of loadAgents()) {
+    if (other.id !== agent.id && other.canTalkTo.includes(agent.id)) out.add(other.id)
+  }
+  return [...out]
+}
+
+/**
+ * Everyone reachable from this agent through connections, including itself.
+ *
+ * The collaboration group: who shares a thread, and what the group cap is
+ * measured against. A plain breadth-first walk, which is more than the shape
+ * needs today but costs nothing and cannot be wrong if the cap ever moves.
+ */
+export function groupOf(agentId: string): string[] {
+  const start = getAgent(agentId)
+  if (!start) return []
+
+  const seen = new Set([agentId])
+  const queue = [agentId]
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    const agent = getAgent(id)
+    if (!agent) continue
+    for (const next of connectionsOf(agent)) {
+      if (seen.has(next)) continue
+      seen.add(next)
+      queue.push(next)
+    }
+  }
+  // Sorted, so the same group always produces the same thread id.
+  return [...seen].sort()
+}
+
+/**
+ * The stable id for a group's shared conversation.
+ *
+ * Derived from the members rather than stored, so a thread cannot outlive the
+ * relationship that created it. Adding or removing a member deliberately
+ * produces a *different* thread: the group is a different group, and folding
+ * a new agent into an existing transcript would hand them a conversation they
+ * were never part of.
+ */
+export function threadIdFor(members: string[]): string {
+  return `thread:${[...members].sort().join('+')}`
+}

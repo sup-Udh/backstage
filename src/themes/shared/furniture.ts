@@ -312,3 +312,182 @@ export function wallLamp(x: number, y: number): Op[] {
     [x - 1, y + 7, 5, 1, 'brandLite']
   ]
 }
+
+/**
+ * A doorway in the back wall.
+ *
+ * The room needs somewhere to have come from. Without one the office reads as
+ * a sealed box, and characters walking in from the edge have nowhere to have
+ * walked in from. `y` is the floor line the frame stands on.
+ */
+export function doorway(x: number, y: number, w = 34, h = 52): Op[] {
+  const ops: Op[] = [
+    // Frame.
+    [x - 3, y - h - 3, w + 6, h + 3, 'ink'],
+    [x, y - h, w, h, 'woodDark'],
+    // The room beyond, darker than anything in this one so it reads as depth.
+    [x + 2, y - h + 2, w - 4, h - 2, 'ink2'],
+    // Door leaf, standing open against the left jamb.
+    [x + 2, y - h + 2, 11, h - 2, 'wood'],
+    [x + 2, y - h + 2, 11, 1, 'woodLite'],
+    [x + 10, y - Math.round(h / 2), 2, 3, 'brand'],
+    // Lintel.
+    [x - 3, y - h - 3, w + 6, 3, 'ink'],
+    [x - 2, y - h - 2, w + 4, 1, 'woodLite']
+  ]
+  // Light spilling out across the floor.
+  ops.push([x + 1, y, w - 2, 2, 'floorShadow'])
+  return ops
+}
+
+/**
+ * A free-standing task chair, seen from the front.
+ *
+ * Distinct from `chairBack` in props.ts, which is drawn to sit *behind* an
+ * occupant and frame them. This one has to stand on its own beside a meeting
+ * table, so it carries a seat, a back and legs rather than a silhouette.
+ */
+export function taskChair(x: number, y: number, facing: 'up' | 'down' = 'up'): Op[] {
+  const ops: Op[] = [[x - 8, y - 1, 16, 2, 'floorShadow']]
+  // Back: above the seat when facing away, below it when facing the viewer.
+  const backY = facing === 'up' ? y - 20 : y - 9
+  ops.push([x - 7, backY, 14, 11, 'ink'])
+  ops.push([x - 6, backY + 1, 12, 9, 'accent'])
+  ops.push([x - 6, backY + 1, 12, 1, 'accentLite'])
+  // Seat.
+  ops.push([x - 8, y - 10, 16, 4, 'ink'])
+  ops.push([x - 7, y - 9, 14, 2, 'accentDark'])
+  // Stem and base.
+  ops.push([x - 1, y - 6, 3, 4, 'ink'])
+  ops.push([x - 6, y - 2, 12, 2, 'ink'])
+  return ops
+}
+
+/** A backless stool, for a break area or a bench. */
+export function stool(x: number, y: number): Op[] {
+  return [
+    [x - 6, y - 1, 12, 2, 'floorShadow'],
+    [x - 6, y - 10, 12, 4, 'ink'],
+    [x - 5, y - 9, 10, 2, 'wood'],
+    [x - 5, y - 6, 2, 6, 'ink'],
+    [x + 3, y - 6, 2, 6, 'ink'],
+    [x - 4, y - 4, 8, 1, 'woodDark']
+  ]
+}
+
+/**
+ * A pendant light hanging from the ceiling, with the pool it throws.
+ *
+ * Drawn as part of the wall band rather than as a floor prop: it hangs above
+ * everybody's head and must never sort in front of a character.
+ */
+export function pendantLamp(x: number, y: number, drop = 14): Op[] {
+  return [
+    [x, 0, 1, drop, 'ink3'],
+    [x - 7, y, 15, 2, 'ink'],
+    [x - 6, y + 2, 13, 4, 'ink'],
+    [x - 5, y + 3, 11, 2, 'brand'],
+    [x - 4, y + 5, 9, 1, 'brandLite'],
+    // The glow beneath it, kept subtle so it does not read as a solid block.
+    [x - 5, y + 7, 11, 2, 'brandPale']
+  ]
+}
+
+/**
+ * A rack of equipment: the storage zone's anchor.
+ *
+ * Blinking status lights are left to the renderer, which is handed their
+ * positions the same way it is handed a desk's.
+ */
+export interface RackParts {
+  ops: Op[]
+  leds: { x: number; y: number }[]
+}
+
+export function serverRack(x: number, y: number, h = 46): RackParts {
+  const ops: Op[] = [[x - 1, y - 1, 28, 3, 'floorShadow']]
+  ops.push([x, y - h, 26, h, 'ink'])
+  ops.push([x + 1, y - h + 1, 24, h - 2, 'ink2'])
+  const leds: { x: number; y: number }[] = []
+  const units = Math.floor((h - 6) / 9)
+  for (let i = 0; i < units; i++) {
+    const uy = y - h + 4 + i * 9
+    ops.push([x + 3, uy, 20, 7, 'steelDark'])
+    ops.push([x + 4, uy + 1, 18, 5, 'ink3'])
+    ops.push([x + 5, uy + 2, 8, 1, 'steel'])
+    leds.push({ x: x + 19, y: uy + 3 })
+  }
+  ops.push([x, y - h, 26, 2, 'steel'])
+  return { ops, leds }
+}
+
+/** A bank of storage lockers. */
+export function lockers(x: number, y: number, doors = 3): Op[] {
+  const w = doors * 13 + 2
+  const ops: Op[] = [[x - 1, y - 1, w + 2, 3, 'floorShadow']]
+  ops.push([x, y - 44, w, 44, 'ink'])
+  ops.push([x + 1, y - 43, w - 2, 42, 'steel'])
+  for (let i = 0; i < doors; i++) {
+    const dx = x + 2 + i * 13
+    ops.push([dx, y - 42, 11, 40, 'steelDark'])
+    ops.push([dx + 1, y - 41, 9, 38, 'steel'])
+    ops.push([dx + 1, y - 41, 9, 1, 'white'])
+    // Vents and a handle.
+    ops.push([dx + 3, y - 38, 5, 1, 'steelDark'])
+    ops.push([dx + 3, y - 36, 5, 1, 'steelDark'])
+    ops.push([dx + 8, y - 22, 1, 5, 'ink'])
+  }
+  return ops
+}
+
+/**
+ * A corkboard of pinned notes: the documentation wall.
+ *
+ * Deliberately busier than the whiteboard so a room can carry both without
+ * the two reading as the same object twice.
+ */
+export function noticeBoard(x: number, y: number, w: number, h: number, seed = 7): Op[] {
+  const rng = makeRng(seed)
+  const ops: Op[] = [
+    [x - 2, y - 2, w + 4, h + 4, 'ink'],
+    [x - 1, y - 1, w + 2, h + 2, 'woodDark'],
+    [x, y, w, h, 'cork']
+  ]
+  // Pinned notes on a loose grid, so they read as posted rather than printed.
+  const cols = Math.max(2, Math.floor((w - 4) / 15))
+  const rows = Math.max(1, Math.floor((h - 4) / 15))
+  const tints = ['paper', 'brand', 'white', 'brandLite', 'cream2']
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (rng() > 0.82) continue
+      const nx = x + 3 + c * 15 + Math.floor(rng() * 3)
+      const ny = y + 3 + r * 15 + Math.floor(rng() * 3)
+      const nw = 9 + Math.floor(rng() * 3)
+      const nh = 9 + Math.floor(rng() * 2)
+      if (nx + nw > x + w - 1 || ny + nh > y + h - 1) continue
+      ops.push([nx, ny, nw, nh, 'ink'])
+      ops.push([nx, ny, nw - 1, nh - 1, tints[Math.floor(rng() * tints.length)]])
+      // A line of writing, and the pin holding it up.
+      ops.push([nx + 2, ny + 3, nw - 5, 1, 'ink3'])
+      ops.push([nx + Math.floor(nw / 2) - 1, ny - 1, 2, 2, 'rust'])
+    }
+  }
+  return ops
+}
+
+/** A low side table with a lamp, for a corner that needs softening. */
+export function sideTable(x: number, y: number): Op[] {
+  return [
+    [x - 2, y - 1, 22, 3, 'floorShadow'],
+    // Lamp.
+    [x + 5, y - 21, 9, 5, 'ink'],
+    [x + 6, y - 20, 7, 3, 'brand'],
+    [x + 7, y - 17, 5, 1, 'brandLite'],
+    [x + 8, y - 16, 3, 8, 'ink'],
+    // Top and legs.
+    [x - 1, y - 9, 20, 4, 'ink'],
+    [x, y - 8, 18, 2, 'woodLite'],
+    [x + 1, y - 5, 3, 5, 'ink'],
+    [x + 14, y - 5, 3, 5, 'ink']
+  ]
+}

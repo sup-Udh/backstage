@@ -7,6 +7,7 @@ import type {
   ProviderStatus,
   RunTaskParams,
   RuntimeEvent,
+  SessionLine,
   TerminalSession
 } from '../src/shared/providerApi'
 
@@ -79,6 +80,9 @@ const api: BackstageApi = {
     collaboration: (agentId) => ipcRenderer.invoke('agents:collaboration', agentId),
     awareness: () => ipcRenderer.invoke('agents:awareness'),
 
+    connect: (a, b) => ipcRenderer.invoke('agents:connect', a, b),
+    disconnect: (a, b) => ipcRenderer.invoke('agents:disconnect', a, b),
+
     /*
      * Events are pushed while tasks run. The listener is wrapped so the
      * renderer only ever sees the payload, never the IpcRendererEvent — which
@@ -129,10 +133,25 @@ const api: BackstageApi = {
       subscribe<TerminalSession[]>('terminal:sessions', handler)
   },
 
+  threads: {
+    for: (agentId) => ipcRenderer.invoke('threads:for', agentId),
+    load: (threadId) => ipcRenderer.invoke('threads:load', threadId),
+    clear: (threadId) => ipcRenderer.invoke('threads:clear', threadId),
+    post: (agentId, prompt) => ipcRenderer.invoke('threads:post', agentId, prompt)
+  },
+
   sessions: {
     list: () => ipcRenderer.invoke('agentSession:list'),
+    lines: (sessionId) => ipcRenderer.invoke('agentSession:lines', sessionId),
+    send: (sessionId, text) => ipcRenderer.invoke('agentSession:send', sessionId, text),
+    interrupt: (sessionId) => ipcRenderer.invoke('agentSession:interrupt', sessionId),
+    rename: (sessionId, name) =>
+      ipcRenderer.invoke('agentSession:rename', sessionId, name),
+    setCharacter: (sessionId, slot) =>
+      ipcRenderer.invoke('agentSession:setCharacter', sessionId, slot),
     onChanged: (handler) =>
-      subscribe<AgentSession[]>('agentSession:changed', handler)
+      subscribe<AgentSession[]>('agentSession:changed', handler),
+    onLine: (handler) => subscribe<SessionLine>('agentSession:line', handler)
   },
 
   files: {

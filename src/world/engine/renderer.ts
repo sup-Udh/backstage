@@ -41,10 +41,30 @@ interface Mote {
   drift: number
 }
 
+/** A collaboration link between two characters in the room. */
+export interface WorldLink {
+  a: string
+  b: string
+  /** Briefly true just after the pair exchanged something. */
+  active: boolean
+}
+
+/** A connection being dragged out from a character but not yet dropped. */
+export interface PendingLink {
+  from: string
+  /** Cursor position in scene coordinates. */
+  x: number
+  y: number
+  /** The character under the cursor, if it is a legal target. */
+  target: string | null
+  /** True when the cursor is over something that cannot be connected. */
+  blocked: boolean
+}
+
 /**
- * Draws the office at logical resolution (320x160). The canvas is then
- * upscaled by CSS with image-rendering: pixelated, so the render loop only
- * ever touches ~51k pixels and nothing is ever interpolated.
+ * Draws the office at its logical resolution and lets the camera scale it by
+ * a whole number, so the render loop only ever touches scene pixels and
+ * nothing is ever interpolated.
  */
 export class WorldRenderer {
   private pal: ThemePalette
@@ -66,15 +86,22 @@ export class WorldRenderer {
       this.sheets.set(c.id, buildWorldSheet(c.appearance, this.pal.brand))
     }
 
-    // Dust drifting in the two window light shafts.
-    const columns = [
+    /*
+     * Dust drifting in the window light. The columns come from the scene, so
+     * a world's motes hang where that world's windows actually are — the
+     * positions used to be hard-coded to the first room ever built, which put
+     * dust in the middle of a blank wall in every theme added since.
+     */
+    const columns = scene.lightColumns ?? [
       [14, 54],
-      [276, 314]
+      [scene.width - 44, scene.width - 6]
     ]
-    for (let i = 0; i < 16; i++) {
-      const col = columns[i % 2]
+    const count = columns.length * 8
+    for (let i = 0; i < count; i++) {
+      const col = columns[i % columns.length]
+      const span = Math.max(1, col[1] - col[0])
       this.motes.push({
-        x: col[0] + ((i * 13) % (col[1] - col[0])),
+        x: col[0] + ((i * 13) % span),
         y: scene.horizon + 6 + ((i * 7) % 44),
         span: 26 + (i % 5) * 4,
         speed: 3 + (i % 4),

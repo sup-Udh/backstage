@@ -1,212 +1,164 @@
 import type { Op } from '../../../world/pixel/ops'
-import type { Prop, SceneDef, Spot } from '../../types'
+import type { Prop, SceneDef } from '../../types'
 import {
-  DESK_BASE,
-  SEAT_DX,
-  SEAT_DY,
+  composeOffice,
+  type OfficeGrid,
+  type WallSlot,
+  type ZoneFurnishing,
+  type ZoneRect
+} from '../../shared/office'
+import {
   boxStack,
   cabinet,
   chairBack,
-  clockFace,
   coffeeStation,
-  deskUnit,
-  evidenceBoard,
   meetingTable,
   plant,
   rug,
   shelfUnit,
   wallSign,
-  whiteboard,
   windowUnit
-} from './props'
+} from '../../shared/props'
+import {
+  doorway,
+  lockers,
+  noticeBoard,
+  sideTable,
+  stool,
+  taskChair
+} from '../../shared/furniture'
+import { evidenceBoard } from './props'
 
 /**
- * The office layout.
+ * The detective bureau.
  *
- * Logical size is 480x240 and it is only ever drawn at an integer scale, so
- * a pixel is always a whole number of screen pixels and nothing resamples.
+ * The original Backstage world, rebuilt on the shared office grid. Nothing
+ * here chooses a coordinate: the grid hands out five wall panels, seven
+ * workstations and three floor zones, and this file only decides that panel
+ * two is an evidence board rather than a whiteboard, and that the left zone
+ * is a case-review table rather than a kitchen.
  */
-export const SCENE_W = 480
-export const SCENE_H = 240
-export const HORIZON = 72
 
-/** Desk surface height, and the x of each desk's left edge. */
-const DESK_Y = 100
-const DESK_X = [8, 82, 156, 236, 310, 384]
-
-/* --------------------------------------------------------------- ground -- */
-
-function background(): Op[] {
-  const ops: Op[] = []
-
-  // Wall, lit from above so the room has a light direction.
-  ops.push([0, 0, SCENE_W, HORIZON, 'wall'])
-  ops.push([0, 0, SCENE_W, 18, 'wallLite'])
-  ops.push([0, HORIZON - 14, SCENE_W, 14, 'wallShade'])
-
-  // Skirting where the wall meets the floor.
-  ops.push([0, HORIZON - 5, SCENE_W, 5, 'ink'])
-  ops.push([0, HORIZON - 4, SCENE_W, 3, 'cream2'])
-  ops.push([0, HORIZON - 1, SCENE_W, 1, 'ink'])
-
-  // Floor.
-  ops.push([0, HORIZON, SCENE_W, SCENE_H - HORIZON, 'floor'])
-  for (let y = HORIZON + 7; y < SCENE_H; y += 9) {
-    ops.push([0, y, SCENE_W, 1, 'floorLine'])
+/** Wall panels, left to right: window, shelving, the board, notices, window. */
+function wall(slot: WallSlot): Op[] {
+  switch (slot.index) {
+    case 0:
+    case 4:
+      return windowUnit(slot.x, slot.y, slot.w, slot.h)
+    case 1:
+      return shelfUnit(slot.x + 12, slot.y, slot.w - 24)
+    case 2:
+      return evidenceBoard(slot.x, slot.y - 2, slot.w, slot.h + 6)
+    default:
+      return noticeBoard(slot.x, slot.y, slot.w, slot.h, 17)
   }
-  // Staggered board seams.
-  for (let y = HORIZON, row = 0; y < SCENE_H; y += 9, row++) {
-    for (let x = (row % 2) * 26; x < SCENE_W; x += 52) {
-      ops.push([x, y, 1, 8, 'floorAlt'])
-    }
-  }
-
-  // Light falling from the two windows
-  for (const [px, pw] of [
-    [16, 50],
-    [416, 50]
-  ]) {
-    for (let s = 0; s < 8; s++) {
-      ops.push([px - s, HORIZON + 1 + s * 3, pw + s * 2, 3, 'floorLit'])
-    }
-  }
-
-  // Rug under the meeting area.
-  ops.push(...rug(180, 180, 120, 40))
-  return ops
 }
 
-/* ---------------------------------------------------------------- props -- */
+function zone(z: ZoneRect): ZoneFurnishing {
+  // Left: the case-review table, where the team stands over the evidence.
+  if (z.index === 0) {
+    return {
+      props: [
+        { id: 'rug', ops: rug(z.cx - 74, z.baseY - 46, 148, 60), baseY: 0 },
+        { id: 'meeting-table', ops: meetingTable(z.cx - 29, z.baseY), baseY: z.baseY },
+        { id: 'chair-l', ops: taskChair(z.cx - 44, z.baseY - 4, 'down'), baseY: z.baseY - 5 },
+        { id: 'chair-r', ops: taskChair(z.cx + 44, z.baseY - 4, 'down'), baseY: z.baseY - 5 },
+        { id: 'chair-f', ops: taskChair(z.cx, z.baseY + 18, 'up'), baseY: z.baseY + 18 }
+      ]
+    }
+  }
 
-const desks = DESK_X.map((x, i) => deskUnit(x, DESK_Y, 100 + i * 17))
+  // Middle: the archive. Records, and a whiteboard on a stand beside them.
+  if (z.index === 1) {
+    return {
+      props: [
+        { id: 'cabinet-1', ops: cabinet(z.cx - 46, z.baseY), baseY: z.baseY },
+        { id: 'cabinet-2', ops: cabinet(z.cx - 20, z.baseY), baseY: z.baseY },
+        { id: 'boxes', ops: boxStack(z.cx + 14, z.baseY), baseY: z.baseY },
+        { id: 'plant-mid', ops: plant(z.cx + 46, z.baseY, 3), baseY: z.baseY }
+      ]
+    }
+  }
 
-/** Depths that both the layout and the renderer's overlays depend on. */
-const DESK_BASE_Y = DESK_Y + DESK_BASE
-const COFFEE_BASE_Y = 120
-const TABLE_BASE_Y = 210
+  // Right: coffee, and somewhere to stand while it brews.
+  const coffee = coffeeStation(z.cx - 26, z.baseY)
+  return {
+    props: [
+      { id: 'coffee', ops: coffee.ops, baseY: z.baseY },
+      { id: 'stool-1', ops: stool(z.cx - 40, z.baseY + 24), baseY: z.baseY + 24 },
+      { id: 'stool-2', ops: stool(z.cx + 12, z.baseY + 26), baseY: z.baseY + 26 }
+    ],
+    steam: [{ x: coffee.steam.x, y: coffee.steam.y, baseY: z.baseY }]
+  }
+}
 
 /**
- * Where a character sits at desk `i`. The seat is offset to the right of the
- * monitor and low enough that the desk, which sorts in front, hides their
- * legs from the waist down - which is what makes them read as seated.
+ * The pieces that make this room the bureau rather than a generic office:
+ * the door people arrive through, the signage, a lamp over each desk row, and
+ * a chair behind every seat so no workstation floats.
  */
-const deskSpots: Spot[] = DESK_X.map((x) => ({
-  x: x + SEAT_DX,
-  y: DESK_Y + SEAT_DY,
-  facing: 'down' as const
-}))
-
-function props(): Prop[] {
+function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
 
-  // Wall furniture never overlaps the cast, so it sorts above the horizon.
-  list.push({ id: 'window-l', ops: windowUnit(16, 12, 50, 40), baseY: 0 })
-  list.push({ id: 'shelf-1', ops: shelfUnit(82, 16, 38), baseY: 0 })
-  list.push({ id: 'board', ops: evidenceBoard(136, 10, 100, 48), baseY: 0 })
-  list.push({ id: 'whiteboard', ops: whiteboard(256, 16, 44, 34), baseY: 0 })
-  list.push({ id: 'shelf-2', ops: shelfUnit(316, 16, 38), baseY: 0 })
-  list.push({ id: 'clock', ops: clockFace(376, 22, 9), baseY: 0 })
-  list.push({ id: 'sign', ops: wallSign(370, 40), baseY: 0 })
-  list.push({ id: 'window-r', ops: windowUnit(416, 12, 50, 40), baseY: 0 })
+  // The way in, between the first two wall panels.
+  const doorX = Math.round((grid.wall[0].x + grid.wall[0].w + grid.wall[1].x) / 2) - 17
+  list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
-  // Chair backs sort just behind their occupant so they frame the sprite.
-  deskSpots.forEach((s, i) => {
-    list.push({ id: `chair-${i}`, ops: chairBack(s.x, s.y), baseY: s.y - 6 })
+  /*
+   * The signage goes under the evidence board, and the clock hangs on a
+   * different panel. Both used to be centred on the same one, which put a
+   * clock face behind the sign in every render.
+   */
+  list.push({
+    id: 'sign',
+    ops: wallSign(grid.wall[2].cx, grid.wall[2].y + grid.wall[2].h + 16),
+    baseY: 0
   })
 
-  desks.forEach((d, i) => {
-    list.push({ id: `desk-${i}`, ops: d.ops, baseY: d.baseY })
+  /*
+   * Every seat gets its chair, drawn just behind its occupant so it frames
+   * them and still stands up on its own at an empty desk.
+   */
+  for (const slot of grid.stations) {
+    const seat = { x: slot.x + 30, y: slot.y + 5 }
+    list.push({
+      id: `chair-${slot.index}`,
+      ops: chairBack(seat.x, seat.y),
+      baseY: seat.y - 6
+    })
+  }
+
+  // The side walls the grid keeps clear of the desks.
+  const [left, right] = grid.flanks
+  list.push({ id: 'lockers', ops: lockers(left.x, left.y, 3), baseY: left.y })
+  list.push({
+    id: 'case-board',
+    ops: noticeBoard(right.x - 4, right.y - 62, 46, 44, 55),
+    baseY: right.y
   })
+  list.push({ id: 'side-table', ops: sideTable(right.x + 4, right.y + 4), baseY: right.y + 4 })
 
-  const coffee = coffeeStation(410, 118)
-  list.push({ id: 'coffee', ops: coffee.ops, baseY: COFFEE_BASE_Y })
-
-  list.push({ id: 'boxes-1', ops: boxStack(20, 190), baseY: 190 })
-  list.push({ id: 'plant-1', ops: plant(70, 186, 3), baseY: 186 })
-  
-  list.push({ id: 'table', ops: meetingTable(210, 208), baseY: TABLE_BASE_Y })
-  
-  list.push({ id: 'cabinet-1', ops: cabinet(330, 186), baseY: 186 })
-  list.push({ id: 'cabinet-2', ops: cabinet(366, 186), baseY: 186 })
-  list.push({ id: 'plant-2', ops: plant(430, 200, 9), baseY: 200 })
+  list.push({ id: 'plant-l', ops: plant(14, grid.laneY + 4, 17), baseY: grid.laneY + 4 })
+  list.push({
+    id: 'plant-r',
+    ops: plant(grid.width - 26, grid.height - 26, 33),
+    baseY: grid.height - 26
+  })
+  list.push({ id: 'boxes-corner', ops: boxStack(grid.width - 34, grid.laneY + 8), baseY: grid.laneY + 8 })
 
   return list
 }
 
-/* ---------------------------------------------------------------- scene -- */
+export const detectiveScene: SceneDef = composeOffice({
+  floorStyle: 'planks',
+  wallStyle: 'plain',
+  wall,
+  zone,
+  accents,
+  clock: { slot: 3, r: 9 }
+})
 
-export const detectiveScene: SceneDef = {
-  width: SCENE_W,
-  height: SCENE_H,
-  horizon: HORIZON,
-
-  background: background(),
-  props: props(),
-
-  desks: deskSpots,
-
-  // Standing under the evidence board, backs to the viewer.
-  boardSpots: [
-    { x: 156, y: 106, facing: 'up' },
-    { x: 186, y: 106, facing: 'up' },
-    { x: 216, y: 106, facing: 'up' }
-  ],
-
-  talkSpots: [
-    [
-      { x: 90, y: 140, facing: 'right' },
-      { x: 114, y: 140, facing: 'left' }
-    ],
-    [
-      { x: 280, y: 142, facing: 'right' },
-      { x: 304, y: 142, facing: 'left' }
-    ],
-    [
-      { x: 50, y: 210, facing: 'right' },
-      { x: 74, y: 210, facing: 'left' }
-    ],
-    [
-      { x: 150, y: 200, facing: 'right' },
-      { x: 174, y: 200, facing: 'left' }
-    ],
-    [
-      { x: 370, y: 206, facing: 'right' },
-      { x: 394, y: 206, facing: 'left' }
-    ]
-  ],
-
-  coffeeSpots: [
-    { x: 420, y: 134, facing: 'up' },
-    { x: 440, y: 134, facing: 'up' },
-    { x: 460, y: 134, facing: 'up' }
-  ],
-
-  wanderSpots: [
-    { x: 40, y: 136, facing: 'right' },
-    { x: 140, y: 136, facing: 'down' },
-    { x: 200, y: 136, facing: 'right' },
-    { x: 240, y: 136, facing: 'left' },
-    { x: 340, y: 136, facing: 'down' },
-    { x: 80, y: 156, facing: 'down' },
-    { x: 170, y: 156, facing: 'up' },
-    { x: 260, y: 156, facing: 'down' },
-    { x: 310, y: 156, facing: 'right' },
-    { x: 390, y: 156, facing: 'left' },
-    { x: 110, y: 196, facing: 'down' },
-    { x: 280, y: 196, facing: 'left' },
-    { x: 310, y: 216, facing: 'right' },
-    { x: 410, y: 216, facing: 'up' }
-  ],
-
-  // The clear corridor between the desk row and the meeting area.
-  laneY: 165,
-
-  monitors: desks.map((d) => d.monitor),
-  deskBaseY: DESK_BASE_Y,
-  steamVents: [
-    { x: 440, y: 92, baseY: COFFEE_BASE_Y },
-    { x: 256, y: 187, baseY: TABLE_BASE_Y }
-  ],
-  leds: [...desks.map((d) => d.led), { x: 417, y: 89 }],
-  clock: { x: 376, y: 22, r: 9 }
-}
+/** Kept for the theme preview, which draws the room at its own size. */
+export const SCENE_W = detectiveScene.width
+export const SCENE_H = detectiveScene.height
+export const HORIZON = detectiveScene.horizon

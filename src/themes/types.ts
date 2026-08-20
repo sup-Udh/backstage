@@ -116,6 +116,16 @@ export interface SceneDef {
   leds: { x: number; y: number }[]
   /** Centre of the wall clock. */
   clock: { x: number; y: number; r: number }
+  /**
+   * Vertical shafts of light the room's windows throw, as [x0, x1] pairs.
+   *
+   * The renderer drifts dust through these. It used to assume where a world's
+   * windows were, which was true of the one room that existed when it was
+   * written and wrong for every world added afterwards — dust hung in the
+   * middle of a wall in half the themes. A scene now says where its own light
+   * falls.
+   */
+  lightColumns?: [number, number][]
 }
 
 export interface Theme {

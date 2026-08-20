@@ -144,7 +144,7 @@ export class OpenAIProvider implements AIProvider {
       }
     }
 
-    const response = await this.client.responses.create({
+    const params = {
       model: req.model,
       instructions: req.system,
       input,
@@ -155,7 +155,27 @@ export class OpenAIProvider implements AIProvider {
         parameters: { ...t.parameters, additionalProperties: false },
         strict: false
       }))
-    })
+    }
+
+    /*
+     * Streaming is used only when somebody is listening.
+     *
+     * The SDK's stream helper accumulates the same final response object as a
+     * non-streaming call, so everything below this point is identical either
+     * way — the difference is that the text has already reached the user by
+     * the time it resolves. `finalResponse()` still throws on a failed
+     * request, so error handling is unchanged too.
+     */
+    let response: OpenAI.Responses.Response
+    if (req.onDelta) {
+      const stream = this.client.responses.stream(params)
+      stream.on('response.output_text.delta', (event) => {
+        if (event.delta) req.onDelta!(event.delta)
+      })
+      response = await stream.finalResponse()
+    } else {
+      response = await this.client.responses.create(params)
+    }
 
     const toolCalls: ToolCall[] = []
     for (const item of response.output ?? []) {

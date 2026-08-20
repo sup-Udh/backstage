@@ -1,16 +1,33 @@
+import type { Op } from '../../world/pixel/ops'
 import type { Prop, SceneDef, ThemePalette } from '../types'
-import { backdrop, standardLayout } from '../shared/room'
+import {
+  composeOffice,
+  type OfficeGrid,
+  type WallSlot,
+  type ZoneFurnishing,
+  type ZoneRect
+} from '../shared/office'
 import {
   cabinet,
-  clockFace,
-  deskUnit,
+  chairBack,
+  coffeeStation,
   meetingTable,
   plant,
   wallSign,
   whiteboard,
-  coffeeStation
+  windowUnit
 } from '../shared/props'
-import { cubicle, poster, printer, waterCooler, bookcase } from '../shared/furniture'
+import {
+  cubicle,
+  doorway,
+  lockers,
+  noticeBoard,
+  poster,
+  printer,
+  stool,
+  taskChair,
+  waterCooler
+} from '../shared/furniture'
 
 /** Fluorescent beige, blue-grey cubicle fabric, hard-wearing carpet. */
 export const officePalette: ThemePalette = {
@@ -64,114 +81,117 @@ export const officePalette: ThemePalette = {
   steelDark: '#858B93'
 }
 
-const STATIONS = [30, 85, 140, 195, 250, 305]
-const STATION_Y = 100
-const HORIZON = 72
+/** Windows at the ends, motivational posters and the branch noticeboard. */
+function wall(slot: WallSlot): Op[] {
+  switch (slot.index) {
+    case 0:
+    case 4:
+      return windowUnit(slot.x, slot.y, slot.w, slot.h)
+    case 1:
+      return poster(slot.x + 14, slot.y, slot.w - 28, slot.h, 21)
+    case 2:
+      return whiteboard(slot.x + 6, slot.y, slot.w - 12, slot.h - 4)
+    default:
+      return noticeBoard(slot.x, slot.y, slot.w, slot.h, 42)
+  }
+}
 
-const desks = STATIONS.map((x, i) => deskUnit(x, STATION_Y, 320 + i * 11))
-const coffee = coffeeStation(390, 200)
+function zone(z: ZoneRect): ZoneFurnishing {
+  // Left: the conference table nobody wants to be summoned to.
+  if (z.index === 0) {
+    return {
+      props: [
+        { id: 'table', ops: meetingTable(z.cx - 29, z.baseY), baseY: z.baseY },
+        { id: 'chair-l', ops: taskChair(z.cx - 44, z.baseY - 4, 'down'), baseY: z.baseY - 5 },
+        { id: 'chair-r', ops: taskChair(z.cx + 44, z.baseY - 4, 'down'), baseY: z.baseY - 5 },
+        { id: 'chair-f1', ops: taskChair(z.cx - 16, z.baseY + 18, 'up'), baseY: z.baseY + 18 },
+        { id: 'chair-f2', ops: taskChair(z.cx + 16, z.baseY + 18, 'up'), baseY: z.baseY + 18 }
+      ]
+    }
+  }
 
-function props(): Prop[] {
+  // Middle: reprographics and the filing everybody pretends is somebody else's.
+  if (z.index === 1) {
+    return {
+      props: [
+        { id: 'printer', ops: printer(z.cx - 44, z.baseY), baseY: z.baseY },
+        { id: 'cabinet-1', ops: cabinet(z.cx - 10, z.baseY), baseY: z.baseY },
+        { id: 'cabinet-2', ops: cabinet(z.cx + 16, z.baseY), baseY: z.baseY },
+        { id: 'plant-mid', ops: plant(z.cx + 46, z.baseY, 55), baseY: z.baseY }
+      ]
+    }
+  }
+
+  // Right: the break area, which is where the branch actually happens.
+  const coffee = coffeeStation(z.cx - 26, z.baseY)
+  return {
+    props: [
+      { id: 'coffee', ops: coffee.ops, baseY: z.baseY },
+      { id: 'cooler', ops: waterCooler(z.cx + 34, z.baseY), baseY: z.baseY },
+      { id: 'stool-1', ops: stool(z.cx - 40, z.baseY + 24), baseY: z.baseY + 24 },
+      { id: 'stool-2', ops: stool(z.cx + 8, z.baseY + 26), baseY: z.baseY + 26 }
+    ],
+    steam: [{ x: coffee.steam.x, y: coffee.steam.y, baseY: z.baseY }]
+  }
+}
+
+/** The thing that makes this a branch office: cubicle walls around every desk. */
+function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
-  
-  // Wall elements (baseY = 0)
-  list.push({ id: 'whiteboard', ops: whiteboard(370, 14, 60, 36), baseY: 0 })
-  list.push({ id: 'sign', ops: wallSign(240, 26), baseY: 0 })
-  list.push({ id: 'clock', ops: clockFace(450, 26, 9), baseY: 0 })
-  list.push({ id: 'poster-1', ops: poster(40, 16, 36, 30, 21), baseY: 0 })
-  list.push({ id: 'poster-2', ops: poster(120, 16, 36, 30, 42), baseY: 0 })
-  list.push({ id: 'poster-3', ops: poster(300, 16, 36, 30, 9), baseY: 0 })
 
-  // Dividers and Desks
-  STATIONS.forEach((x, i) => {
-    list.push({ id: `cubicle-${i}`, ops: cubicle(x, 104, 55), baseY: 104 })
+  const doorX = Math.round((grid.wall[0].x + grid.wall[0].w + grid.wall[1].x) / 2) - 17
+  list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
+
+  list.push({
+    id: 'sign',
+    ops: wallSign(grid.wall[2].cx, grid.wall[2].y + grid.wall[2].h + 16),
+    baseY: 0
   })
-  desks.forEach((d, i) => list.push({ id: `desk-${i}`, ops: d.ops, baseY: d.baseY }))
 
-  // Office Equipment and Storage
-  list.push({ id: 'printer', ops: printer(446, 130), baseY: 130 })
-  list.push({ id: 'bookcase', ops: bookcase(10, 110, 20, 40), baseY: 110 })
-  list.push({ id: 'cabinet-1', ops: cabinet(360, 120), baseY: 120 })
-  list.push({ id: 'cabinet-2', ops: cabinet(385, 120), baseY: 120 })
-  
-  // Meeting Area
-  list.push({ id: 'table', ops: meetingTable(140, 210), baseY: 211 })
-  
-  // Break Area
-  list.push({ id: 'coffee-station', ops: coffee.ops, baseY: 200 })
-  list.push({ id: 'cooler', ops: waterCooler(360, 206), baseY: 206 })
-  
-  // Plants
-  list.push({ id: 'plant-1', ops: plant(16, 160, 17), baseY: 160 })
-  list.push({ id: 'plant-2', ops: plant(464, 220, 33), baseY: 220 })
-  list.push({ id: 'plant-3', ops: plant(90, 210, 55), baseY: 210 })
-  
+  for (const slot of grid.stations) {
+    /*
+     * A divider behind each station, sorted just behind the desk so it reads
+     * as the back wall of that cubicle rather than a panel floating in the
+     * room. This is the signature of the world and the reason its desks do
+     * not look like the detective bureau's.
+     */
+    list.push({
+      id: `cubicle-${slot.index}`,
+      ops: cubicle(slot.x - 2, slot.y - 2, 56),
+      baseY: slot.y - 3
+    })
+    const seat = { x: slot.x + 30, y: slot.y + 5 }
+    list.push({
+      id: `chair-${slot.index}`,
+      ops: chairBack(seat.x, seat.y),
+      baseY: seat.y - 6
+    })
+  }
+
+  const [left, right] = grid.flanks
+  list.push({ id: 'lockers', ops: lockers(left.x, left.y, 3), baseY: left.y })
+  list.push({
+    id: 'notice-r',
+    ops: noticeBoard(right.x - 4, right.y - 60, 46, 42, 88),
+    baseY: right.y
+  })
+  list.push({ id: 'cabinet-r', ops: cabinet(right.x + 6, right.y), baseY: right.y })
+
+  list.push({ id: 'plant-l', ops: plant(14, grid.laneY + 6, 17), baseY: grid.laneY + 6 })
+  list.push({
+    id: 'plant-r',
+    ops: plant(grid.width - 26, grid.height - 26, 33),
+    baseY: grid.height - 26
+  })
+
   return list
 }
 
-export const officeScene: SceneDef = {
-  width: 480,
-  height: 240,
-  horizon: HORIZON,
-  background: backdrop({
-    width: 480,
-    height: 240,
-    horizon: HORIZON,
-    floorStyle: 'carpet',
-    wallStyle: 'plain'
-  }),
-  props: props(),
-  ...standardLayout({ stations: STATIONS, stationY: STATION_Y, breakX: 420 }),
-  laneY: 160,
-  boardSpots: [
-    { x: 390, y: 100, facing: 'up' },
-    { x: 415, y: 100, facing: 'up' },
-    { x: 440, y: 100, facing: 'up' }
-  ],
-  talkSpots: [
-    [
-      { x: 106, y: 215, facing: 'right' },
-      { x: 130, y: 215, facing: 'left' }
-    ],
-    [
-      { x: 210, y: 215, facing: 'right' },
-      { x: 234, y: 215, facing: 'left' }
-    ],
-    [
-      { x: 60, y: 190, facing: 'right' },
-      { x: 84, y: 190, facing: 'left' }
-    ],
-    [
-      { x: 420, y: 150, facing: 'right' },
-      { x: 444, y: 150, facing: 'left' }
-    ],
-    [
-      { x: 280, y: 200, facing: 'right' },
-      { x: 304, y: 200, facing: 'left' }
-    ]
-  ],
-  coffeeSpots: [
-    { x: 400, y: 196, facing: 'up' },
-    { x: 430, y: 196, facing: 'up' },
-    { x: 360, y: 202, facing: 'up' }
-  ],
-  wanderSpots: [
-    { x: 40, y: 160, facing: 'down' },
-    { x: 80, y: 155, facing: 'up' },
-    { x: 120, y: 165, facing: 'left' },
-    { x: 160, y: 160, facing: 'right' },
-    { x: 200, y: 155, facing: 'down' },
-    { x: 240, y: 165, facing: 'up' },
-    { x: 280, y: 160, facing: 'left' },
-    { x: 320, y: 155, facing: 'right' },
-    { x: 360, y: 165, facing: 'down' },
-    { x: 100, y: 180, facing: 'right' },
-    { x: 260, y: 190, facing: 'left' },
-    { x: 340, y: 210, facing: 'up' },
-    { x: 450, y: 170, facing: 'down' }
-  ],
-  monitors: desks.map((d) => d.monitor),
-  steamVents: [{ x: coffee.steam.x, y: coffee.steam.y, baseY: 200 }],
-  leds: [...desks.map((d) => d.led), { x: 450, y: 118 }],
-  clock: { x: 450, y: 26, r: 9 }
-}
+export const officeScene: SceneDef = composeOffice({
+  floorStyle: 'carpet',
+  wallStyle: 'plain',
+  wall,
+  zone,
+  accents,
+  clock: { slot: 3, r: 9 }
+})

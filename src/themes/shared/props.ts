@@ -150,37 +150,87 @@ export const SEAT_DY = 5
 export interface DeskParts {
   ops: Op[]
   baseY: number
-  monitor: { x: number; y: number }
+  /**
+   * Every animated screen on this desk. A list rather than a single point
+   * because a workstation may carry a second monitor or a laptop, and the
+   * renderer animates whatever it is given without knowing which layout it
+   * came from.
+   */
+  monitors: { x: number; y: number }[]
   led: { x: number; y: number }
 }
 
 /**
- * A desk with monitor, lamp and clutter. `y` is the desk surface top.
+ * How a workstation is laid out.
  *
- * The monitor is deliberately parked at the left end rather than centred:
- * the occupant sits at SEAT_DX and the desk sorts in front of them, so a
- * centred monitor would cover the character's face. Clutter sits on the
+ * Four arrangements rather than one, because a row of identical desks reads
+ * as wallpaper. They are deliberately *arrangements* and not different desks:
+ * the body, the footprint and the seat are identical in every variant, so the
+ * layout grid stays uniform and a character sits the same way at any of them.
+ * Only what is standing on the surface changes.
+ */
+export type DeskVariant = 'single' | 'dual' | 'laptop' | 'paperwork'
+
+export const DESK_VARIANTS: DeskVariant[] = ['single', 'dual', 'laptop', 'paperwork']
+
+/**
+ * A desk with screens, lamp and clutter. `y` is the desk surface top.
+ *
+ * The primary monitor is deliberately parked at the left end rather than
+ * centred: the occupant sits at SEAT_DX and the desk sorts in front of them,
+ * so a centred monitor would cover the character's face. Clutter sits on the
  * surface itself, below the character's visible waistline, for the same
  * reason.
  */
-export function deskUnit(x: number, y: number, seed: number): DeskParts {
+export function deskUnit(
+  x: number,
+  y: number,
+  seed: number,
+  variant: DeskVariant = 'single'
+): DeskParts {
   const ops: Op[] = []
+  const monitors: { x: number; y: number }[] = []
 
-  // Monitor, left end.
+  // Primary monitor, left end. Present in every variant, so the desk always
+  // reads as a workstation whatever else is on it.
   ops.push([x + 10, y - 3, 3, 3, 'ink'])
   ops.push([x + 7, y - 1, 9, 2, 'ink'])
   ops.push([x + 2, y - 18, 19, 16, 'ink'])
   ops.push([x + 3, y - 17, 17, 13, 'screen'])
   ops.push([x + 3, y - 17, 17, 1, 'screenLite'])
   const led = { x: x + 17, y: y - 4 }
-  const monitor = { x: x + 3, y: y - 17 }
+  monitors.push({ x: x + 3, y: y - 17 })
 
-  // Desk lamp, right end: the yellow light source at floor level.
-  ops.push([x + 42, y - 3, 6, 3, 'ink'])
-  ops.push([x + 44, y - 13, 2, 10, 'ink'])
-  ops.push([x + 41, y - 18, 9, 5, 'ink'])
-  ops.push([x + 42, y - 17, 7, 3, 'brand'])
-  ops.push([x + 43, y - 14, 5, 1, 'brandLite'])
+  if (variant === 'dual') {
+    /*
+     * A second screen, angled in beside the first and one pixel shorter so
+     * the pair reads as two monitors rather than one wide one.
+     */
+    ops.push([x + 25, y - 3, 3, 3, 'ink'])
+    ops.push([x + 22, y - 1, 9, 2, 'ink'])
+    ops.push([x + 19, y - 16, 16, 14, 'ink'])
+    ops.push([x + 20, y - 15, 14, 11, 'screen'])
+    ops.push([x + 20, y - 15, 14, 1, 'screenLite'])
+    monitors.push({ x: x + 20, y: y - 15 })
+  } else if (variant === 'laptop') {
+    // An open laptop: lid, hinge and a lit keyboard deck.
+    ops.push([x + 23, y - 11, 14, 11, 'ink'])
+    ops.push([x + 24, y - 10, 12, 9, 'screen'])
+    ops.push([x + 24, y - 10, 12, 1, 'screenLite'])
+    ops.push([x + 21, y - 1, 18, 2, 'ink'])
+    ops.push([x + 22, y - 1, 16, 1, 'steel'])
+    monitors.push({ x: x + 24, y: y - 10 })
+  }
+
+  // Desk lamp, right end: the yellow light source at floor level. The
+  // paperwork desk does without one, so the row is not a line of lamps.
+  if (variant !== 'paperwork') {
+    ops.push([x + 42, y - 3, 6, 3, 'ink'])
+    ops.push([x + 44, y - 13, 2, 10, 'ink'])
+    ops.push([x + 41, y - 18, 9, 5, 'ink'])
+    ops.push([x + 42, y - 17, 7, 3, 'brand'])
+    ops.push([x + 43, y - 14, 5, 1, 'brandLite'])
+  }
 
   // Desk body.
   ops.push([x - 1, y - 1, DESK_W + 2, 17, 'ink'])
@@ -195,18 +245,31 @@ export function deskUnit(x: number, y: number, seed: number): DeskParts {
   ops.push([x + 1, y + 16, 3, 5, 'ink'])
   ops.push([x + DESK_W - 4, y + 16, 3, 5, 'ink'])
   ops.push([x - 2, y + 21, DESK_W + 4, 2, 'floorShadow'])
-  // Pool of lamplight on the surface, not a rectangle on the wall.
-  ops.push([x + 37, y + 1, 13, 2, 'brandPale'])
+  if (variant !== 'paperwork') {
+    // Pool of lamplight on the surface, not a rectangle on the wall.
+    ops.push([x + 37, y + 1, 13, 2, 'brandPale'])
+  }
+
+  if (variant === 'paperwork') {
+    // In place of the lamp: a leaning stack of files and an in-tray.
+    ops.push([x + 38, y - 9, 12, 9, 'ink'])
+    ops.push([x + 39, y - 8, 10, 3, 'paper'])
+    ops.push([x + 39, y - 5, 10, 3, 'cream2'])
+    ops.push([x + 39, y - 2, 10, 2, 'paper'])
+    ops.push([x + 40, y - 8, 8, 1, 'rust'])
+    ops.push([x + 24, y - 6, 10, 6, 'ink'])
+    ops.push([x + 25, y - 5, 8, 4, 'cork'])
+  }
 
   // Clutter, varied per desk so they do not read as clones.
   const rng = makeRng(seed)
-  if (rng() > 0.3) {
+  if (variant !== 'dual' && rng() > 0.3) {
     // Coffee mug, sitting on the surface.
     ops.push([x + 24, y, 6, 5, 'ink'])
     ops.push([x + 25, y + 1, 4, 3, 'white'])
     ops.push([x + 30, y + 1, 1, 2, 'ink'])
   }
-  if (rng() > 0.35) {
+  if (variant === 'single' && rng() > 0.35) {
     // Loose papers.
     ops.push([x + 34, y + 1, 9, 3, 'ink'])
     ops.push([x + 35, y + 2, 7, 1, 'paper'])
@@ -217,7 +280,7 @@ export function deskUnit(x: number, y: number, seed: number): DeskParts {
     ops.push([x + 19, y - 16, 4, 4, 'brand'])
   }
 
-  return { ops, baseY: y + DESK_BASE, monitor, led }
+  return { ops, baseY: y + DESK_BASE, monitors, led }
 }
 
 /**

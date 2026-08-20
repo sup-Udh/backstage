@@ -1,11 +1,12 @@
 import type { Theme } from '../../themes/types'
-import type { AgentConfig } from '../../shared/providerApi'
 import { bucketFor, STATUS_GLYPH } from '../../characters/character.states'
 import { ALL_AGENTS, useBackstage } from '../../stores/backstageStore'
-import { useTeam, spawnedAgents } from '../../stores/teamStore'
+import { groupWorkers, type Worker } from '../../agents/workers'
 
 interface Props {
   theme: Theme
+  workers: Worker[]
+  onSpawn: () => void
 }
 
 const BUCKETS = ['working', 'thinking', 'talking', 'idle'] as const
@@ -18,36 +19,28 @@ const BUCKETS = ['working', 'thinking', 'talking', 'idle'] as const
  * has to stay on screen while the surfaces below it change — the panel is a
  * tool, and a tool does not hide its own status bar.
  *
- * The counts come from the same per-agent runtime state the world renders
- * from, so "2 working" here and two characters typing next door are the same
- * two agents. The selector only changes which conversation is shown; it never
- * starts or stops anything.
+ * The list is every *worker*, which now means CLI sessions as well as
+ * configured agents. A Claude session the user started is something they can
+ * talk to, so it belongs here; leaving it out was the reason the terminal had
+ * to be the only way to reach it.
+ *
+ * Selecting only changes which conversation is shown. It never starts or
+ * stops anything.
  */
-export function TeamHeader({ theme }: Props) {
+export function TeamHeader({ theme, workers, onSpawn }: Props) {
   const target = useBackstage((s) => s.chatTarget)
   const setTarget = useBackstage((s) => s.setChatTarget)
-  const agentStates = useBackstage((s) => s.agentStates)
-  const agents = useTeam((s) => s.agents)
 
-  const present = spawnedAgents(agents)
+  void theme
 
   const counts: Record<string, number> = {}
-  for (const agent of present) {
-    const status = agentStates[agent.id]?.status ?? 'idle'
-    const bucket = bucketFor(status)
+  for (const worker of workers) {
+    const bucket = bucketFor(worker.status)
     counts[bucket] = (counts[bucket] ?? 0) + 1
   }
+  const errored = workers.filter((w) => w.status === 'error').length
 
-  const errored = present.filter(
-    (a) => agentStates[a.id]?.status === 'error'
-  ).length
-
-  /* The cast is chosen by slot, so the selector can only ever offer this
-     world's characters — never someone from a theme the user is not in. */
-  const characterName = (agent: AgentConfig) => {
-    const cast = theme.characters
-    return cast[((agent.characterSlot % cast.length) + cast.length) % cast.length].name
-  }
+  const groups = groupWorkers(workers)
 
   return (
     <header className="shrink-0 border-b-[3px] border-ink bg-cream px-3 py-2.5">
@@ -56,7 +49,7 @@ export function TeamHeader({ theme }: Props) {
           Your Team
         </h1>
         <span className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-ink-3">
-          <span className="text-ink">{present.length}</span> agents
+          <span className="text-ink">{workers.length}</span> working
         </span>
       </div>
 
@@ -101,14 +94,34 @@ export function TeamHeader({ theme }: Props) {
           className="min-w-0 flex-1 border-2 border-ink bg-paper px-2 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink outline-none focus:border-brand-deep"
         >
           <option value={ALL_AGENTS}>
-            All agents{present.length > 0 ? ` (${present.length})` : ''}
+            All agents{workers.length > 0 ? ` (${workers.length})` : ''}
           </option>
-          {present.map((agent) => (
-            <option key={agent.id} value={agent.id}>
-              {characterName(agent)} — {agent.role}
-            </option>
+          {/*
+            Grouped, and only for groups that exist — a user who has never
+            opened a terminal should not be shown an empty CLI SESSIONS
+            heading explaining a feature to them inside a dropdown.
+          */}
+          {groups.map((group) => (
+            <optgroup key={group.label} label={group.label.toUpperCase()}>
+              {group.workers.map((worker) => (
+                <option key={worker.id} value={worker.id}>
+                  {worker.name}
+                  {worker.role ? ` — ${worker.role}` : ''}
+                  {worker.busy ? ' ●' : ''}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
+
+        <button
+          type="button"
+          onClick={onSpawn}
+          title="Spawn a new agent"
+          className="shrink-0 border-2 border-ink bg-brand px-2 py-1 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-brand-lite"
+        >
+          + Spawn
+        </button>
       </div>
     </header>
   )

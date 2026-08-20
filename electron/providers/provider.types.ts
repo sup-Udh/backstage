@@ -64,6 +64,21 @@ export interface GenerateTurnRequest {
   system: string
   turns: Turn[]
   tools: ToolSpec[]
+  /**
+   * Called with each fragment of prose as it arrives.
+   *
+   * Optional on both sides: a caller that does not pass one gets the same
+   * single result it always did, and a provider whose SDK cannot stream can
+   * ignore it and still satisfy the interface. That keeps streaming a
+   * capability rather than a requirement — a new provider is not blocked from
+   * being added because it only supports whole responses.
+   *
+   * Only ever carries assistant prose. Tool calls are not streamed: a
+   * half-parsed set of arguments is not something the runtime could act on,
+   * and showing one to the user would be showing them a decision the model
+   * has not finished making.
+   */
+  onDelta?: (chunk: string) => void
 }
 
 export interface GenerateTurnResult {

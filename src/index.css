@@ -46,6 +46,20 @@
   --color-dim: #7a7a96;
 
   /*
+   * Failure and success, taken from the world palettes so a failed task is
+   * the same red in the office as it is in the panel.
+   *
+   * These were being used by components before they existed as tokens —
+   * `text-rust` appears in a dozen places and resolved to nothing, which is
+   * why every error message has been rendering in the default text colour on
+   * a border that was not there. Both are chosen against cream.
+   */
+  --color-rust: #a8512f;
+  --color-rust-lite: #c9683f;
+  --color-sage: #5c7a4c;
+  --color-sage-dark: #46603a;
+
+  /*
    * The three type tiers. Components pick a tier, never a family, so the
    * system can be retuned in one place.
    *

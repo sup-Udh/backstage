@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { teamRuntime } from '../agents/team'
 import { useBackstage, localId } from '../stores/backstageStore'
 import type { AgentSession } from '../shared/providerApi'
-import type { AgentStatus } from '../agents/agent.types'
+import { lifecycleForSession, workerIdFor } from '../agents/workers'
 
 /**
  * Real workspace events into the world and the session surfaces.
@@ -20,13 +20,12 @@ import type { AgentStatus } from '../agents/agent.types'
  * screen is still a running process, and the world must keep saying so.
  */
 
-/** Where CLI sessions are cast from, past the configured team's slots. */
-const CLI_SLOT_BASE = 4
-
 export function useWorkspaceEvents(): void {
   const ingestEvent = useBackstage((s) => s.ingestEvent)
   const setAgentSessions = useBackstage((s) => s.setAgentSessions)
   const setTerminalSessions = useBackstage((s) => s.setTerminalSessions)
+  const setSessionLines = useBackstage((s) => s.setSessionLines)
+  const pushSessionLine = useBackstage((s) => s.pushSessionLine)
   const known = useRef(new Map<string, string>())
 
   /* Mirror live PTY sessions, so every surface sees the same session list. */
@@ -49,51 +48,53 @@ export function useWorkspaceEvents(): void {
 
     return window.backstage.sessions.onChanged((sessions: AgentSession[]) => {
       for (const session of sessions) {
-        const agentId = `cli-${session.terminalSessionId}`
-        const name = (session.provider ?? 'cli').replace(/^./, (c) => c.toUpperCase())
+        const agentId = workerIdFor(session)
 
         if (!known.current.has(session.id)) {
           known.current.set(session.id, session.status)
           teamRuntime.registerExternal({
             id: agentId,
-            name,
+            name: session.name,
             role: 'CLI session',
             model: `${session.provider ?? 'cli'} cli`,
-            slot: CLI_SLOT_BASE + known.current.size
+            // The slot is assigned by the main process, which is the only
+            // place that knows how many sessions have existed this run.
+            slot: session.characterSlot
           })
           ingestEvent({
             id: localId('cli'),
             type: 'agent.activated',
             at: Date.now(),
             agentId,
-            agentName: name,
-            activity: `started a ${name} session in ${session.cwd.split(/[\\/]/).pop()}.`
+            agentName: session.name,
+            activity: `started in ${session.cwd.split(/[\\/]/).pop()}.`
           })
         }
+
+        /*
+         * The name and the character can change while a session runs — the
+         * user renames it, or recasts it — and neither is a status change, so
+         * both are applied on every update rather than only on arrival.
+         */
+        teamRuntime.updateExternal(agentId, {
+          name: session.name,
+          slot: session.characterSlot
+        })
 
         const previous = known.current.get(session.id)
         if (previous === session.status) continue
         known.current.set(session.id, session.status)
 
         /*
-         * The mapping is deliberately literal. A CLI session is working, or
-         * waiting for input, or over — there is no inference here that could
-         * leave a character animating for a process that has exited.
+         * The mapping is shared with the selector rather than written again
+         * here, so the world and the dropdown cannot describe the same
+         * session differently. It is deliberately literal: a session is
+         * working, or at its prompt, or over, and nothing infers a state that
+         * could leave a character animating for a process that has exited.
          */
-        const status: AgentStatus =
-          session.status === 'working'
-            ? 'working'
-            : session.status === 'waiting'
-              ? 'waiting'
-              : session.status === 'error'
-                ? 'error'
-                : session.status === 'starting'
-                  ? 'thinking'
-                  : 'idle'
-
         teamRuntime.setExternalStatus(
           agentId,
-          status,
+          lifecycleForSession(session.status),
           session.status === 'waiting'
             ? 'Waiting for you'
             : session.status === 'working'
@@ -109,16 +110,45 @@ export function useWorkspaceEvents(): void {
             type: 'agent.completed',
             at: Date.now(),
             agentId,
-            agentName: name,
+            agentName: session.name,
             activity:
               session.status === 'error'
                 ? 'session ended with an error.'
                 : 'session ended.'
           })
+          // A finished session leaves the office; its log stays in Tasks.
+          teamRuntime.removeExternal(agentId)
         }
       }
     })
   }, [ingestEvent])
+
+  /*
+   * The readable transcript of every CLI session.
+   *
+   * Subscribed here rather than in the chat panel so a session the user is
+   * not currently looking at still accumulates its output — switching to
+   * Claude 2 and back has to show what Claude 1 did in the meantime, and a
+   * subscription that unmounts with a tab would have missed it.
+   */
+  useEffect(() => {
+    if (!window.backstage?.sessions) return
+    return window.backstage.sessions.onLine(pushSessionLine)
+  }, [pushSessionLine])
+
+  /* Replay what a session printed before this window was listening. */
+  const agentSessions = useBackstage((s) => s.agentSessions)
+  const replayed = useRef(new Set<string>())
+  useEffect(() => {
+    if (!window.backstage?.sessions) return
+    for (const session of agentSessions) {
+      if (replayed.current.has(session.id)) continue
+      replayed.current.add(session.id)
+      void window.backstage.sessions
+        .lines(session.id)
+        .then((lines) => setSessionLines(session.id, lines))
+    }
+  }, [agentSessions, setSessionLines])
 
   /*
    * File changes made outside the app — including by an external CLI. These

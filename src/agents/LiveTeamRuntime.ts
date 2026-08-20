@@ -263,6 +263,30 @@ export class LiveTeamRuntime implements AgentRuntime {
     this.emit()
   }
 
+  /**
+   * Rename or recast a session that is already in the world.
+   *
+   * Separate from `setExternalStatus` because these are not status: a session
+   * renamed to "Auth review" or moved onto a different character has not
+   * started or stopped doing anything, and folding the two together would
+   * mean a rename could not be applied without also asserting a status.
+   */
+  updateExternal(id: string, patch: { name?: string; slot?: number }): void {
+    const body = this.find(id)
+    if (!body || !this.external.has(id)) return
+
+    let changed = false
+    if (patch.name !== undefined && patch.name !== body.name) {
+      body.name = patch.name
+      changed = true
+    }
+    if (patch.slot !== undefined && patch.slot !== body.slot) {
+      body.slot = patch.slot
+      changed = true
+    }
+    if (changed) this.emit()
+  }
+
   setExternalStatus(id: string, status: AgentStatus, task: string | null): void {
     const body = this.find(id)
     if (!body || !this.external.has(id)) return

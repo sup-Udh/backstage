@@ -47,11 +47,27 @@ const MAX_FRAMES = 4
  * at every zoom level and every window size — there is no size that is only
  * correct at one viewport.
  *
- * 0.6 rather than an arbitrary fraction because 20x30 x 0.6 is exactly 12x18:
- * both axes land on whole pixels and the 2:3 proportion is preserved exactly,
- * so nothing is stretched and no pixel is ever sampled between two others.
+ * ── Why exactly 0.5 ──
+ *
+ * The art is 20x30. Shrinking it is a nearest-neighbour resample, and that
+ * only stays clean when both axes land on whole pixels *and* the sampling
+ * grid is uniform — otherwise some source rows survive and their neighbours
+ * vanish, and a face loses an eye at one size and gains a smudge at another.
+ *
+ * That rules out most of the range. 0.45 would be a tidy-sounding 25% cut but
+ * gives 9 x 13.5: the height does not land, and worse, the sheet is 32 rows
+ * tall, so every row boundary after the first would fall on a half pixel and
+ * the frame grid itself would come apart. 0.5 gives 10x15 on an exact 2:1
+ * grid — every pair of source pixels becomes one, uniformly, everywhere.
+ *
+ * The other half of the reduction comes from the room. The world grew from
+ * 480x240 to 640x400 in the same pass, so a character went from occupying
+ * 7.5% of the room's height to 3.75% — the cast is half the size relative to
+ * the office it works in, which is the proportion that was actually wanted.
+ * Cutting the sprite alone to reach that would have meant 8x12, which is
+ * below the size at which these faces are still recognisable.
  */
-export const CHARACTER_SCALE = 0.6
+export const CHARACTER_SCALE = 0.5
 
 /** The character's footprint in the world, in scene pixels. */
 export const WORLD_SPRITE_W = Math.round(SPRITE_W * CHARACTER_SCALE)

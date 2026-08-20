@@ -15,12 +15,21 @@ import type {
 } from '../../src/shared/providerApi'
 import { CAPABILITIES } from '../../src/shared/capabilities'
 import {
+  connectAgents,
   deleteAgent,
+  disconnectAgents,
   getAgent,
   listAgents,
   setSpawned,
   upsertAgent
 } from '../agents/agentStore'
+import {
+  clearThread,
+  initThreads,
+  loadThread,
+  postToThread,
+  threadFor
+} from '../agents/threads'
 import { agentRegistry, validateAgent } from '../agents/AgentRegistry'
 import { orchestrator, wasRejected } from '../agents/AgentOrchestrator'
 import { initTriggerEngine } from '../agents/TriggerEngine'
@@ -84,6 +93,7 @@ function recipients(target: string | undefined): AgentConfig[] {
 
 export function registerAgentHandlers(): void {
   initTriggerEngine()
+  initThreads()
   agentRegistry.refreshAll()
 
   // One subscription for the whole renderer. Every surface listens to this.
@@ -285,6 +295,67 @@ export function registerAgentHandlers(): void {
 
   ipcMain.handle('agents:clearChat', (_e, ws: unknown, agentId: unknown): void =>
     conversationStore.clear(String(ws ?? ''), String(agentId ?? ''))
+  )
+
+  /* --------------------------------------------------- relationships -- */
+
+  /*
+   * Connecting is a roster-wide change: it alters what two agents may do to
+   * each other, so the whole registry is re-derived and every surface is told
+   * rather than only the two ends being patched locally.
+   */
+  ipcMain.handle('agents:connect', (_e, a: unknown, b: unknown) => {
+    const result = connectAgents(String(a ?? ''), String(b ?? ''))
+    if (result.ok) {
+      agentRegistry.refreshAll()
+      const from = getAgent(String(a ?? ''))
+      const to = getAgent(String(b ?? ''))
+      systemBus.emit({
+        type: 'agent.connected',
+        agentId: from?.id,
+        agentName: from?.name,
+        targetAgentId: to?.id,
+        targetAgentName: to?.name,
+        activity: `is now connected to ${to?.name ?? 'another agent'}.`
+      })
+    }
+    return { ...result, agents: listAgents() }
+  })
+
+  ipcMain.handle('agents:disconnect', (_e, a: unknown, b: unknown) => {
+    const from = getAgent(String(a ?? ''))
+    const to = getAgent(String(b ?? ''))
+    const result = disconnectAgents(String(a ?? ''), String(b ?? ''))
+    if (result.ok) {
+      agentRegistry.refreshAll()
+      systemBus.emit({
+        type: 'agent.disconnected',
+        agentId: from?.id,
+        agentName: from?.name,
+        targetAgentId: to?.id,
+        targetAgentName: to?.name,
+        activity: `is no longer connected to ${to?.name ?? 'another agent'}.`
+      })
+    }
+    return { ...result, agents: listAgents() }
+  })
+
+  /* ------------------------------------------------- collaboration threads -- */
+
+  ipcMain.handle('threads:for', (_e, agentId: unknown) =>
+    threadFor(String(agentId ?? ''))
+  )
+
+  ipcMain.handle('threads:load', (_e, threadId: unknown): ChatMessage[] =>
+    loadThread(String(threadId ?? ''))
+  )
+
+  ipcMain.handle('threads:clear', (_e, threadId: unknown): void =>
+    clearThread(String(threadId ?? ''))
+  )
+
+  ipcMain.handle('threads:post', (_e, agentId: unknown, prompt: unknown) =>
+    postToThread(String(agentId ?? ''), String(prompt ?? ''))
   )
 
   /* ------------------------------------------------------- shared state -- */

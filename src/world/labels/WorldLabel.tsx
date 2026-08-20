@@ -18,9 +18,9 @@ interface Props {
  *
  * A DOM element rather than something painted into the scene canvas, which is
  * the whole point: the browser renders it at the display's own resolution
- * instead of into a 320x160 buffer that then gets upscaled. Text is therefore
- * crisp at any zoom and on any device pixel ratio, without the canvas having
- * to know anything about either.
+ * instead of into a low-resolution scene buffer that then gets upscaled. Text
+ * is therefore crisp at any zoom and on any device pixel ratio, without the
+ * canvas having to know anything about either.
  *
  * Still pixel art in every other respect — Pixelify Sans, hard two-pixel ink
  * borders, no rounding, no blur, no shadows that soften an edge. It reads as a
@@ -68,10 +68,14 @@ export const WorldLabel = forwardRef<HTMLDivElement, Props>(function WorldLabel(
         fontSize,
         // Whole-pixel line box, so the plate height never lands on a half pixel.
         lineHeight: 1,
-        // Room to breathe: compressed pixel type turns into noise (#18).
-        letterSpacing: '0.08em',
-        padding: '0.15em 0.3em',
-        gap: '0.25em',
+        /*
+         * Tight, but not compressed. Pixel type turns into noise below about
+         * 0.05em, and the plate has to stay narrower than the character it
+         * belongs to — so the padding comes off before the tracking does.
+         */
+        letterSpacing: '0.06em',
+        padding: '0.1em 0.25em',
+        gap: '0.2em',
         willChange: 'transform'
       }}
     >

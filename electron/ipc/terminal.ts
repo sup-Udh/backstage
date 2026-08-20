@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { terminals } from '../terminal/TerminalSessionManager'
 import { agentSessions } from '../terminal/AgentSessionManager'
+import { sessionTranscripts } from '../terminal/sessionTranscript'
 import { fileWatcher, type FileChange } from '../workspace/FileWatcher'
 import { systemBus } from '../agents/EventBus'
 import { refreshGit } from '../workspace/awareness'
@@ -128,4 +129,65 @@ export function registerTerminalHandlers(): void {
   )
 
   ipcMain.handle('agentSession:list', () => agentSessions.list())
+
+  /* ---------------------------------------------- CLI sessions as agents -- */
+
+  sessionTranscripts.on('line', (line) => broadcast('agentSession:line', line))
+
+  ipcMain.handle('agentSession:lines', (_e, id: unknown) =>
+    typeof id === 'string' ? sessionTranscripts.lines(id) : []
+  )
+
+  ipcMain.handle('agentSession:rename', (_e, id: unknown, name: unknown) =>
+    agentSessions.rename(String(id ?? ''), String(name ?? ''))
+  )
+
+  ipcMain.handle('agentSession:setCharacter', (_e, id: unknown, slot: unknown) =>
+    agentSessions.setCharacter(String(id ?? ''), Number(slot))
+  )
+
+  /**
+   * Stop what a session is doing.
+   *
+   * An interrupt, not a kill: the CLI abandons its current turn and keeps its
+   * context, which is what "stop working" has to mean for something the user
+   * has been holding a conversation with. Ending the session outright is
+   * `terminal:close`, which is a different and louder decision.
+   */
+  ipcMain.handle('agentSession:interrupt', (_e, id: unknown) =>
+    agentSessions.interrupt(String(id ?? ''))
+  )
+
+  /**
+   * Send a message to a CLI session from the chat surface.
+   *
+   * This is the same stdin the keyboard writes to — there is one session, and
+   * the chat is another way into it rather than a parallel conversation with
+   * a copy. Whatever the user sends here appears in the terminal panel, and
+   * whatever they type in the terminal appears in the chat, because both are
+   * views of one process.
+   */
+  ipcMain.handle('agentSession:send', (_e, id: unknown, text: unknown) => {
+    const sessionId = String(id ?? '')
+    const message = String(text ?? '')
+    if (!message.trim()) return { ok: false, error: 'Empty message.' }
+
+    const session = agentSessions.get(sessionId)
+    if (!session || session.status === 'exited') {
+      return { ok: false, error: 'That session is no longer running.' }
+    }
+
+    /*
+     * Recorded before the write, so the user's own line is in the transcript
+     * even if the PTY rejects it — a message that visibly vanished would be
+     * worse than one shown next to an error.
+     */
+    sessionTranscripts.recordInput(sessionId, message)
+
+    const sent = terminals.write(
+      session.terminalSessionId,
+      `${message}${String.fromCharCode(13)}`
+    )
+    return sent ? { ok: true } : { ok: false, error: 'Could not reach that session.' }
+  })
 }

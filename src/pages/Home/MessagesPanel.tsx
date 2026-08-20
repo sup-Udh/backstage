@@ -6,7 +6,9 @@ import {
   useBackstage
 } from '../../stores/backstageStore'
 import { useTeam, spawnedAgents } from '../../stores/teamStore'
-import { ActivityRail } from '../../workspace/ActivityRail'
+import type { ChatMessage } from '../../shared/providerApi'
+import { activityLine, blocksFrom, type ToolBlock as Block } from '../../agents/toolActivity'
+import { ToolBlock } from './ToolBlock'
 
 interface Props {
   theme: Theme
@@ -21,6 +23,18 @@ const SUGGESTIONS = [
 ]
 
 /**
+ * One entry in the rendered conversation.
+ *
+ * The transcript on disk holds what was *said*; the tool ledger holds what was
+ * *done*. Both are real, both belong in the conversation, and neither is
+ * stored inside the other — so they are merged here, at render time, by the
+ * only thing they genuinely share: when they happened.
+ */
+type Entry =
+  | { kind: 'message'; at: number; key: string; message: ChatMessage }
+  | { kind: 'tools'; at: number; key: string; agentId: string; block: Block }
+
+/**
  * The transcript.
  *
  * Every line belongs to an agent. In one-to-one mode this is that agent's own
@@ -33,6 +47,8 @@ const SUGGESTIONS = [
 export function MessagesPanel({ theme, onSubmit }: Props) {
   const target = useBackstage((s) => s.chatTarget)
   const agentMessages = useBackstage((s) => s.agentMessages)
+  const agentTools = useBackstage((s) => s.agentTools)
+  const streaming = useBackstage((s) => s.streaming)
   const agentStates = useBackstage((s) => s.agentStates)
   const providers = useBackstage((s) => s.providers)
   const agents = useTeam((s) => s.agents)
@@ -43,25 +59,10 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
 
   const present = spawnedAgents(agents)
   const isBroadcast = target === ALL_AGENTS
-
-  const messages = useMemo(
-    () =>
-      transcriptFor(
-        { agentMessages },
-        target,
-        present.map((a) => a.id)
-      ),
-    [agentMessages, target, present]
+  const shown = useMemo(
+    () => (isBroadcast ? present.map((a) => a.id) : [target]),
+    [isBroadcast, present, target]
   )
-
-  const anyRunning = present.some(
-    (a) => agentStates[a.id]?.executionId !== null && agentStates[a.id] !== undefined
-  )
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [messages.length, target])
 
   /*
    * The configured name loses to the character's: this is the user's agent,
@@ -74,6 +75,9 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
     return cast[((config.characterSlot % cast.length) + cast.length) % cast.length].name
   }
 
+  const roleFor = (agentId?: string) =>
+    agents.find((a) => a.id === agentId)?.role ?? ''
+
   const modelFor = (agentId?: string) => {
     const config = agents.find((a) => a.id === agentId)
     if (!config) return ''
@@ -82,65 +86,113 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
     return [provider?.name, model].filter(Boolean).join(' · ')
   }
 
+  const messages = useMemo(
+    () => transcriptFor({ agentMessages }, target, present.map((a) => a.id)),
+    [agentMessages, target, present]
+  )
+
+  /*
+   * Messages and tool blocks, interleaved by time.
+   *
+   * A stable sort matters here: a tool call and the sentence that follows it
+   * routinely land in the same millisecond, and an unstable order would let
+   * an agent's conclusion jump above the work that produced it between one
+   * render and the next.
+   */
+  const entries = useMemo<Entry[]>(() => {
+    const list: Entry[] = messages.map((m) => ({
+      kind: 'message',
+      at: m.at,
+      key: m.id,
+      message: m
+    }))
+
+    for (const agentId of shown) {
+      for (const block of blocksFrom(agentTools[agentId] ?? [])) {
+        list.push({
+          kind: 'tools',
+          at: block.at,
+          key: `${agentId}:${block.id}`,
+          agentId,
+          block
+        })
+      }
+    }
+
+    return list
+      .map((entry, i) => ({ entry, i }))
+      .sort((a, b) => a.entry.at - b.entry.at || a.i - b.i)
+      .map(({ entry }) => entry)
+  }, [messages, agentTools, shown])
+
+  /*
+   * Stay pinned to the newest line, but only when the user is already there.
+   * Yanking the view down while somebody is reading back through a long
+   * investigation is worse than letting new output arrive off-screen.
+   */
+  const pinned = useRef(true)
+  const onScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+  }
+
+  // Follows the stream as well as new entries, so a long answer being typed
+  // out keeps its last line in view rather than growing off the bottom.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && pinned.current) el.scrollTop = el.scrollHeight
+  }, [entries.length, streaming, target])
+
+  // A new conversation always starts at the bottom.
+  useEffect(() => {
+    pinned.current = true
+  }, [target])
+
   /** The most recent failed task for an agent, so a retry has something to aim at. */
   const failedTaskFor = (agentId: string) =>
     tasks.find((t) => t.agentId === agentId && t.status === 'failed')
 
+  /** Whoever is mid-execution right now, and what they are actually doing. */
+  const working = shown
+    .map((id) => ({ id, state: agentStates[id] }))
+    .filter((a) => a.state?.executionId)
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* While anything is running, what the team is actually doing. */}
-      {anyRunning && <ActivityRail limit={3} />}
-
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        {messages.length === 0 ? (
-          <div>
-            <h2 className="font-ui text-xl font-extrabold uppercase leading-[1.1] tracking-[-0.02em] text-ink">
-              {present.length === 0 ? 'The office is empty.' : 'Your team is ready.'}
-            </h2>
-            <p className="mt-1.5 font-ui text-[13px] leading-[1.6] text-ink-3">
-              {present.length === 0
-                ? 'Spawn an agent and they walk into the world, ready for work.'
-                : 'Give an agent a task and watch them figure it out. You can talk to someone else while they work.'}
-            </p>
-
-            {present.length === 0 && (
-              <button
-                type="button"
-                onClick={() => useBackstage.getState().setPage('agents')}
-                className="mt-3 border-[3px] border-ink bg-brand px-4 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
-              >
-                Open Agents
-              </button>
-            )}
-
-            {present.length > 0 && (
-              <>
-                <p className="mt-4 font-pixel text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3">
-                  Try
-                </p>
-                <ul className="mt-1.5 flex flex-col gap-1.5">
-                  {SUGGESTIONS.map((s) => (
-                    <li key={s}>
-                      <button
-                        type="button"
-                        onClick={() => onSubmit(s)}
-                        className="w-full border-2 border-rule bg-paper px-2.5 py-1.5 text-left font-ui text-[12px] leading-snug text-ink-3 transition-colors hover:border-ink hover:bg-brand-pale hover:text-ink"
-                      >
-                        {s}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
+      >
+        {entries.length === 0 ? (
+          <Empty
+            present={present.length}
+            onSubmit={onSubmit}
+          />
         ) : (
           <ol className="flex flex-col gap-3">
-            {messages.map((message) => {
+            {entries.map((entry) => {
+              if (entry.kind === 'tools') {
+                return (
+                  <li key={entry.key}>
+                    {isBroadcast && (
+                      <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                        {nameFor(entry.agentId)}
+                      </p>
+                    )}
+                    <ToolBlock block={entry.block} />
+                  </li>
+                )
+              }
+
+              const message = entry.message
+
+              /* The user's own line: right-aligned, brand plate, no header. */
               if (message.kind === 'user') {
                 return (
-                  <li key={message.id} className="flex justify-end">
-                    <p className="max-w-[88%] border-2 border-ink bg-brand px-2.5 py-1.5 font-ui text-[12px] leading-[1.5] text-ink">
+                  <li key={entry.key} className="flex justify-end">
+                    <p className="max-w-[85%] border-2 border-ink bg-brand px-2.5 py-1.5 font-ui text-[12px] leading-[1.5] text-ink">
                       {message.text}
                     </p>
                   </li>
@@ -150,7 +202,7 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
               if (message.kind === 'system') {
                 const failed = failedTaskFor(message.agentId)
                 return (
-                  <li key={message.id}>
+                  <li key={entry.key}>
                     <div className="border-2 border-rust bg-paper px-2.5 py-1.5">
                       <p className="font-pixel text-[10px] font-semibold uppercase tracking-[0.1em] text-rust">
                         {isBroadcast ? `${nameFor(message.agentId)} — ` : ''}Failed
@@ -179,7 +231,7 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
                */
               if (message.kind === 'collaboration') {
                 return (
-                  <li key={message.id}>
+                  <li key={entry.key}>
                     <div className="border-l-2 border-brand-deep bg-brand-pale/40 py-1 pl-2.5">
                       <p className="font-mono text-[9px] uppercase tracking-[0.08em] text-brand-deep">
                         {message.fromName ?? 'A teammate'} →{' '}
@@ -193,17 +245,28 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
                 )
               }
 
+              /*
+               * The agent's own answer. A two-line header identifies who is
+               * speaking and what is behind them, then gets out of the way —
+               * the response is the thing worth reading, so it carries the
+               * larger type and the header is set small and quiet.
+               */
               return (
-                <li key={message.id}>
-                  <p className="flex flex-wrap items-baseline gap-x-2">
+                <li key={entry.key}>
+                  <p className="flex flex-wrap items-baseline gap-x-1.5 leading-none">
                     <span className="font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
                       {nameFor(message.agentId)}
                     </span>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-3">
-                      {modelFor(message.agentId)}
-                    </span>
+                    {roleFor(message.agentId) && (
+                      <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-3">
+                        · {roleFor(message.agentId)}
+                      </span>
+                    )}
                   </p>
-                  <p className="mt-0.5 whitespace-pre-wrap font-ui text-[12px] leading-[1.65] text-ink-3">
+                  <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-3">
+                    {modelFor(message.agentId)}
+                  </p>
+                  <p className="mt-1.5 whitespace-pre-wrap font-ui text-[12.5px] leading-[1.65] text-ink">
                     {message.text}
                   </p>
                 </li>
@@ -211,7 +274,118 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
             })}
           </ol>
         )}
+
+        {/*
+          The live foot of the transcript: what each busy agent is saying as
+          it says it, and what it is doing when it is not saying anything.
+
+          The streamed text is rendered in exactly the same type as a finished
+          answer, so the response does not visibly reflow when the real
+          message replaces it — only the caret disappears.
+        */}
+        {working.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-3">
+            {working.map(({ id, state }) => {
+              const partial = streaming[id]
+              return (
+                <li key={id}>
+                  {partial ? (
+                    <>
+                      <p className="flex flex-wrap items-baseline gap-x-1.5 leading-none">
+                        <span className="font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
+                          {nameFor(id)}
+                        </span>
+                        {roleFor(id) && (
+                          <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-3">
+                            · {roleFor(id)}
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-3">
+                        {modelFor(id)}
+                      </p>
+                      <p className="mt-1.5 whitespace-pre-wrap font-ui text-[12.5px] leading-[1.65] text-ink">
+                        {partial}
+                        <span
+                          aria-hidden
+                          className="blink ml-0.5 inline-block align-baseline text-brand-deep"
+                        >
+                          ▌
+                        </span>
+                      </p>
+                    </>
+                  ) : (
+                    <p className="flex items-center gap-1.5">
+                      <span
+                        aria-hidden
+                        className="blink font-mono text-[10px] text-brand-deep"
+                      >
+                        ✦
+                      </span>
+                      <span className="font-ui text-[11.5px] italic leading-snug text-ink-3">
+                        {activityLine(nameFor(id), state?.action ?? null)}
+                      </span>
+                    </p>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </div>
+    </div>
+  )
+}
+
+/** The empty state, split out so the transcript body stays readable. */
+function Empty({
+  present,
+  onSubmit
+}: {
+  present: number
+  onSubmit: (text: string) => void
+}) {
+  return (
+    <div>
+      <h2 className="font-ui text-xl font-extrabold uppercase leading-[1.1] tracking-[-0.02em] text-ink">
+        {present === 0 ? 'The office is empty.' : 'Your team is ready.'}
+      </h2>
+      <p className="mt-1.5 font-ui text-[13px] leading-[1.6] text-ink-3">
+        {present === 0
+          ? 'Spawn an agent and they walk into the world, ready for work.'
+          : 'Give an agent a task and watch them figure it out. You can talk to someone else while they work.'}
+      </p>
+
+      {present === 0 && (
+        <button
+          type="button"
+          onClick={() => useBackstage.getState().setPage('agents')}
+          className="mt-3 border-[3px] border-ink bg-brand px-4 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
+        >
+          Open Agents
+        </button>
+      )}
+
+      {present > 0 && (
+        <>
+          <p className="mt-4 font-pixel text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3">
+            Try
+          </p>
+          <ul className="mt-1.5 flex flex-col gap-1.5">
+            {SUGGESTIONS.map((s) => (
+              <li key={s}>
+                <button
+                  type="button"
+                  onClick={() => onSubmit(s)}
+                  className="w-full border-2 border-rule bg-paper px-2.5 py-1.5 text-left font-ui text-[12px] leading-snug text-ink-3 transition-colors hover:border-ink hover:bg-brand-pale hover:text-ink"
+                >
+                  {s}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   )
 }

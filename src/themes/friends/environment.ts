@@ -1,8 +1,30 @@
 import type { Op } from '../../world/pixel/ops'
 import type { Prop, SceneDef, ThemePalette } from '../types'
-import { backdrop, standardLayout } from '../shared/room'
-import { clockFace, deskUnit, plant, windowUnit, rug, coffeeStation } from '../shared/props'
-import { armchair, couch, kitchenCounter, poster, coffeeTable, bookcase } from '../shared/furniture'
+import {
+  composeOffice,
+  type OfficeGrid,
+  type WallSlot,
+  type ZoneFurnishing,
+  type ZoneRect
+} from '../shared/office'
+import {
+  chairBack,
+  coffeeStation,
+  plant,
+  rug,
+  windowUnit
+} from '../shared/props'
+import {
+  armchair,
+  bookcase,
+  coffeeTable,
+  couch,
+  doorway,
+  kitchenCounter,
+  poster,
+  sideTable,
+  stool
+} from '../shared/furniture'
 
 /** A warm sitcom apartment: purple walls, an orange couch, late afternoon. */
 export const friendsPalette: ThemePalette = {
@@ -56,13 +78,6 @@ export const friendsPalette: ThemePalette = {
   steelDark: '#847C93'
 }
 
-const STATIONS = [20, 94, 168, 242, 316, 390]
-const STATION_Y = 96
-const HORIZON = 72
-
-const desks = STATIONS.map((x, i) => deskUnit(x, STATION_Y, 210 + i * 13))
-const coffee = coffeeStation(380, 146)
-
 /** The apartment's signature: an empty gilt frame hung on the wall. */
 function giltFrame(x: number, y: number, w: number, h: number): Op[] {
   return [
@@ -73,116 +88,92 @@ function giltFrame(x: number, y: number, w: number, h: number): Op[] {
   ]
 }
 
-function background(): Op[] {
-  return backdrop({
-    width: 480,
-    height: 240,
-    horizon: HORIZON,
-    floorStyle: 'planks',
-    wallStyle: 'plain',
-    lightPools: [
-      [32, 44],
-      [112, 44],
-      [312, 44],
-      [392, 44]
-    ]
-  })
+/** Big apartment windows at the ends, art and the frame between them. */
+function wall(slot: WallSlot): Op[] {
+  switch (slot.index) {
+    case 0:
+    case 4:
+      return windowUnit(slot.x, slot.y, slot.w, slot.h)
+    case 2:
+      return giltFrame(slot.x + 18, slot.y - 2, slot.w - 36, slot.h + 6)
+    default:
+      return poster(slot.x + 16, slot.y, slot.w - 32, slot.h, slot.index * 17 + 5)
+  }
 }
 
-function props(): Prop[] {
+function zone(z: ZoneRect): ZoneFurnishing {
+  // Left: the living room. The couch everybody in the show sits on.
+  if (z.index === 0) {
+    return {
+      props: [
+        { id: 'rug', ops: rug(z.cx - 78, z.baseY - 50, 156, 66), baseY: 0 },
+        { id: 'couch', ops: couch(z.cx - 40, z.baseY, 80), baseY: z.baseY },
+        { id: 'coffee-table', ops: coffeeTable(z.cx - 16, z.baseY + 20), baseY: z.baseY + 20 },
+        { id: 'armchair', ops: armchair(z.cx + 52, z.baseY + 6), baseY: z.baseY + 6 }
+      ]
+    }
+  }
+
+  // Middle: the reading corner, keeping the floor between the two ends open.
+  if (z.index === 1) {
+    return {
+      props: [
+        { id: 'bookcase', ops: bookcase(z.cx - 44, z.baseY, 30, 54), baseY: z.baseY },
+        { id: 'side-table', ops: sideTable(z.cx + 2, z.baseY), baseY: z.baseY },
+        { id: 'plant-mid', ops: plant(z.cx + 44, z.baseY, 15), baseY: z.baseY }
+      ]
+    }
+  }
+
+  // Right: the kitchen, and the coffee that the whole theme is named after.
+  const coffee = coffeeStation(z.cx - 26, z.baseY)
+  return {
+    props: [
+      { id: 'kitchen', ops: kitchenCounter(z.cx - 52, z.baseY - 22, 104), baseY: z.baseY - 22 },
+      { id: 'coffee', ops: coffee.ops, baseY: z.baseY },
+      { id: 'stool-1', ops: stool(z.cx - 36, z.baseY + 24), baseY: z.baseY + 24 },
+      { id: 'stool-2', ops: stool(z.cx + 4, z.baseY + 26), baseY: z.baseY + 26 },
+      { id: 'stool-3', ops: stool(z.cx + 40, z.baseY + 24), baseY: z.baseY + 24 }
+    ],
+    steam: [{ x: coffee.steam.x, y: coffee.steam.y, baseY: z.baseY }]
+  }
+}
+
+function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
-  // Left Area: Living Space
-  list.push({ id: 'rug', ops: rug(30, 160, 200, 70), baseY: 0 })
-  list.push({ id: 'couch', ops: couch(110, 210, 80), baseY: 211 })
-  list.push({ id: 'armchair-1', ops: armchair(50, 190), baseY: 191 })
-  list.push({ id: 'armchair-2', ops: armchair(200, 200), baseY: 201 })
-  list.push({ id: 'coffee-table', ops: coffeeTable(120, 196), baseY: 197 })
-  
-  // Right Area: Kitchen
-  list.push({ id: 'kitchen', ops: kitchenCounter(270, 146, 100), baseY: 147 })
-  list.push({ id: 'coffee', ops: coffee.ops, baseY: 147 })
-  list.push({ id: 'bookcase', ops: bookcase(446, 120, 26, 50), baseY: 121 })
 
-  // Wall Decor & Windows
-  list.push({ id: 'window-1', ops: windowUnit(30, 14, 46, 34), baseY: 0 })
-  list.push({ id: 'window-2', ops: windowUnit(110, 14, 46, 34), baseY: 0 })
-  list.push({ id: 'poster-1', ops: poster(170, 16, 26, 26, 5), baseY: 0 })
-  list.push({ id: 'frame', ops: giltFrame(220, 18, 34, 30), baseY: 0 })
-  list.push({ id: 'poster-2', ops: poster(270, 14, 30, 24, 12), baseY: 0 })
-  list.push({ id: 'window-3', ops: windowUnit(310, 14, 46, 34), baseY: 0 })
-  list.push({ id: 'window-4', ops: windowUnit(390, 14, 46, 34), baseY: 0 })
-  list.push({ id: 'clock', ops: clockFace(460, 36, 8), baseY: 0 })
+  const doorX = Math.round((grid.wall[3].x + grid.wall[3].w + grid.wall[4].x) / 2) - 17
+  list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
-  // Desks
-  desks.forEach((d, i) => list.push({ id: `desk-${i}`, ops: d.ops, baseY: d.baseY }))
+  for (const slot of grid.stations) {
+    const seat = { x: slot.x + 30, y: slot.y + 5 }
+    list.push({
+      id: `chair-${slot.index}`,
+      ops: chairBack(seat.x, seat.y),
+      baseY: seat.y - 6
+    })
+  }
 
-  // Plants
-  list.push({ id: 'plant-1', ops: plant(14, 140, 6), baseY: 140 })
-  list.push({ id: 'plant-2', ops: plant(460, 210, 12), baseY: 210 })
-  list.push({ id: 'plant-3', ops: plant(250, 140, 15), baseY: 140 })
-  
+  const [left, right] = grid.flanks
+  list.push({ id: 'bookcase-l', ops: bookcase(left.x, left.y, 28, 52), baseY: left.y })
+  list.push({ id: 'armchair-r', ops: armchair(right.x + 8, right.y), baseY: right.y })
+  list.push({ id: 'side-table-r', ops: sideTable(right.x - 2, right.y + 22), baseY: right.y + 22 })
+
+  list.push({ id: 'plant-l', ops: plant(14, grid.laneY + 6, 6), baseY: grid.laneY + 6 })
+  list.push({
+    id: 'plant-r',
+    ops: plant(grid.width - 26, grid.height - 24, 12),
+    baseY: grid.height - 24
+  })
+
   return list
 }
 
-export const friendsScene: SceneDef = {
-  width: 480,
-  height: 240,
-  horizon: HORIZON,
-  background: background(),
-  props: props(),
-  ...standardLayout({ stations: STATIONS, stationY: STATION_Y }),
-  talkSpots: [
-    [
-      { x: 70, y: 170, facing: 'right' },
-      { x: 94, y: 170, facing: 'left' }
-    ],
-    [
-      { x: 230, y: 180, facing: 'right' },
-      { x: 254, y: 180, facing: 'left' }
-    ],
-    [
-      { x: 300, y: 180, facing: 'right' },
-      { x: 324, y: 180, facing: 'left' }
-    ],
-    [
-      { x: 380, y: 190, facing: 'right' },
-      { x: 404, y: 190, facing: 'left' }
-    ],
-    [
-      { x: 150, y: 140, facing: 'right' },
-      { x: 174, y: 140, facing: 'left' }
-    ]
-  ],
-  boardSpots: [
-    { x: 206, y: 104, facing: 'up' },
-    { x: 226, y: 104, facing: 'up' },
-    { x: 246, y: 104, facing: 'up' }
-  ],
-  coffeeSpots: [
-    { x: 370, y: 160, facing: 'up' },
-    { x: 390, y: 160, facing: 'up' },
-    { x: 410, y: 160, facing: 'up' }
-  ],
-  wanderSpots: [
-    { x: 40, y: 140, facing: 'down' },
-    { x: 90, y: 140, facing: 'down' },
-    { x: 140, y: 135, facing: 'down' },
-    { x: 200, y: 140, facing: 'down' },
-    { x: 260, y: 145, facing: 'left' },
-    { x: 280, y: 135, facing: 'down' },
-    { x: 320, y: 140, facing: 'down' },
-    { x: 360, y: 135, facing: 'down' },
-    { x: 420, y: 145, facing: 'down' },
-    { x: 440, y: 170, facing: 'left' },
-    { x: 280, y: 190, facing: 'up' },
-    { x: 180, y: 210, facing: 'up' },
-    { x: 50, y: 150, facing: 'right' },
-    { x: 130, y: 150, facing: 'right' },
-    { x: 450, y: 200, facing: 'up' }
-  ],
-  laneY: 150,
-  monitors: desks.map((d) => d.monitor),
-  steamVents: [{ ...coffee.steam, baseY: 147 }],
-  leds: [...desks.map((d) => d.led)],
-  clock: { x: 460, y: 36, r: 8 }
-}
+export const friendsScene: SceneDef = composeOffice({
+  floorStyle: 'planks',
+  wallStyle: 'plain',
+  wall,
+  zone,
+  accents,
+  clock: { slot: 3, r: 8 }
+})

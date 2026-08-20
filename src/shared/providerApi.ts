@@ -157,6 +157,53 @@ export interface AgentSession {
   startedAt: number
   endedAt?: number
   lastOutput?: string
+  /** "Claude 1" until the user renames it. Unique across live sessions. */
+  name: string
+  /** Which of the active theme's characters stands in for this session. */
+  characterSlot: number
+}
+
+/**
+ * One line of a CLI session's readable transcript.
+ *
+ * Reconstructed from the PTY's output by a small terminal emulator, because a
+ * full-screen CLI emits repaints rather than a conversation. `user` lines are
+ * what was sent in; `output` lines are what the process printed. Nothing here
+ * is interpreted — there is no attempt to label a line as "the assistant
+ * speaking", because that structure does not exist in the byte stream.
+ */
+export interface SessionLine {
+  id: string
+  sessionId: string
+  kind: 'user' | 'output'
+  text: string
+  at: number
+}
+
+/** Whether an operation on a session or a relationship succeeded. */
+export interface OkResult {
+  ok: boolean
+  error?: string
+}
+
+/* -------------------------------------------------------- relationships -- */
+
+export interface LinkResult extends OkResult {
+  /** The roster after the change, so the caller never has to refetch. */
+  agents: AgentConfig[]
+}
+
+/** A group of connected agents and the conversation they share. */
+export interface ThreadInfo {
+  id: string
+  members: string[]
+  names: string[]
+}
+
+export interface ThreadPostResult {
+  accepted: boolean
+  error?: string
+  rejected?: { agentId: string; error: string }[]
 }
 
 export interface FileChange {
@@ -250,8 +297,33 @@ export interface BackstageApi {
     collaboration(agentId?: string): Promise<CollaborationMessage[]>
     awareness(): Promise<AwarenessSnapshot>
 
+    /**
+     * Collaboration links, in both directions.
+     *
+     * The cap lives in the main process, so these can be refused. The UI
+     * checks too, but only so a button can grey out rather than fail — a
+     * limit enforced solely in the renderer is not enforced.
+     */
+    connect(a: string, b: string): Promise<LinkResult>
+    disconnect(a: string, b: string): Promise<LinkResult>
+
     /** Subscribe to runtime events. Returns an unsubscribe function. */
     onEvent(handler: (event: RuntimeEvent) => void): () => void
+  }
+
+  /**
+   * Shared conversations between connected agents.
+   *
+   * Kept apart from `agents.loadChat`, which is one agent's private memory.
+   * A thread is the group's, and neither ever becomes part of the other.
+   */
+  threads: {
+    /** The group this agent belongs to, or null if it has no connections. */
+    for(agentId: string): Promise<ThreadInfo | null>
+    load(threadId: string): Promise<ChatMessage[]>
+    clear(threadId: string): Promise<void>
+    /** Post into the group. Every member answers on its own queue. */
+    post(agentId: string, prompt: string): Promise<ThreadPostResult>
   }
 
   automation: {
@@ -283,9 +355,26 @@ export interface BackstageApi {
     onSessions(handler: (sessions: TerminalSession[]) => void): () => void
   }
 
+  /**
+   * External CLI agent sessions, as first-class workers.
+   *
+   * Everything here acts on the real process. `send` writes to the same stdin
+   * the keyboard does, and `interrupt` delivers a genuine SIGINT — there is
+   * one session, and the chat is another view of it rather than a separate
+   * conversation with a copy of it.
+   */
   sessions: {
     list(): Promise<AgentSession[]>
+    /** The readable transcript so far, for a panel opening mid-conversation. */
+    lines(sessionId: string): Promise<SessionLine[]>
+    /** Send a message to the session's stdin. */
+    send(sessionId: string, text: string): Promise<OkResult>
+    /** Interrupt the current turn. The session and its context survive. */
+    interrupt(sessionId: string): Promise<boolean>
+    rename(sessionId: string, name: string): Promise<OkResult>
+    setCharacter(sessionId: string, slot: number): Promise<boolean>
     onChanged(handler: (sessions: AgentSession[]) => void): () => void
+    onLine(handler: (line: SessionLine) => void): () => void
   }
 
   files: {

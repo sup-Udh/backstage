@@ -18,9 +18,18 @@ interface Hover {
   top: number
 }
 
-const MIN_SCALE = 1
-const MAX_SCALE = 6
-/** How far below the fold the world may run before it steps down a size. */
+/**
+ * The viewport the landing world is shown through, in CSS pixels.
+ *
+ * A window into the office rather than the whole floor plan. The room is now
+ * far larger than a page section can show at a zoom where anything is
+ * legible, so fitting all of it would mean drawing at 1x — every character
+ * ten pixels tall and the furniture unreadable. Framing a portion of a large
+ * room is also simply the better shot: it implies the space continues past
+ * the frame, which is exactly what the landing page is trying to say.
+ */
+const VIEW = { minW: 420, maxW: 1120, minH: 280, maxH: 560 }
+/** How far below the fold the world may run before it gives up height. */
 const BOTTOM_ALLOWANCE = 24
 
 /**
@@ -38,8 +47,6 @@ export function World({ theme, engine, switching = false }: Props) {
 
   const agents = useSyncExternalStore(engine.subscribeViews, engine.getViews)
 
-  const { width: sceneW, height: sceneH } = theme.scene
-
   // Start the loop once. The engine outlives re-renders.
   useEffect(() => {
     const canvas = canvasRef.current
@@ -50,17 +57,17 @@ export function World({ theme, engine, switching = false }: Props) {
 
 
   /*
-   * Size the world to the space actually available.
+   * Size the viewport to the space actually available.
    *
    * Width comes from the container and height from what is left of the
-   * viewport below the hero copy, so a short window gets a smaller world
-   * rather than one that runs off the bottom. The scale is always a whole
-   * number: a fractional one would put sprite edges between device pixels,
-   * which is exactly the blurring the art direction rules out.
+   * viewport below the hero copy, so a short window gets a shorter world
+   * rather than one that runs off the bottom.
    *
-   * The canvas backing store is then set to the room's exact size at that
-   * scale, so the camera fits it with no letterboxing and the aspect ratio
-   * can never distort.
+   * The canvas is deliberately *not* sized to the room. It is a fixed window
+   * that the engine's camera looks through, which is what lets the same
+   * office appear here and in the workspace at the same zoom, with the same
+   * character-to-furniture proportions, however differently the two are
+   * laid out on the page.
    */
   const measure = useCallback(() => {
     const el = wrapRef.current
@@ -69,30 +76,27 @@ export function World({ theme, engine, switching = false }: Props) {
 
     const top = el.getBoundingClientRect().top
     // A little overshoot is fine: the page scrolls, and insisting the world
-    // end exactly at the fold would shrink it a whole step for a few pixels.
+    // end exactly at the fold would cost it a visible slice for a few pixels.
     const availH = window.innerHeight - top + BOTTOM_ALLOWANCE
-    const next = Math.max(
-      MIN_SCALE,
-      Math.min(
-        MAX_SCALE,
-        Math.floor(el.clientWidth / sceneW),
-        Math.floor(availH / sceneH)
-      )
-    )
 
-    const w = sceneW * next
-    const h = sceneH * next
+    const w = Math.round(
+      Math.max(VIEW.minW, Math.min(VIEW.maxW, el.clientWidth))
+    )
+    const h = Math.round(Math.max(VIEW.minH, Math.min(VIEW.maxH, availH)))
+
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w
       canvas.height = h
       const ctx = canvas.getContext('2d')
       if (ctx) ctx.imageSmoothingEnabled = false
     }
-    // Without this the engine's camera has no idea how big its canvas is and
-    // draws the room at its default zoom into a mismatched buffer.
+    /*
+     * The engine aims itself the first time it learns its viewport, centring
+     * on the desks at the shared opening zoom. Calling `fit` here would
+     * override that and pull straight back out to the whole floor plan.
+     */
     engine.setViewport(w, h)
-    engine.fit()
-  }, [engine, sceneW, sceneH])
+  }, [engine])
 
   useEffect(() => {
     measure()

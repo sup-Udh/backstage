@@ -1,60 +1,78 @@
+import type { Op } from '../../world/pixel/ops'
 import type { Prop, SceneDef, ThemePalette } from '../types'
-import { backdrop } from '../shared/room'
-import { clockFace, deskUnit, plant, rug, windowUnit, whiteboard, shelfUnit, DESK_BASE, SEAT_DX, SEAT_DY } from '../shared/props'
+import {
+  composeOffice,
+  type OfficeGrid,
+  type WallSlot,
+  type ZoneFurnishing,
+  type ZoneRect
+} from '../shared/office'
+import {
+  chairBack,
+  coffeeStation,
+  plant,
+  rug,
+  whiteboard,
+  windowUnit
+} from '../shared/props'
 import {
   arcadeCabinet,
   armchair,
   coffeeTable,
   couch,
   crtSet,
+  doorway,
+  noticeBoard,
   poster,
-  stringLights
+  serverRack,
+  stringLights,
+  stool
 } from '../shared/furniture'
 
-/** A basement at night: wood panelling, navy dark, fairy lights, CRT glow. */
+/** A basement den in 1985: cold blues, string lights, CRT glow. */
 export const strangerPalette: ThemePalette = {
   brand: '#FFC94F',
   brandLite: '#FFE29A',
-  brandPale: '#F4E1AE',
-  brandDeep: '#D8983C',
-  brandShadow: '#A16A1E',
+  brandPale: '#F3E4BC',
+  brandDeep: '#D99A32',
+  brandShadow: '#9E6C18',
 
-  ink: '#12141F',
-  ink2: '#1F2434',
-  ink3: '#39415A',
+  ink: '#131523',
+  ink2: '#20243A',
+  ink3: '#383E5C',
 
-  cream: '#E2DCCC',
-  cream2: '#C7C0AE',
-  white: '#F2EEE2',
+  cream: '#DDD9E6',
+  cream2: '#C2BDD2',
+  white: '#F2F0F8',
 
-  wall: '#2E3550',
-  wallLite: '#3B4466',
-  wallShade: '#232941',
+  wall: '#2E3450',
+  wallLite: '#3B4262',
+  wallShade: '#232840',
 
-  floor: '#6B5340',
-  floorLit: '#7E6450',
-  floorAlt: '#5D4736',
-  floorLine: '#4B392B',
-  floorShadow: '#382A20',
+  floor: '#4A4356',
+  floorLit: '#5A5268',
+  floorAlt: '#413B4C',
+  floorLine: '#332E3D',
+  floorShadow: '#262230',
 
-  wood: '#7A5A3C',
-  woodDark: '#553F29',
-  woodLite: '#9A7550',
+  wood: '#6E5540',
+  woodDark: '#4E3B2C',
+  woodLite: '#8C6E52',
 
-  screen: '#101726',
-  screenLite: '#1E2C42',
+  screen: '#101828',
+  screenLite: '#1C2A44',
 
-  sage: '#5F8F6A',
-  sageDark: '#436A4C',
-  sageLite: '#84B58E',
+  sage: '#4E8C6A',
+  sageDark: '#356148',
+  sageLite: '#6DB08A',
 
-  rust: '#B03A3A',
-  cork: '#8A6A46',
-  corkDark: '#684F34',
+  rust: '#C0392B',
+  cork: '#8E7350',
+  corkDark: '#6A563B',
 
-  accent: '#B03A3A',
-  accentLite: '#D25757',
-  accentDark: '#7E2626',
+  accent: '#C0392B',
+  accentLite: '#E05B4A',
+  accentDark: '#8C2418',
 
   paper: '#EDE7D6',
   paperShade: '#CDC5B0',
@@ -63,110 +81,115 @@ export const strangerPalette: ThemePalette = {
   steelDark: '#5C6479'
 }
 
-const STATIONS = [30, 100, 170, 240, 310, 380]
-const STATION_Y = 100
-const HORIZON = 72
+/** One high basement window, the map wall, and a lot of pinned paper. */
+function wall(slot: WallSlot): Op[] {
+  switch (slot.index) {
+    case 0:
+    case 4:
+      return windowUnit(slot.x, slot.y, slot.w, slot.h)
+    case 2:
+      return whiteboard(slot.x + 6, slot.y, slot.w - 12, slot.h - 4)
+    case 1:
+      return noticeBoard(slot.x, slot.y, slot.w, slot.h, 77)
+    default:
+      return poster(slot.x + 14, slot.y, slot.w - 28, slot.h, 105)
+  }
+}
 
-const desks = STATIONS.map((x, i) => deskUnit(x, STATION_Y, 510 + i * 23))
+function zone(z: ZoneRect): ZoneFurnishing {
+  // Left: the arcade wall. The reason anybody comes down here.
+  if (z.index === 0) {
+    return {
+      props: [
+        { id: 'arcade-1', ops: arcadeCabinet(z.cx - 62, z.baseY), baseY: z.baseY },
+        { id: 'arcade-2', ops: arcadeCabinet(z.cx - 30, z.baseY - 4), baseY: z.baseY - 4 },
+        { id: 'arcade-3', ops: arcadeCabinet(z.cx + 2, z.baseY), baseY: z.baseY },
+        { id: 'stool', ops: stool(z.cx + 44, z.baseY + 20), baseY: z.baseY + 20 }
+      ],
+      leds: [
+        { x: z.cx - 54, y: z.baseY - 30 },
+        { x: z.cx - 22, y: z.baseY - 34 },
+        { x: z.cx + 10, y: z.baseY - 30 }
+      ]
+    }
+  }
 
-function props(): Prop[] {
+  // Middle: the blanket fort, which is where the actual plotting happens.
+  if (z.index === 1) {
+    return {
+      props: [
+        { id: 'rug', ops: rug(z.cx - 74, z.baseY - 48, 148, 62), baseY: 0 },
+        { id: 'couch', ops: couch(z.cx - 44, z.baseY, 62), baseY: z.baseY },
+        { id: 'coffee-table', ops: coffeeTable(z.cx - 14, z.baseY + 20), baseY: z.baseY + 20 },
+        { id: 'armchair', ops: armchair(z.cx + 40, z.baseY + 4), baseY: z.baseY + 4 }
+      ]
+    }
+  }
+
+  // Right: the radio bench and enough hardware to reach the Upside Down.
+  const coffee = coffeeStation(z.cx - 26, z.baseY)
+  const rack = serverRack(z.cx + 34, z.baseY, 44)
+  return {
+    props: [
+      { id: 'coffee', ops: coffee.ops, baseY: z.baseY },
+      { id: 'rack', ops: rack.ops, baseY: z.baseY },
+      { id: 'crt', ops: crtSet(z.cx - 20, z.baseY - 20), baseY: z.baseY - 0.5 }
+    ],
+    steam: [{ x: coffee.steam.x, y: coffee.steam.y, baseY: z.baseY }],
+    leds: rack.leds
+  }
+}
+
+/**
+ * Fairy lights strung the whole way across the wall — the one thing that has
+ * to be there for the room to read as this world at all.
+ */
+function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
-  
-  // Window on left
-  list.push({ id: 'window', ops: windowUnit(20, 10, 60, 50), baseY: 0 })
-  
-  // Wider string lights across full wall.
-  list.push({ id: 'lights-1', ops: stringLights(0, 8, 240, 77), baseY: 0 })
-  list.push({ id: 'lights-2', ops: stringLights(240, 8, 240, 88), baseY: 0 })
-  
-  // Map wall area
-  list.push({ id: 'map-board', ops: whiteboard(100, 20, 80, 40), baseY: 0 })
-  list.push({ id: 'clock', ops: clockFace(200, 34, 7), baseY: 0 })
-  
-  // Additional posters
-  list.push({ id: 'poster-1', ops: poster(230, 24, 30, 26, 61), baseY: 0 })
-  list.push({ id: 'poster-2', ops: poster(270, 26, 34, 24, 72), baseY: 0 })
-  list.push({ id: 'poster-3', ops: poster(320, 20, 24, 34, 83), baseY: 0 })
-  list.push({ id: 'poster-4', ops: poster(360, 24, 30, 26, 94), baseY: 0 })
-  list.push({ id: 'poster-5', ops: poster(410, 26, 32, 24, 105), baseY: 0 })
 
-  desks.forEach((d, i) => list.push({ id: `desk-${i}`, ops: d.ops, baseY: d.baseY }))
+  list.push({ id: 'lights-l', ops: stringLights(0, 6, grid.width >> 1, 77), baseY: 0 })
+  list.push({
+    id: 'lights-r',
+    ops: stringLights(grid.width >> 1, 6, grid.width >> 1, 88),
+    baseY: 0
+  })
 
-  // Arcade cabinets
-  list.push({ id: 'arcade-1', ops: arcadeCabinet(30, 150), baseY: 150 })
-  list.push({ id: 'arcade-2', ops: arcadeCabinet(62, 144), baseY: 144 })
-  list.push({ id: 'arcade-3', ops: arcadeCabinet(94, 150), baseY: 150 })
+  const doorX = Math.round((grid.wall[3].x + grid.wall[3].w + grid.wall[4].x) / 2) - 17
+  list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
-  // Radio corner
-  list.push({ id: 'radio-shelf', ops: shelfUnit(380, 120, 40), baseY: 152 })
-  list.push({ id: 'crt-table', ops: coffeeTable(425, 150), baseY: 149 })
-  list.push({ id: 'crt', ops: crtSet(431, 148), baseY: 148 })
+  for (const slot of grid.stations) {
+    const seat = { x: slot.x + 30, y: slot.y + 5 }
+    list.push({
+      id: `chair-${slot.index}`,
+      ops: chairBack(seat.x, seat.y),
+      baseY: seat.y - 6
+    })
+  }
 
-  // Blanket/fort area with rug
-  list.push({ id: 'fort-rug', ops: rug(180, 160, 120, 70), baseY: 0 })
-  list.push({ id: 'fort-couch', ops: couch(190, 190, 50), baseY: 190 })
-  list.push({ id: 'fort-armchair', ops: armchair(270, 190), baseY: 190 })
+  const [left, right] = grid.flanks
+  list.push({
+    id: 'notice-l',
+    ops: noticeBoard(left.x, left.y - 58, 44, 42, 51),
+    baseY: left.y
+  })
+  list.push({ id: 'stool-l', ops: stool(left.x + 20, left.y), baseY: left.y })
+  list.push({ id: 'arcade-r', ops: arcadeCabinet(right.x + 8, right.y), baseY: right.y })
 
-  list.push({ id: 'plant-1', ops: plant(140, 160, 37), baseY: 160 })
-  list.push({ id: 'plant-2', ops: plant(350, 180, 42), baseY: 180 })
+  list.push({ id: 'plant-l', ops: plant(14, grid.laneY + 6, 37), baseY: grid.laneY + 6 })
+  list.push({
+    id: 'plant-r',
+    ops: plant(grid.width - 26, grid.height - 24, 42),
+    baseY: grid.height - 24
+  })
 
   return list
 }
 
-export const strangerScene: SceneDef = {
-  width: 480,
-  height: 240,
-  horizon: HORIZON,
-  background: backdrop({
-    width: 480,
-    height: 240,
-    horizon: HORIZON,
-    floorStyle: 'concrete',
-    wallStyle: 'stripe'
-  }),
-  props: props(),
-  desks: STATIONS.map((x) => ({
-    x: x + SEAT_DX,
-    y: STATION_Y + SEAT_DY,
-    facing: 'down'
-  })),
-  deskBaseY: STATION_Y + DESK_BASE,
-  boardSpots: [
-    { x: 110, y: 90, facing: 'up' },
-    { x: 140, y: 90, facing: 'up' },
-    { x: 170, y: 90, facing: 'up' }
-  ],
-  talkSpots: [
-    [{ x: 40, y: 190, facing: 'right' }, { x: 64, y: 190, facing: 'left' }],
-    [{ x: 140, y: 180, facing: 'right' }, { x: 164, y: 180, facing: 'left' }],
-    [{ x: 220, y: 200, facing: 'right' }, { x: 244, y: 200, facing: 'left' }],
-    [{ x: 300, y: 195, facing: 'right' }, { x: 324, y: 195, facing: 'left' }],
-    [{ x: 380, y: 180, facing: 'right' }, { x: 404, y: 180, facing: 'left' }]
-  ],
-  coffeeSpots: [
-    { x: 430, y: 180, facing: 'up' },
-    { x: 450, y: 180, facing: 'up' },
-    { x: 410, y: 170, facing: 'up' }
-  ],
-  wanderSpots: [
-    { x: 40, y: 170, facing: 'down' },
-    { x: 100, y: 175, facing: 'down' },
-    { x: 180, y: 160, facing: 'right' },
-    { x: 260, y: 155, facing: 'left' },
-    { x: 340, y: 160, facing: 'up' },
-    { x: 420, y: 165, facing: 'down' },
-    { x: 60, y: 210, facing: 'right' },
-    { x: 120, y: 205, facing: 'left' },
-    { x: 200, y: 215, facing: 'down' },
-    { x: 280, y: 210, facing: 'down' },
-    { x: 360, y: 205, facing: 'left' },
-    { x: 440, y: 210, facing: 'up' },
-    { x: 80, y: 185, facing: 'right' },
-    { x: 320, y: 175, facing: 'left' }
-  ],
-  laneY: 135,
-  monitors: desks.map((d) => d.monitor),
-  steamVents: [],
-  leds: [...desks.map((d) => d.led), { x: 46, y: 110 }, { x: 78, y: 104 }], // Extra LEDs for arcades
-  clock: { x: 200, y: 34, r: 7 }
-}
+export const strangerScene: SceneDef = composeOffice({
+  floorStyle: 'concrete',
+  wallStyle: 'stripe',
+  wall,
+  zone,
+  accents,
+  clock: { slot: 3, r: 8 }
+})
