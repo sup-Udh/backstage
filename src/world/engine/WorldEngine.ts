@@ -301,20 +301,23 @@ export class WorldEngine {
    */
   getLabelAnchors(): LabelAnchor[] {
     const { x: camX, y: camY, scale } = this.cam
+    const offX = Math.round(camX * scale)
+    const offY = Math.round(camY * scale)
     return this.chars.map((c) => {
-      const x = Math.round((c.x - camX) * scale)
-      const head = Math.round((c.y - WORLD_SPRITE_H - camY) * scale)
-      const feet = Math.round((c.y - camY) * scale)
+      const cx = Math.round(c.x) * scale - offX
+      const cy = Math.round(c.y) * scale - offY
+      const head = cy - WORLD_SPRITE_H * scale
+      const feet = cy
       return {
         agentId: c.agentId,
-        x,
+        x: cx,
         head,
         feet,
         // A margin either side, so a label does not pop as its character
         // walks past the edge of the viewport.
         onScreen:
-          x > -MARGIN &&
-          x < this.viewW + MARGIN &&
+          cx > -MARGIN &&
+          cx < this.viewW + MARGIN &&
           feet > -MARGIN &&
           head < this.viewH + MARGIN
       }

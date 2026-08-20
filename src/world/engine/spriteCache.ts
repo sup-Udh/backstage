@@ -67,7 +67,7 @@ const MAX_FRAMES = 4
  * Cutting the sprite alone to reach that would have meant 8x12, which is
  * below the size at which these faces are still recognisable.
  */
-export const CHARACTER_SCALE = 0.5
+export const CHARACTER_SCALE = 0.8
 
 /** The character's footprint in the world, in scene pixels. */
 export const WORLD_SPRITE_W = Math.round(SPRITE_W * CHARACTER_SCALE)
