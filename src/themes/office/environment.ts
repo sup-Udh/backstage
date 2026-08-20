@@ -1,7 +1,11 @@
-import type { Op } from '../../world/pixel/ops'
+﻿import type { Op } from '../../world/pixel/ops'
 import type { Prop, SceneDef, ThemePalette } from '../types'
 import {
-  composeOffice,
+  ROOM_H,
+  ROOM_W,
+  centreSlot,
+  doorwayX,
+  sceneFactory,
   type OfficeGrid,
   type WallSlot,
   type ZoneFurnishing,
@@ -81,19 +85,22 @@ export const officePalette: ThemePalette = {
   steelDark: '#858B93'
 }
 
-/** Windows at the ends, motivational posters and the branch noticeboard. */
+/**
+ * Windows at the ends, the whiteboard in the middle, motivational posters and
+ * the branch noticeboard between. Described by role rather than index: the
+ * room decides how many panels it has, and the whiteboard is what makes this a
+ * branch office rather than a corridor.
+ */
 function wall(slot: WallSlot): Op[] {
-  switch (slot.index) {
-    case 0:
-    case 4:
-      return windowUnit(slot.x, slot.y, slot.w, slot.h)
-    case 1:
-      return poster(slot.x + 14, slot.y, slot.w - 28, slot.h, 21)
-    case 2:
-      return whiteboard(slot.x + 6, slot.y, slot.w - 12, slot.h - 4)
-    default:
-      return noticeBoard(slot.x, slot.y, slot.w, slot.h, 42)
+  if (slot.isFirst || slot.isLast) {
+    return windowUnit(slot.x, slot.y, slot.w, slot.h)
   }
+  if (slot.isCentre) {
+    return whiteboard(slot.x + 6, slot.y, slot.w - 12, slot.h - 4)
+  }
+  return slot.index % 2 === 1
+    ? poster(slot.x + 14, slot.y, slot.w - 28, slot.h, 21)
+    : noticeBoard(slot.x, slot.y, slot.w, slot.h, 42)
 }
 
 function zone(z: ZoneRect): ZoneFurnishing {
@@ -139,12 +146,12 @@ function zone(z: ZoneRect): ZoneFurnishing {
 function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
 
-  const doorX = Math.round((grid.wall[0].x + grid.wall[0].w + grid.wall[1].x) / 2) - 17
+  const doorX = doorwayX(grid, 'left')
   list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
   list.push({
     id: 'sign',
-    ops: wallSign(grid.wall[2].cx, grid.wall[2].y + grid.wall[2].h + 16),
+    ops: wallSign(centreSlot(grid).cx, centreSlot(grid).y + centreSlot(grid).h + 16),
     baseY: 0
   })
 
@@ -187,7 +194,13 @@ function accents(grid: OfficeGrid): Prop[] {
   return list
 }
 
-export const officeScene: SceneDef = composeOffice({
+/**
+ * The branch office, at whatever size the viewport gives it.
+ *
+ * There is no camera, so the room is built to fit rather than panned around:
+ * a wider window gets more wall and more desks, not the same room enlarged.
+ */
+export const buildOfficeScene = sceneFactory({
   floorStyle: 'carpet',
   wallStyle: 'plain',
   wall,
@@ -195,3 +208,6 @@ export const officeScene: SceneDef = composeOffice({
   accents,
   clock: { slot: 3, r: 9 }
 })
+
+/** The room at its default size, for the theme previews. */
+export const officeScene: SceneDef = buildOfficeScene(ROOM_W, ROOM_H)

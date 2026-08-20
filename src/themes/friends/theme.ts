@@ -1,6 +1,6 @@
-import type { Theme } from '../types'
+﻿import type { Theme } from '../types'
 import { friendsCharacters } from './characters'
-import { friendsPalette, friendsScene } from './environment'
+import { friendsPalette, buildFriendsScene, friendsScene } from './environment'
 
 export const friendsTheme: Theme = {
   id: 'friends',
@@ -8,5 +8,6 @@ export const friendsTheme: Theme = {
   tagline: 'Your AI team, but nobody ever leaves the couch.',
   palette: friendsPalette,
   scene: friendsScene,
+  buildScene: buildFriendsScene,
   characters: friendsCharacters
 }

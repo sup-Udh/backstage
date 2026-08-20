@@ -1,7 +1,10 @@
-import type { Op } from '../../world/pixel/ops'
+﻿import type { Op } from '../../world/pixel/ops'
 import type { Prop, SceneDef, ThemePalette } from '../types'
 import {
-  composeOffice,
+  ROOM_H,
+  ROOM_W,
+  doorwayX,
+  sceneFactory,
   type OfficeGrid,
   type WallSlot,
   type ZoneFurnishing,
@@ -88,17 +91,20 @@ function giltFrame(x: number, y: number, w: number, h: number): Op[] {
   ]
 }
 
-/** Big apartment windows at the ends, art and the frame between them. */
+/**
+ * Big apartment windows at the ends, the gilt frame in the middle, posters
+ * between them. Described by role, because the room decides how many panels
+ * there are â€” the frame is the thing that says "this apartment", so it is
+ * pinned to the centre and exists at every width.
+ */
 function wall(slot: WallSlot): Op[] {
-  switch (slot.index) {
-    case 0:
-    case 4:
-      return windowUnit(slot.x, slot.y, slot.w, slot.h)
-    case 2:
-      return giltFrame(slot.x + 18, slot.y - 2, slot.w - 36, slot.h + 6)
-    default:
-      return poster(slot.x + 16, slot.y, slot.w - 32, slot.h, slot.index * 17 + 5)
+  if (slot.isFirst || slot.isLast) {
+    return windowUnit(slot.x, slot.y, slot.w, slot.h)
   }
+  if (slot.isCentre) {
+    return giltFrame(slot.x + 18, slot.y - 2, slot.w - 36, slot.h + 6)
+  }
+  return poster(slot.x + 16, slot.y, slot.w - 32, slot.h, slot.index * 17 + 5)
 }
 
 function zone(z: ZoneRect): ZoneFurnishing {
@@ -142,7 +148,7 @@ function zone(z: ZoneRect): ZoneFurnishing {
 function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
 
-  const doorX = Math.round((grid.wall[3].x + grid.wall[3].w + grid.wall[4].x) / 2) - 17
+  const doorX = doorwayX(grid, 'right')
   list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
   for (const slot of grid.stations) {
@@ -169,7 +175,13 @@ function accents(grid: OfficeGrid): Prop[] {
   return list
 }
 
-export const friendsScene: SceneDef = composeOffice({
+/**
+ * The apartment, at whatever size the viewport gives it.
+ *
+ * There is no camera, so the room is built to fit rather than panned around:
+ * a wider window gets more wall and more desks, not the same room enlarged.
+ */
+export const buildFriendsScene = sceneFactory({
   floorStyle: 'planks',
   wallStyle: 'plain',
   wall,
@@ -177,3 +189,6 @@ export const friendsScene: SceneDef = composeOffice({
   accents,
   clock: { slot: 3, r: 8 }
 })
+
+/** The room at its default size, for the theme previews. */
+export const friendsScene: SceneDef = buildFriendsScene(ROOM_W, ROOM_H)

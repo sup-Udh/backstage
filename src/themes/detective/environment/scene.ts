@@ -1,7 +1,11 @@
-import type { Op } from '../../../world/pixel/ops'
+﻿import type { Op } from '../../../world/pixel/ops'
 import type { Prop, SceneDef } from '../../types'
 import {
-  composeOffice,
+  ROOM_H,
+  ROOM_W,
+  centreSlot,
+  doorwayX,
+  sceneFactory,
   type OfficeGrid,
   type WallSlot,
   type ZoneFurnishing,
@@ -39,19 +43,25 @@ import { evidenceBoard } from './props'
  * is a case-review table rather than a kitchen.
  */
 
-/** Wall panels, left to right: window, shelving, the board, notices, window. */
+/**
+ * Wall panels: windows at the ends, the evidence board in the middle, shelving
+ * and notices in between.
+ *
+ * Described by role rather than by index, because the room decides how many
+ * panels there are â€” five at the default width, three in a narrow window,
+ * more on a wide one. The evidence board is what makes this room the bureau,
+ * so it is pinned to the centre and exists at every size.
+ */
 function wall(slot: WallSlot): Op[] {
-  switch (slot.index) {
-    case 0:
-    case 4:
-      return windowUnit(slot.x, slot.y, slot.w, slot.h)
-    case 1:
-      return shelfUnit(slot.x + 12, slot.y, slot.w - 24)
-    case 2:
-      return evidenceBoard(slot.x, slot.y - 2, slot.w, slot.h + 6)
-    default:
-      return noticeBoard(slot.x, slot.y, slot.w, slot.h, 17)
+  if (slot.isFirst || slot.isLast) {
+    return windowUnit(slot.x, slot.y, slot.w, slot.h)
   }
+  if (slot.isCentre) {
+    return evidenceBoard(slot.x, slot.y - 2, slot.w, slot.h + 6)
+  }
+  return slot.index % 2 === 1
+    ? shelfUnit(slot.x + 12, slot.y, slot.w - 24)
+    : noticeBoard(slot.x, slot.y, slot.w, slot.h, 17)
 }
 
 function zone(z: ZoneRect): ZoneFurnishing {
@@ -101,7 +111,7 @@ function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
 
   // The way in, between the first two wall panels.
-  const doorX = Math.round((grid.wall[0].x + grid.wall[0].w + grid.wall[1].x) / 2) - 17
+  const doorX = doorwayX(grid, 'left')
   list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
   /*
@@ -111,7 +121,7 @@ function accents(grid: OfficeGrid): Prop[] {
    */
   list.push({
     id: 'sign',
-    ops: wallSign(grid.wall[2].cx, grid.wall[2].y + grid.wall[2].h + 16),
+    ops: wallSign(centreSlot(grid).cx, centreSlot(grid).y + centreSlot(grid).h + 16),
     baseY: 0
   })
 
@@ -149,7 +159,13 @@ function accents(grid: OfficeGrid): Prop[] {
   return list
 }
 
-export const detectiveScene: SceneDef = composeOffice({
+/**
+ * The bureau, at whatever size the viewport gives it.
+ *
+ * There is no camera, so the room is built to fit rather than panned around:
+ * a wider window gets more wall and more desks, not the same room enlarged.
+ */
+export const buildDetectiveScene = sceneFactory({
   floorStyle: 'planks',
   wallStyle: 'plain',
   wall,
@@ -157,6 +173,9 @@ export const detectiveScene: SceneDef = composeOffice({
   accents,
   clock: { slot: 3, r: 9 }
 })
+
+/** The room at its default size, for the theme previews. */
+export const detectiveScene: SceneDef = buildDetectiveScene(ROOM_W, ROOM_H)
 
 /** Kept for the theme preview, which draws the room at its own size. */
 export const SCENE_W = detectiveScene.width

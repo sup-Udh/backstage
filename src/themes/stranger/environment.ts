@@ -1,7 +1,10 @@
-import type { Op } from '../../world/pixel/ops'
+﻿import type { Op } from '../../world/pixel/ops'
 import type { Prop, SceneDef, ThemePalette } from '../types'
 import {
-  composeOffice,
+  ROOM_H,
+  ROOM_W,
+  doorwayX,
+  sceneFactory,
   type OfficeGrid,
   type WallSlot,
   type ZoneFurnishing,
@@ -81,19 +84,21 @@ export const strangerPalette: ThemePalette = {
   steelDark: '#5C6479'
 }
 
-/** One high basement window, the map wall, and a lot of pinned paper. */
+/**
+ * High basement windows at the ends, the map wall in the middle, and a lot of
+ * pinned paper between. Described by role rather than index, because the room
+ * decides how many panels it has and the map wall is the point of the room.
+ */
 function wall(slot: WallSlot): Op[] {
-  switch (slot.index) {
-    case 0:
-    case 4:
-      return windowUnit(slot.x, slot.y, slot.w, slot.h)
-    case 2:
-      return whiteboard(slot.x + 6, slot.y, slot.w - 12, slot.h - 4)
-    case 1:
-      return noticeBoard(slot.x, slot.y, slot.w, slot.h, 77)
-    default:
-      return poster(slot.x + 14, slot.y, slot.w - 28, slot.h, 105)
+  if (slot.isFirst || slot.isLast) {
+    return windowUnit(slot.x, slot.y, slot.w, slot.h)
   }
+  if (slot.isCentre) {
+    return whiteboard(slot.x + 6, slot.y, slot.w - 12, slot.h - 4)
+  }
+  return slot.index % 2 === 1
+    ? noticeBoard(slot.x, slot.y, slot.w, slot.h, 77)
+    : poster(slot.x + 14, slot.y, slot.w - 28, slot.h, 105)
 }
 
 function zone(z: ZoneRect): ZoneFurnishing {
@@ -141,7 +146,7 @@ function zone(z: ZoneRect): ZoneFurnishing {
 }
 
 /**
- * Fairy lights strung the whole way across the wall — the one thing that has
+ * Fairy lights strung the whole way across the wall â€” the one thing that has
  * to be there for the room to read as this world at all.
  */
 function accents(grid: OfficeGrid): Prop[] {
@@ -154,7 +159,7 @@ function accents(grid: OfficeGrid): Prop[] {
     baseY: 0
   })
 
-  const doorX = Math.round((grid.wall[3].x + grid.wall[3].w + grid.wall[4].x) / 2) - 17
+  const doorX = doorwayX(grid, 'right')
   list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
   for (const slot of grid.stations) {
@@ -185,7 +190,13 @@ function accents(grid: OfficeGrid): Prop[] {
   return list
 }
 
-export const strangerScene: SceneDef = composeOffice({
+/**
+ * The basement, at whatever size the viewport gives it.
+ *
+ * There is no camera, so the room is built to fit rather than panned around:
+ * a wider window gets more wall and more desks, not the same room enlarged.
+ */
+export const buildStrangerScene = sceneFactory({
   floorStyle: 'concrete',
   wallStyle: 'stripe',
   wall,
@@ -193,3 +204,6 @@ export const strangerScene: SceneDef = composeOffice({
   accents,
   clock: { slot: 3, r: 8 }
 })
+
+/** The room at its default size, for the theme previews. */
+export const strangerScene: SceneDef = buildStrangerScene(ROOM_W, ROOM_H)

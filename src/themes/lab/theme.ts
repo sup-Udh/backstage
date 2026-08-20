@@ -1,6 +1,6 @@
-import type { Theme } from '../types'
+﻿import type { Theme } from '../types'
 import { labCharacters } from './characters'
-import { labPalette, labScene } from './environment'
+import { labPalette, buildLabScene, labScene } from './environment'
 
 export const labTheme: Theme = {
   id: 'lab',
@@ -8,5 +8,6 @@ export const labTheme: Theme = {
   tagline: 'Your AI team, and the purity is non-negotiable.',
   palette: labPalette,
   scene: labScene,
+  buildScene: buildLabScene,
   characters: labCharacters
 }

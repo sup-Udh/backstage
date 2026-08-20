@@ -1,6 +1,6 @@
-import type { Theme } from '../types'
+﻿import type { Theme } from '../types'
 import { officeCharacters } from './characters'
-import { officePalette, officeScene } from './environment'
+import { officePalette, buildOfficeScene, officeScene } from './environment'
 
 export const officeTheme: Theme = {
   id: 'office',
@@ -8,5 +8,6 @@ export const officeTheme: Theme = {
   tagline: 'Your AI team has a meeting about the meeting.',
   palette: officePalette,
   scene: officeScene,
+  buildScene: buildOfficeScene,
   characters: officeCharacters
 }

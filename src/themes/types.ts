@@ -133,7 +133,24 @@ export interface Theme {
   name: string
   tagline: string
   palette: ThemePalette
+  /**
+   * The room at its default size.
+   *
+   * Used by surfaces that draw a fixed crop of the world rather than living
+   * inside it — the theme previews on the setup and settings pages. The
+   * workspace does not use this: it builds the room to fit its panel.
+   */
   scene: SceneDef
+  /**
+   * The room at a given logical size.
+   *
+   * There is no camera any more, so the world has to *be* the size of the
+   * viewport rather than being panned around inside it. A wider room gets more
+   * wall panels and more desks, a taller one more floor between its rows —
+   * which is what makes filling a large window mean "a bigger office" rather
+   * than "the same office, further away".
+   */
+  buildScene: (width: number, height: number) => SceneDef
   characters: CharacterDef[]
 }
 

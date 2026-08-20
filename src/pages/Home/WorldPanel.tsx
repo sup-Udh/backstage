@@ -42,16 +42,21 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const pointer = useRef<{ x: number; y: number } | null>(null)
-  /** The gesture in progress: panning the camera, or pulling out a link. */
-  const gesture = useRef<
-    | { kind: 'pan'; x: number; y: number; moved: boolean }
-    | { kind: 'link'; from: string; x: number; y: number; moved: boolean }
-    | null
-  >(null)
+  /**
+   * The gesture in progress.
+   *
+   * Only one kind now. Pressing on the floor used to pan the camera; there is
+   * no camera, so pressing on the floor is a click that clears the selection
+   * and nothing more.
+   */
+  const gesture = useRef<{
+    from: string
+    x: number
+    y: number
+    moved: boolean
+  } | null>(null)
 
   const [hover, setHover] = useState<Hover | null>(null)
-  const [zoom, setZoom] = useState(2)
-  const [dragging, setDragging] = useState(false)
   const [linking, setLinking] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ text: string; tone: 'error' | 'info' } | null>(
     null
@@ -247,8 +252,13 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
       const ctx = canvas.getContext('2d')
       if (ctx) ctx.imageSmoothingEnabled = false
     }
+    /*
+     * The engine lays the room out to fit this canvas. There is nothing to
+     * fit *to* afterwards — the office is exactly as large as the panel, so
+     * resizing the window changes how much office there is rather than how
+     * much of it is visible.
+     */
     engine.setViewport(w, h)
-    setZoom(engine.getCamera().scale)
   }, [engine])
 
   useEffect(() => {
@@ -274,11 +284,9 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
       engine.setHovered(hit?.id ?? null)
       setHover((prev) => {
         if (!hit) return prev === null ? prev : null
-        const cam = engine.getCamera()
-        const offX = Math.round(cam.x * cam.scale)
-        const offY = Math.round(cam.y * cam.scale)
-        const left = Math.round(hit.x) * cam.scale - offX
-        const top = Math.round(hit.y) * cam.scale - offY
+        const { scale } = engine.getCamera()
+        const left = Math.round(hit.x) * scale
+        const top = Math.round(hit.y) * scale
         if (prev && prev.id === hit.id && prev.left === left && prev.top === top) {
           return prev
         }
@@ -293,23 +301,21 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top }
   }
 
-  /*
-   * Pressing on a character starts a possible connection; pressing on the
-   * floor pans. Which one it is cannot be known until the pointer moves, so
-   * both begin as an undecided press and are resolved by the first movement.
+  /**
+   * Pressing on a character starts a possible connection.
+   *
+   * Pressing on the floor used to begin a pan; with the room fitted to the
+   * panel there is nowhere to pan to, so it is simply a press that will turn
+   * out to be a click.
    */
   const onDown = (e: React.MouseEvent) => {
     const p = local(e)
     const s = engine.toScene(p.x, p.y)
     const hit = engine.hitTest(s.x, s.y)
     const worker = findWorker(workers, hit?.id ?? null)
+    if (!hit || !worker) return
 
-    if (hit && worker) {
-      gesture.current = { kind: 'link', from: hit.id, x: p.x, y: p.y, moved: false }
-    } else {
-      gesture.current = { kind: 'pan', x: p.x, y: p.y, moved: false }
-    }
-    setDragging(true)
+    gesture.current = { from: hit.id, x: p.x, y: p.y, moved: false }
   }
 
   const onMove = (e: React.MouseEvent) => {
@@ -318,18 +324,8 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
     const g = gesture.current
     if (!g) return
 
-    const dx = p.x - g.x
-    const dy = p.y - g.y
-    if (!g.moved && Math.hypot(dx, dy) < DRAG_SLOP) return
+    if (!g.moved && Math.hypot(p.x - g.x, p.y - g.y) < DRAG_SLOP) return
     g.moved = true
-
-    if (g.kind === 'pan') {
-      engine.panBy(dx, dy)
-      g.x = p.x
-      g.y = p.y
-      setHover(null)
-      return
-    }
 
     // Pulling a connection out of a character.
     const scene = engine.toScene(p.x, p.y)
@@ -353,27 +349,27 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
 
   const finish = () => {
     gesture.current = null
-    setDragging(false)
     setLinking(null)
     engine.setPendingLink(null)
   }
 
   const onUp = (e: React.MouseEvent) => {
     const g = gesture.current
-    if (!g) return finish()
+    const p = local(e)
+    const s = engine.toScene(p.x, p.y)
 
-    if (!g.moved) {
-      /*
-       * A press that did not move is a click: select whoever is under it.
-       * Choosing someone in the world and choosing them in the TALK TO
-       * selector are the same act, so both go through `setChatTarget`, which
-       * carries the highlight with it.
-       */
-      const p = local(e)
-      const s = engine.toScene(p.x, p.y)
+    /*
+     * A press that did not move — on a character or on the floor — is a click.
+     */
+    if (!g || !g.moved) {
       const hit = engine.hitTest(s.x, s.y)
 
       if (hit) {
+        /*
+         * Choosing someone in the world and choosing them in the TALK TO
+         * selector are the same act, so both go through `setChatTarget`, which
+         * carries the highlight with it.
+         */
         setLinkMenu(null)
         setChatTarget(hit.id)
         return finish()
@@ -385,12 +381,12 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
        */
       const onLink = engine.hitTestLink(s.x, s.y)
       if (onLink) {
-        const cam = engine.getCamera()
+        const { scale } = engine.getCamera()
         setLinkMenu({
           a: onLink.a,
           b: onLink.b,
-          left: Math.round((onLink.x - cam.x) * cam.scale),
-          top: Math.round((onLink.y - cam.y) * cam.scale)
+          left: Math.round(onLink.x * scale),
+          top: Math.round(onLink.y * scale)
         })
         return finish()
       }
@@ -400,29 +396,29 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
       return finish()
     }
 
-    if (g.kind === 'link') {
-      const p = local(e)
-      const s = engine.toScene(p.x, p.y)
-      const over = engine.hitTest(s.x, s.y)
+    // A drag that started on a character: a connection, if it landed on one.
+    const over = engine.hitTest(s.x, s.y)
+    if (over && over.id !== g.from) {
+      const from = findWorker(workers, g.from)
+      const target = findWorker(workers, over.id)
+      const allowed = droppableFor(g.from)
 
-      if (over && over.id !== g.from) {
-        const from = findWorker(workers, g.from)
-        const target = findWorker(workers, over.id)
-        const allowed = droppableFor(g.from)
-
-        if (from && target && from.kind !== target.kind) {
-          say('An agent and a CLI session cannot be connected.')
-        } else if (!allowed.includes(over.id)) {
-          say(
-            (degree.get(g.from) ?? 0) >= MAX_CONNECTIONS ||
-              (degree.get(over.id) ?? 0) >= MAX_CONNECTIONS
-              ? 'Connection limit reached.'
-              : 'Those two are already connected.'
-          )
-        } else {
-          // The main process decides; a refusal is reported, never hidden.
-          void link(g.from, over.id, true).then(report)
-        }
+      if (from && target && from.kind !== target.kind) {
+        say('An agent and a CLI session cannot be connected.')
+      } else if (!allowed.includes(over.id)) {
+        say(
+          (degree.get(g.from) ?? 0) >= MAX_CONNECTIONS ||
+            (degree.get(over.id) ?? 0) >= MAX_CONNECTIONS
+            ? 'Connection limit reached.'
+            : 'Those two are already connected.'
+        )
+      } else {
+        /*
+         * The agent the drag started from becomes the lead. The main process
+         * decides whether the link is allowed at all; a refusal is reported,
+         * never hidden.
+         */
+        void link(g.from, over.id, true).then(report)
       }
     }
 
@@ -434,17 +430,6 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
     engine.setHovered(null)
     setHover(null)
     finish()
-  }
-
-  const onWheel = (e: React.WheelEvent) => {
-    const p = local(e)
-    engine.zoomBy(e.deltaY < 0 ? 1 : -1, p.x, p.y)
-    setZoom(engine.getCamera().scale)
-  }
-
-  const step = (n: number) => {
-    engine.zoomBy(n)
-    setZoom(engine.getCamera().scale)
   }
 
   const hoveredView = hover ? views.find((v) => v.characterId === hover.id) : undefined
@@ -468,23 +453,19 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
           onMouseMove={onMove}
           onMouseUp={onUp}
           onMouseLeave={onLeave}
-          onWheel={onWheel}
           className="pixelated block"
-          style={{
-            cursor: linking
-              ? 'crosshair'
-              : dragging
-                ? 'grabbing'
-                : hover
-                  ? 'pointer'
-                  : 'grab'
-          }}
+          /*
+           * No grab cursor: there is nothing to grab. The room is the size of
+           * the panel, so the only things the pointer does here are pick a
+           * character and pull a connection out of one.
+           */
+          style={{ cursor: linking ? 'crosshair' : hover ? 'pointer' : 'default' }}
         />
 
         {/*
           Names and statuses, as DOM over the canvas. They follow characters
-          around the room but are sized independently of the camera, so they
-          stay readable however far out the user zooms.
+          around the room but are sized independently of it, so they stay
+          readable whatever scale the room ended up at.
         */}
         <WorldLabelLayer
           engine={engine}
@@ -578,34 +559,12 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
           </div>
         )}
 
-        {/* Camera controls, bottom-right so they never sit over the desks. */}
-        <div className="absolute bottom-4 right-4 z-20 flex flex-col gap-1">
-          {[
-            { label: '+', title: 'Zoom in', run: () => step(1) },
-            { label: '−', title: 'Zoom out', run: () => step(-1) },
-            {
-              label: '⤢',
-              title: 'Fit the whole room',
-              run: () => {
-                engine.fit()
-                setZoom(engine.getCamera().scale)
-              }
-            }
-          ].map((b) => (
-            <button
-              key={b.label}
-              type="button"
-              title={b.title}
-              onClick={b.run}
-              className="grid h-8 w-8 place-items-center border-2 border-ink bg-cream font-pixel text-sm font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-brand"
-            >
-              {b.label}
-            </button>
-          ))}
-          <span className="mt-1 border-2 border-ink bg-ink px-1 py-0.5 text-center font-mono text-[10px] font-medium text-brand">
-            {zoom}×
-          </span>
-        </div>
+        {/*
+          There are no camera controls. The room is laid out to fit this panel,
+          so there is nothing to zoom into and nowhere to pan to — and a zoom
+          button that only ever re-rendered the same view would be a control
+          that appears broken.
+        */}
 
         {selectedWorker && selectedChar && (
           <AgentInspector
@@ -614,7 +573,6 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
             cast={cast}
             others={workers}
             connections={connections}
-            onFocus={() => engine.focusOn(selectedChar.id)}
             onClose={() => selectAgent(null)}
             onViewTask={() => {
               setChatTarget(selectedWorker.id)

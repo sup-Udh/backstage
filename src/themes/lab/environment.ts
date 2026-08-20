@@ -1,7 +1,11 @@
-import type { Op } from '../../world/pixel/ops'
+﻿import type { Op } from '../../world/pixel/ops'
 import type { Prop, SceneDef, ThemePalette } from '../types'
 import {
-  composeOffice,
+  ROOM_H,
+  ROOM_W,
+  centreSlot,
+  doorwayX,
+  sceneFactory,
   type OfficeGrid,
   type StationSlot,
   type WallSlot,
@@ -90,7 +94,7 @@ export const labPalette: ThemePalette = {
  *
  * Deliberately built to the same footprint and seat offset as `deskUnit`: the
  * grid places it, the director seats a character at it, and the renderer
- * animates its screen — all of which only work because the contract is
+ * animates its screen â€” all of which only work because the contract is
  * identical whatever the surface is made of. Only the material changes.
  */
 function labStation(slot: StationSlot): DeskParts {
@@ -118,19 +122,21 @@ function labStation(slot: StationSlot): DeskParts {
   }
 }
 
-/** Safety notices, a fume-hood window and the containment board. */
+/**
+ * Fume-hood windows at the ends, the containment board in the middle, safety
+ * notices between. Described by role rather than index, because the room
+ * decides how many panels it has and the board is what makes this a lab.
+ */
 function wall(slot: WallSlot): Op[] {
-  switch (slot.index) {
-    case 0:
-    case 4:
-      return windowUnit(slot.x, slot.y, slot.w, slot.h)
-    case 2:
-      return whiteboard(slot.x + 6, slot.y, slot.w - 12, slot.h - 4)
-    case 1:
-      return noticeBoard(slot.x, slot.y, slot.w, slot.h, 112)
-    default:
-      return poster(slot.x + 14, slot.y, slot.w - 28, slot.h, 134)
+  if (slot.isFirst || slot.isLast) {
+    return windowUnit(slot.x, slot.y, slot.w, slot.h)
   }
+  if (slot.isCentre) {
+    return whiteboard(slot.x + 6, slot.y, slot.w - 12, slot.h - 4)
+  }
+  return slot.index % 2 === 1
+    ? noticeBoard(slot.x, slot.y, slot.w, slot.h, 112)
+    : poster(slot.x + 14, slot.y, slot.w - 28, slot.h, 134)
 }
 
 function zone(z: ZoneRect): ZoneFurnishing {
@@ -181,12 +187,12 @@ function zone(z: ZoneRect): ZoneFurnishing {
 function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
 
-  const doorX = Math.round((grid.wall[0].x + grid.wall[0].w + grid.wall[1].x) / 2) - 17
+  const doorX = doorwayX(grid, 'left')
   list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
   list.push({
     id: 'sign',
-    ops: wallSign(grid.wall[2].cx, grid.wall[2].y + grid.wall[2].h + 16),
+    ops: wallSign(centreSlot(grid).cx, centreSlot(grid).y + centreSlot(grid).h + 16),
     baseY: 0
   })
 
@@ -218,7 +224,13 @@ function accents(grid: OfficeGrid): Prop[] {
   return list
 }
 
-export const labScene: SceneDef = composeOffice({
+/**
+ * The laboratory, at whatever size the viewport gives it.
+ *
+ * There is no camera, so the room is built to fit rather than panned around:
+ * a wider window gets more wall and more desks, not the same room enlarged.
+ */
+export const buildLabScene = sceneFactory({
   floorStyle: 'concrete',
   wallStyle: 'brick',
   wall,
@@ -227,3 +239,6 @@ export const labScene: SceneDef = composeOffice({
   station: labStation,
   clock: { slot: 3, r: 8 }
 })
+
+/** The room at its default size, for the theme previews. */
+export const labScene: SceneDef = buildLabScene(ROOM_W, ROOM_H)

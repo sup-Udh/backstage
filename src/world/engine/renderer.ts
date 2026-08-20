@@ -1,4 +1,4 @@
-import type { Theme, ThemePalette } from '../../themes/types'
+﻿import type { SceneDef, Theme, ThemePalette } from '../../themes/types'
 import type { CharacterDef } from '../../characters/character.types'
 import type { CharacterRuntime } from '../world.types'
 import {
@@ -85,15 +85,18 @@ export class WorldRenderer {
 
   /**
    * @param cast The project's characters. Sheets are baked for these and only
-   *   these — an unchosen character has no art in this renderer at all, which
+   *   these â€” an unchosen character has no art in this renderer at all, which
    *   is a cheaper world as well as an isolated one.
+   * @param scene The room as laid out for the current viewport. Passed in
+   *   rather than read from the theme, because the room is rebuilt whenever
+   *   the panel changes shape and the renderer is rebuilt with it.
    */
   constructor(
-    private theme: Theme,
-    cast: CharacterDef[]
+    theme: Theme,
+    cast: CharacterDef[],
+    private scene: SceneDef
   ) {
     this.pal = theme.palette
-    const scene = theme.scene
 
     this.background = bakeOps(scene.background, this.pal, 0)
     this.props = scene.props
@@ -106,7 +109,7 @@ export class WorldRenderer {
 
     /*
      * Dust drifting in the window light. The columns come from the scene, so
-     * a world's motes hang where that world's windows actually are — the
+     * a world's motes hang where that world's windows actually are â€” the
      * positions used to be hard-coded to the first room ever built, which put
      * dust in the middle of a blank wall in every theme added since.
      */
@@ -193,7 +196,7 @@ export class WorldRenderer {
   }
 
   private drawClock(ctx: CanvasRenderingContext2D): void {
-    const { x: cx, y: cy, r } = this.theme.scene.clock
+    const { x: cx, y: cy, r } = this.scene.clock
     const now = new Date()
     const sec = now.getSeconds() + now.getMilliseconds() / 1000
     const min = now.getMinutes() + sec / 60
@@ -275,7 +278,7 @@ export class WorldRenderer {
    *
    * Deliberately quiet. A room where six agents are linked is a room with
    * several of these in it, and drawn as anything more assertive they would
-   * become the subject of the picture — the office is what the panel is for,
+   * become the subject of the picture â€” the office is what the panel is for,
    * and the links are annotation on top of it.
    *
    * Dashed, and drawn between the characters' chests rather than their feet,
@@ -312,7 +315,7 @@ export class WorldRenderer {
     const steps = Math.ceil(len)
     const crawl = active ? t * 14 : 0
     for (let i = 0; i <= steps; i++) {
-      // 3 on, 3 off — long enough to read as a dash at any zoom.
+      // 3 on, 3 off â€” long enough to read as a dash at any zoom.
       if ((Math.floor(i - crawl) % 6 + 6) % 6 > 2) continue
       const p = i / steps
       ctx.fillRect(Math.round(ax + dx * p), Math.round(ay + dy * p), 1, 1)
@@ -475,7 +478,8 @@ export class WorldRenderer {
     t: number,
     hoveredId: string | null,
     selectedId: string | null,
-    cam: Camera,
+    /** Screen pixels per scene pixel. Whole numbers only. */
+    scale: number,
     viewW: number,
     viewH: number,
     links: WorldLink[] = [],
@@ -483,25 +487,22 @@ export class WorldRenderer {
     /** Characters a pending link could legally be dropped on. */
     droppable: Set<string> = new Set()
   ): void {
-    const scene = this.theme.scene
+    const scene = this.scene
 
     /*
-     * The canvas is the size of the viewport now, not of the room, so the
-     * camera is a transform rather than a CSS scale. Both the scale and the
-     * translation are whole numbers, which is what keeps a scene pixel an
-     * exact block of screen pixels however far the user has panned.
+     * The room is built to fill the canvas, so the transform is a plain
+     * whole-number scale with no translation — every scene pixel is an exact
+     * block of screen pixels, always.
+     *
+     * The clear underneath still matters: quantising the room's logical size
+     * can leave a few screen pixels along one edge that the scene does not
+     * cover, and painting them the room's own wall colour is what keeps that
+     * from reading as a gap rather than as the wall continuing.
      */
     ctx.setTransform(1, 0, 0, 1, 0, 0)
-    ctx.fillStyle = this.pal.ink
+    ctx.fillStyle = this.pal.wall
     ctx.fillRect(0, 0, viewW, viewH)
-    ctx.setTransform(
-      cam.scale,
-      0,
-      0,
-      cam.scale,
-      -Math.round(cam.x * cam.scale),
-      -Math.round(cam.y * cam.scale)
-    )
+    ctx.setTransform(scale, 0, 0, scale, 0, 0)
 
     if (this.background) this.blit(ctx, this.background)
 
@@ -527,7 +528,7 @@ export class WorldRenderer {
     for (const c of chars) {
       /*
        * Both ids are agent ids. `def.id` is the *character* being worn, which
-       * is re-cast whenever the theme changes — matching on it meant the
+       * is re-cast whenever the theme changes â€” matching on it meant the
        * outline and the floor ring only appeared in worlds where a character
        * happened to be named after an agent, while the name plate beside them
        * highlighted correctly. Selection has to look the same in every world.
@@ -549,7 +550,7 @@ export class WorldRenderer {
     /*
      * Links are drawn after the room rather than sorted into it.
      *
-     * A relationship is not a physical object in the office — it has no place
+     * A relationship is not a physical object in the office â€” it has no place
      * in the depth order, and sorting it by either end's y would make the
      * same connection pass in front of a desk at one moment and behind it the
      * next as the pair walked around. Painting them on top keeps a link

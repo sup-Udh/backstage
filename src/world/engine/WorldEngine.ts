@@ -1,6 +1,6 @@
 import type { AgentRuntime } from '../../agents/agent.types'
 import { ANIMATIONS, characterStateForAgent } from '../../characters/character.states'
-import type { Theme } from '../../themes/types'
+import type { SceneDef, Theme } from '../../themes/types'
 import { makeRng } from '../pixel/ops'
 import { WORLD_SPRITE_H, WORLD_SPRITE_W } from './spriteCache'
 import type { AgentView, CharacterRuntime } from '../world.types'
@@ -33,14 +33,29 @@ export class WorldEngine {
   private selected: string | null = null
   private rng: () => number = Math.random
 
+  /**
+   * The room as currently laid out.
+   *
+   * Held here rather than read from the theme, because it is rebuilt whenever
+   * the viewport changes shape — the theme describes how to build a room of a
+   * given size, and this is the one that is on screen.
+   */
+  private scene: SceneDef
+
   /** Viewport size in CSS pixels, kept in step with the canvas. */
   private viewW = 0
   private viewH = 0
+  /**
+   * The view transform.
+   *
+   * Only `scale` varies now. There is no panning and no zooming: the room is
+   * built to fit the panel, so the origin is always the room's origin. It
+   * remains a Camera so the renderer keeps one transform path rather than
+   * gaining a second, cameraless one.
+   */
   private cam: Camera = { x: 0, y: 0, scale: DEFAULT_ZOOM }
   /** Characters already in the world, so reserves are spawned only once. */
   private placed = new Set<string>()
-  /** Whether the opening camera has been aimed yet. */
-  private framed = false
   /** Collaboration links, mirrored from the roster. */
   private links: WorldLink[] = []
   /** A link being dragged out of a character. */
@@ -63,8 +78,16 @@ export class WorldEngine {
     seed = 991
   ) {
     const rng = makeRng(seed)
-    this.renderer = new WorldRenderer(theme, cast)
-    this.director = new Director(theme.scene, rng)
+    /*
+     * The room starts at the theme's default size and is re-laid the moment
+     * the panel reports its real dimensions. Starting from something valid
+     * rather than from nothing means every field below can be initialised
+     * against a real grid, and a frame painted before the first measurement
+     * shows a room rather than an empty canvas.
+     */
+    this.scene = theme.scene
+    this.renderer = new WorldRenderer(theme, cast, this.scene)
+    this.director = new Director(this.scene, rng)
 
     this.rng = rng
     // A character exists only while its agent is present in the world.
@@ -76,8 +99,8 @@ export class WorldEngine {
         ownName: a.useOwnName ? a.name : undefined,
         def: castForSlot(cast, a.slot),
         model: a.model,
-        x: theme.scene.desks[a.slot % theme.scene.desks.length].x,
-        y: theme.scene.desks[a.slot % theme.scene.desks.length].y,
+        x: this.scene.desks[a.slot % this.scene.desks.length].x,
+        y: this.scene.desks[a.slot % this.scene.desks.length].y,
         facing: 'down',
         state: 'idle',
         path: [],
@@ -114,8 +137,8 @@ export class WorldEngine {
 
       if (i === walker) {
         // Start far from the destination so the walk is worth watching.
-        c.x = this.theme.scene.width - 26
-        c.y = this.theme.scene.laneY + 14
+        c.x = this.scene.width - 26
+        c.y = this.scene.laneY + 14
       }
 
       this.director.onStatusChange(c, agent.status, this.chars)
@@ -208,7 +231,7 @@ export class WorldEngine {
         // Just off the left edge, so the walk in is visible, and behind
         // anyone still on their way in.
         x: -10 - queued++ * ENTRY_SPACING,
-        y: this.theme.scene.laneY,
+        y: this.scene.laneY,
         facing: 'right',
         state: 'walking',
         path: [],
@@ -230,85 +253,106 @@ export class WorldEngine {
     }
   }
 
-  /* --------------------------------------------------------------- camera -- */
+  /* ---------------------------------------------------------- room fitting -- */
 
-  /** Largest whole-number zoom at which the whole room fits the viewport. */
-  private fitScale(): number {
-    const scene = this.theme.scene
-    if (this.viewW === 0 || this.viewH === 0) return DEFAULT_ZOOM
-    return Math.max(
-      1,
-      Math.min(
-        8,
-        Math.floor(this.viewW / scene.width),
-        Math.floor(this.viewH / scene.height)
-      )
-    )
+  /**
+   * How many screen pixels one scene pixel occupies.
+   *
+   * Whole numbers only — a fractional scale puts sprite edges between device
+   * pixels, which is the one thing this whole rendering approach exists to
+   * avoid. Chosen from the viewport's width so the room lands at a logical
+   * size the art was drawn for: around 600 scene pixels across, which is what
+   * every theme's furniture was proportioned against.
+   */
+  private scaleFor(w: number): number {
+    if (w === 0) return DEFAULT_ZOOM
+    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(w / TARGET_ROOM_W)))
   }
 
   /**
-   * The zoom the room opens at.
+   * The room's logical size for this viewport.
    *
-   * Deliberately not the fit scale. The office is larger than a typical panel
-   * can show at a legible zoom, and opening at "everything visible" would
-   * mean opening at 1x — the whole floor plan on screen, every character ten
-   * pixels tall, and nothing readable. Opening one step in shows most of the
-   * room with the desks and the people at them clearly resolved, and the fit
-   * control is one click away for anyone who wants the overview.
-   *
-   * On a display large enough to fit the room at a higher zoom, that wins:
-   * there is no reason to leave space unused.
+   * Quantised, so nudging a window edge by a pixel does not rebuild the world.
+   * The step is in scene pixels and deliberately coarse: a room two pixels
+   * wider is not a different room, and rebaking every prop to find that out
+   * would make dragging a window edge expensive for no visible gain.
    */
-  private openingZoom(): number {
-    return Math.max(DEFAULT_ZOOM, this.fitScale())
+  private roomFor(w: number, h: number): { width: number; height: number } {
+    const scale = this.scaleFor(w)
+    const quantise = (n: number) => Math.round(n / scale / ROOM_STEP) * ROOM_STEP
+    return { width: quantise(w), height: quantise(h) }
   }
 
   /**
-   * Keep the room in view. When it is smaller than the viewport it is centred;
-   * when it is larger, panning is clamped to its edges so the user can never
-   * lose the office off the side of the screen.
+   * Fit the room to the viewport.
+   *
+   * There is no camera any more. The room *is* the size of the panel, so a
+   * wider window gets a wider office — more wall panels, more desks, wider
+   * zones — rather than the same office viewed from further away. Nothing is
+   * cropped and nothing has to be panned to.
+   *
+   * Rebuilding is not cheap: it re-composes the scene and re-bakes every prop.
+   * It only happens when the logical size actually changes, which the
+   * quantisation above makes rare — typically once on mount, and again if the
+   * user resizes the window or collapses the command panel.
    */
-  private clampCamera(): void {
-    const scene = this.theme.scene
-    const visW = this.viewW / this.cam.scale
-    const visH = this.viewH / this.cam.scale
-
-    this.cam.x =
-      visW >= scene.width
-        ? (scene.width - visW) / 2
-        : Math.min(Math.max(this.cam.x, 0), scene.width - visW)
-    this.cam.y =
-      visH >= scene.height
-        ? (scene.height - visH) / 2
-        : Math.min(Math.max(this.cam.y, 0), scene.height - visH)
-  }
-
   setViewport(w: number, h: number): void {
     this.viewW = w
     this.viewH = h
-    /*
-     * Grow into new space, but never shrink someone's zoom. Being below the
-     * fit scale means the viewport is showing more than the room, which is
-     * only ever wasted area — so collapsing the command panel enlarges the
-     * office, while a user who has zoomed in keeps exactly where they were.
-     */
-    if (this.cam.scale < this.fitScale()) this.cam.scale = this.fitScale()
-    this.clampCamera()
-    if (!this.framed) {
-      /*
-       * The first real viewport is the first chance to aim the camera. The
-       * room is larger than the view, so leaving it at the origin would open
-       * every world on its top-left corner — a stretch of wall. Centring on
-       * the desks puts the work where the user is already looking.
-       */
-      this.framed = true
-      this.cam.scale = this.openingZoom()
-      this.centreOnWork()
+
+    const scale = this.scaleFor(w)
+    const room = this.roomFor(w, h)
+
+    const changed =
+      scale !== this.cam.scale ||
+      room.width !== this.scene.width ||
+      room.height !== this.scene.height
+
+    this.cam.scale = scale
+    if (changed) this.rebuildScene(room.width, room.height)
+  }
+
+  /**
+   * Re-lay the room at a new size.
+   *
+   * Characters are carried across proportionally rather than left where they
+   * were: their coordinates are in scene pixels, so a room that has changed
+   * shape would otherwise leave somebody standing inside a filing cabinet, or
+   * outside the room altogether. Their reserved spots are released first,
+   * because the desks they were holding no longer exist — the director hands
+   * out new ones from the new grid on the next status change.
+   */
+  private rebuildScene(width: number, height: number): void {
+    const previous = this.scene
+    const scene = this.theme.buildScene(width, height)
+    this.scene = scene
+
+    this.renderer = new WorldRenderer(this.theme, this.cast, scene)
+    this.director = new Director(scene, this.rng)
+
+    const sx = scene.width / previous.width
+    const sy = scene.height / previous.height
+
+    for (const c of this.chars) {
+      this.director.release(c)
+      c.x = Math.round(c.x * sx)
+      c.y = Math.round(c.y * sy)
+      c.path = []
+      c.desk = null
+      c.spotKey = null
+      // Force the director to re-place them against the new grid on the next
+      // tick, rather than leaving them standing wherever the scaling put them.
+      c.lastStatus = null
     }
   }
 
   getCamera(): Camera {
     return { ...this.cam }
+  }
+
+  /** The room as currently laid out. */
+  getScene(): SceneDef {
+    return this.scene
   }
 
   /** The canvas size the camera is drawing into, in CSS pixels. */
@@ -326,30 +370,27 @@ export class WorldEngine {
    * plain projection with no allocation beyond the array itself.
    */
   getLabelAnchors(): LabelAnchor[] {
-    const { x: camX, y: camY, scale } = this.cam
+    const scale = this.cam.scale
 
+    /*
+     * A plain scale, with no camera offset: the room's origin is the canvas's
+     * origin now, so projecting is one multiply. Precision is kept until the
+     * final rounding so a label sits on the same pixel column as the sprite it
+     * belongs to rather than a fraction off it.
+     */
     return this.chars.map((c) => {
-      // 1. Character world position
-      // Keep precision here so zoom steps don't accumulate half-pixel drift.
-      const worldX = c.x
-      const worldY = c.y
+      const head = c.y - WORLD_SPRITE_H - LABEL_GAP
+      const feet = c.y + LABEL_GAP
 
-      // 2. Tag base positions in WORLD coordinates
-      // 16 is WORLD_SPRITE_H. 2 is the small world offset (GAP).
-      const worldHead = worldY - 16 - 2
-      const worldFeet = worldY + 2
-
-      // 3. Transform world positions to screen using the EXACT same camera transform.
-      // Pin rounding to the final CSS pixel result only.
-      const screenX = Math.round(worldX * scale - camX * scale)
-      const screenFeet = Math.round(worldFeet * scale - camY * scale)
-      const screenHead = Math.round(worldHead * scale - camY * scale)
+      const screenX = Math.round(c.x * scale)
+      const screenFeet = Math.round(feet * scale)
+      const screenHead = Math.round(head * scale)
 
       const onScreen =
-        screenX > -20 &&
-        screenX < this.viewW + 20 &&
-        screenFeet > -20 &&
-        screenHead < this.viewH + 20
+        screenX > -MARGIN &&
+        screenX < this.viewW + MARGIN &&
+        screenFeet > -MARGIN &&
+        screenHead < this.viewH + MARGIN
 
       return {
         agentId: c.agentId,
@@ -361,95 +402,13 @@ export class WorldEngine {
     })
   }
 
-  /** The zoom at which the whole room is visible, for the UI to compare. */
-  getFitScale(): number {
-    return this.fitScale()
-  }
-
-  /** Reset to the whole room, centred. */
-  fit(): void {
-    this.cam.scale = this.fitScale()
-    this.clampCamera()
-  }
-
   /**
-   * Aim the camera at the working half of the room.
+   * CSS pixel position within the viewport -> scene coordinates.
    *
-   * The desks are the reason anyone opens this panel, so the opening view is
-   * framed on them rather than on the room's geometric centre — which in a
-   * room with a tall wall band and a break area at the bottom is a patch of
-   * empty floor between the two.
+   * A division, because there is nowhere else the view could be looking.
    */
-  private centreOnWork(): void {
-    const scene = this.theme.scene
-    const seats = scene.desks
-    if (seats.length === 0) {
-      this.clampCamera()
-      return
-    }
-
-    let sx = 0
-    for (const seat of seats) sx += seat.x
-    this.cam.x = sx / seats.length - this.viewW / this.cam.scale / 2
-
-    /*
-     * Vertically, aim between the back wall and the first row of desks rather
-     * than at the middle of the seats.
-     *
-     * Centring on the seats put the average of the two desk rows in the
-     * middle of the frame, which on a panel too short to show the whole room
-     * pushed the entire back wall off the top — the windows, the boards, the
-     * signage and the door, which is most of what says what kind of place
-     * this is. Biasing upwards keeps the wall in shot and lets the lower
-     * zones fall off the bottom instead, where there is less to lose.
-     */
-    const front = Math.min(...seats.map((s) => s.y))
-    const aim = (scene.horizon + front) / 2
-    this.cam.y = aim - this.viewH / this.cam.scale / 2
-    this.clampCamera()
-  }
-
-  /** Drag the view. Deltas are in CSS pixels. */
-  panBy(dxCss: number, dyCss: number): void {
-    this.cam.x -= dxCss / this.cam.scale
-    this.cam.y -= dyCss / this.cam.scale
-    this.clampCamera()
-  }
-
-  /**
-   * Step the zoom, keeping the scene point under the cursor pinned. Zoom is
-   * whole-number, so the pixel grid survives every step.
-   */
-  zoomBy(step: number, anchorCssX?: number, anchorCssY?: number): void {
-    const next = Math.min(8, Math.max(this.fitScale(), this.cam.scale + step))
-    if (next === this.cam.scale) return
-
-    const ax = anchorCssX ?? this.viewW / 2
-    const ay = anchorCssY ?? this.viewH / 2
-    const sceneX = this.cam.x + ax / this.cam.scale
-    const sceneY = this.cam.y + ay / this.cam.scale
-
-    this.cam.scale = next
-    this.cam.x = sceneX - ax / next
-    this.cam.y = sceneY - ay / next
-    this.clampCamera()
-  }
-
-  /** Centre the view on a character. */
-  focusOn(characterId: string): void {
-    const c = this.chars.find((ch) => ch.def.id === characterId)
-    if (!c) return
-    this.cam.x = c.x - this.viewW / this.cam.scale / 2
-    this.cam.y = c.y - this.viewH / this.cam.scale / 2
-    this.clampCamera()
-  }
-
-  /** CSS pixel position within the viewport -> scene coordinates. */
   toScene(cssX: number, cssY: number): { x: number; y: number } {
-    return {
-      x: this.cam.x + cssX / this.cam.scale,
-      y: this.cam.y + cssY / this.cam.scale
-    }
+    return { x: cssX / this.cam.scale, y: cssY / this.cam.scale }
   }
 
   /* ----------------------------------------------------------- lifecycle -- */
@@ -537,7 +496,7 @@ export class WorldEngine {
       this.clock,
       this.hovered,
       this.selected,
-      this.cam,
+      this.cam.scale,
       this.viewW,
       this.viewH,
       this.links,
@@ -714,14 +673,38 @@ export interface LabelAnchor {
  */
 const MARGIN = 12
 
+/** Clearance between a label and the sprite it belongs to, in scene pixels. */
+const LABEL_GAP = 2
+
 /**
- * The zoom a world opens at.
+ * The scale used before the panel has reported its size.
  *
- * Whole-number, like every other zoom in this engine: a fractional scale puts
- * sprite edges between device pixels, which is the one thing the whole
- * rendering approach exists to avoid.
+ * Whole-number, like every scale in this engine: a fractional one puts sprite
+ * edges between device pixels, which is the one thing the whole rendering
+ * approach exists to avoid.
  */
 const DEFAULT_ZOOM = 2
+const MIN_ZOOM = 2
+const MAX_ZOOM = 4
+
+/**
+ * The logical width the room aims for, in scene pixels.
+ *
+ * Every theme's furniture was proportioned against a room about this wide, so
+ * the scale is chosen to land near it: the office reads the same on a laptop
+ * and on a large display, and what changes is how much office there is rather
+ * than how big everything in it looks.
+ */
+const TARGET_ROOM_W = 600
+
+/**
+ * How coarsely the room's logical size is rounded, in scene pixels.
+ *
+ * Rebuilding re-composes the scene and re-bakes every prop, so it must not
+ * happen on every pixel of a window drag. A room sixteen pixels wider is not a
+ * different room.
+ */
+const ROOM_STEP = 16
 
 /**
  * Slack around the sprite that still counts as clicking the character, in

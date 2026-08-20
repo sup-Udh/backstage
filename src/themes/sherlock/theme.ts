@@ -1,6 +1,6 @@
-import type { Theme } from '../types'
+﻿import type { Theme } from '../types'
 import { sherlockCharacters } from './characters'
-import { sherlockPalette, sherlockScene } from './environment'
+import { sherlockPalette, buildSherlockScene, sherlockScene } from './environment'
 
 export const sherlockTheme: Theme = {
   id: 'sherlock',
@@ -8,5 +8,6 @@ export const sherlockTheme: Theme = {
   tagline: 'Your AI team, and one of them is insufferable about it.',
   palette: sherlockPalette,
   scene: sherlockScene,
+  buildScene: buildSherlockScene,
   characters: sherlockCharacters
 }

@@ -1,7 +1,11 @@
-import type { Op } from '../../world/pixel/ops'
+﻿import type { Op } from '../../world/pixel/ops'
 import type { Prop, SceneDef, ThemePalette } from '../types'
 import {
-  composeOffice,
+  ROOM_H,
+  ROOM_W,
+  centreSlot,
+  doorwayX,
+  sceneFactory,
   type OfficeGrid,
   type WallSlot,
   type ZoneFurnishing,
@@ -81,24 +85,25 @@ export const sherlockPalette: ThemePalette = {
   steelDark: '#5E686D'
 }
 
-/** Sash windows at the ends, books and the case wall between. */
+/**
+ * Sash windows at the ends, the case wall in the middle, books between.
+ * Described by role rather than index: the room decides how many panels it
+ * has, and the case wall is the thing that makes this a study.
+ */
 function wall(slot: WallSlot): Op[] {
-  switch (slot.index) {
-    case 0:
-    case 4:
-      return windowUnit(slot.x, slot.y, slot.w, slot.h)
-    case 1:
-    case 3:
-      return shelfUnit(slot.x + 12, slot.y, slot.w - 24)
-    default:
-      return noticeBoard(slot.x, slot.y, slot.w, slot.h, 91)
+  if (slot.isFirst || slot.isLast) {
+    return windowUnit(slot.x, slot.y, slot.w, slot.h)
   }
+  if (slot.isCentre) {
+    return noticeBoard(slot.x, slot.y, slot.w, slot.h, 91)
+  }
+  return shelfUnit(slot.x + 12, slot.y, slot.w - 24)
 }
 
 function zone(z: ZoneRect): ZoneFurnishing {
   /*
    * Left: the fireside. The hearth itself is against the side wall rather
-   * than standing in the middle of the room — a fireplace floating on a rug
+   * than standing in the middle of the room â€” a fireplace floating on a rug
    * read as a hole in the floor, and a chimney has to be in a wall.
    */
   if (z.index === 0) {
@@ -142,7 +147,7 @@ function zone(z: ZoneRect): ZoneFurnishing {
 function accents(grid: OfficeGrid): Prop[] {
   const list: Prop[] = []
 
-  const doorX = Math.round((grid.wall[0].x + grid.wall[0].w + grid.wall[1].x) / 2) - 17
+  const doorX = doorwayX(grid, 'left')
   list.push({ id: 'door', ops: doorway(doorX, grid.horizon - 4), baseY: 0 })
 
   for (const slot of grid.stations) {
@@ -159,7 +164,7 @@ function accents(grid: OfficeGrid): Prop[] {
 
   list.push({
     id: 'portrait',
-    ops: poster(grid.wall[2].cx - 16, grid.wall[2].y + grid.wall[2].h + 12, 32, 20, 61),
+    ops: poster(centreSlot(grid).cx - 16, centreSlot(grid).y + centreSlot(grid).h + 12, 32, 20, 61),
     baseY: 0
   })
 
@@ -178,7 +183,13 @@ function accents(grid: OfficeGrid): Prop[] {
   return list
 }
 
-export const sherlockScene: SceneDef = composeOffice({
+/**
+ * The study, at whatever size the viewport gives it.
+ *
+ * There is no camera, so the room is built to fit rather than panned around:
+ * a wider window gets more wall and more desks, not the same room enlarged.
+ */
+export const buildSherlockScene = sceneFactory({
   floorStyle: 'planks',
   wallStyle: 'panelled',
   wall,
@@ -186,3 +197,6 @@ export const sherlockScene: SceneDef = composeOffice({
   accents,
   clock: { slot: 3, r: 9 }
 })
+
+/** The room at its default size, for the theme previews. */
+export const sherlockScene: SceneDef = buildSherlockScene(ROOM_W, ROOM_H)
