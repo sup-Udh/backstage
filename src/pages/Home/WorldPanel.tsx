@@ -257,9 +257,10 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
       engine.setHovered(hit?.id ?? null)
       setHover((prev) => {
         if (!hit) return prev === null ? prev : null
-        const cam = engine.getCamera()
-        const left = Math.round((hit.x - cam.x) * cam.scale)
-        const top = Math.round((hit.y - cam.y) * cam.scale)
+        const offX = Math.round(cam.x * cam.scale)
+        const offY = Math.round(cam.y * cam.scale)
+        const left = Math.round(hit.x) * cam.scale - offX
+        const top = Math.round(hit.y) * cam.scale - offY
         if (prev && prev.id === hit.id && prev.left === left && prev.top === top) {
           return prev
         }
@@ -450,7 +451,7 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
           onMouseUp={onUp}
           onMouseLeave={onLeave}
           onWheel={onWheel}
-          className="pixelated block h-full w-full"
+          className="pixelated block"
           style={{
             cursor: linking
               ? 'crosshair'

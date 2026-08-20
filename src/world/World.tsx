@@ -123,8 +123,10 @@ export function World({ theme, engine, switching = false }: Props) {
       setHover((prev) => {
         if (!hit) return prev === null ? prev : null
         const cam = engine.getCamera()
-        const left = Math.round((hit.x - cam.x) * cam.scale)
-        const top = Math.round((hit.y - cam.y) * cam.scale)
+        const offX = Math.round(cam.x * cam.scale)
+        const offY = Math.round(cam.y * cam.scale)
+        const left = Math.round(hit.x) * cam.scale - offX
+        const top = Math.round(hit.y) * cam.scale - offY
         if (prev && prev.id === hit.id && prev.left === left && prev.top === top) {
           return prev
         }
