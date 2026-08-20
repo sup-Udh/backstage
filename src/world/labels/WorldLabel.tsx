@@ -75,8 +75,21 @@ export const WorldLabel = forwardRef<HTMLDivElement, Props>(function WorldLabel(
          */
         letterSpacing: '0.06em',
         padding: '0.1em 0.25em',
-        gap: '0.2em',
-        willChange: 'transform'
+        gap: '0.2em'
+        /*
+         * Deliberately no `will-change: transform`, and the layer positions
+         * these with a 2D translate rather than translate3d.
+         *
+         * Both promote the label to its own compositor layer, and a promoted
+         * layer is presented on the compositor's schedule while the canvas
+         * beside it is painted on the main thread's. The two then disagree by
+         * a frame whenever the camera moves quickly, which is exactly the
+         * "the name tag slides off the character while I drag" symptom — the
+         * label was never mispositioned, it was arriving late.
+         *
+         * Staying in the normal paint pass costs a little more per frame and
+         * keeps the tag welded to the sprite, which is worth far more.
+         */
       }}
     >
       {glyph && (

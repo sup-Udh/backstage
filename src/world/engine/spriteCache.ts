@@ -47,25 +47,26 @@ const MAX_FRAMES = 4
  * at every zoom level and every window size — there is no size that is only
  * correct at one viewport.
  *
- * ── Why exactly 0.5 ──
+ * ── Why this number ──
  *
  * The art is 20x30. Shrinking it is a nearest-neighbour resample, and that
- * only stays clean when both axes land on whole pixels *and* the sampling
- * grid is uniform — otherwise some source rows survive and their neighbours
- * vanish, and a face loses an eye at one size and gains a smudge at another.
+ * only stays clean when both axes land on whole pixels *and* the sheet's cell
+ * grid survives — the sheet is 4 frames wide and 32 rows tall, so every row
+ * boundary has to land on a whole pixel too, or the frame grid comes apart
+ * and characters start showing slices of the pose above them.
  *
- * That rules out most of the range. 0.45 would be a tidy-sounding 25% cut but
- * gives 9 x 13.5: the height does not land, and worse, the sheet is 32 rows
- * tall, so every row boundary after the first would fall on a half pixel and
- * the frame grid itself would come apart. 0.5 gives 10x15 on an exact 2:1
- * grid — every pair of source pixels becomes one, uniformly, everywhere.
+ * Any multiple of 0.1 satisfies that. 0.45 would have been a tidy-sounding
+ * 25% cut and does not: it gives 9 x 13.5, and 32 rows of 13.5 puts every
+ * boundary after the first on a half pixel.
  *
- * The other half of the reduction comes from the room. The world grew from
- * 480x240 to 640x400 in the same pass, so a character went from occupying
- * 7.5% of the room's height to 3.75% — the cast is half the size relative to
- * the office it works in, which is the proportion that was actually wanted.
- * Cutting the sprite alone to reach that would have meant 8x12, which is
- * below the size at which these faces are still recognisable.
+ * 0.8 gives 16x24 — a 4:5 grid, so one row in five is dropped uniformly
+ * across the whole sheet. That costs a little detail against a clean halving,
+ * and buys back the thing that matters more: at 0.5 the cast had shrunk far
+ * enough that a seated character was almost entirely hidden behind their own
+ * desk, and faces stopped being tellable apart at the default zoom. The room
+ * carries the proportion instead — it grew from 480x240 to 640x400 in the
+ * same pass, so a character still occupies a smaller share of the office than
+ * it did before any of this, while staying big enough to recognise.
  */
 export const CHARACTER_SCALE = 0.8
 

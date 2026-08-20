@@ -24,8 +24,16 @@ const ACTIVE: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
  * to whom.
  */
 const GAP = 3
-/** Clearance from the edge of the viewport. */
-const EDGE = 2
+
+/**
+ * How many rows a label may be pushed away from its character to clear one
+ * already placed.
+ *
+ * Capped rather than unbounded: past a few rows the label is far enough from
+ * the head that it stops reading as belonging to anyone, at which point
+ * overlapping the neighbour is the lesser problem.
+ */
+const MAX_STACK = 3
 
 interface Rect {
   x: number
@@ -106,21 +114,19 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
   }, [])
 
   useEffect(() => {
-    let raf = 0
-
-    const frame = () => {
-      raf = requestAnimationFrame(frame)
-
+    return engine.subscribeFrame((anchors) => {
       const cam = engine.getCamera()
       if (cam.scale !== zoom) setZoom(cam.scale)
 
-      const { width: viewW, height: viewH } = engine.getViewport()
-      const anchors = engine.getLabelAnchors()
       const placed: Rect[] = []
 
-      // Left to right, so a crowd resolves the same way every frame rather
-      // than flickering between arrangements.
-      for (const a of [...anchors].sort((p, q) => p.x - q.x)) {
+      /*
+       * Front to back, matching the order the renderer draws bodies in. A
+       * character nearer the viewer keeps the position their label wants, and
+       * anyone behind them stacks away from it — so the label that gets moved
+       * is the one belonging to the character already partly hidden.
+       */
+      for (const a of [...anchors].sort((p, q) => q.feet - p.feet)) {
         const hidden = !a.onScreen || a.agentId === hoveredId
 
         for (const kind of ['name', 'status'] as const) {
@@ -135,53 +141,40 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
           }
 
           const { w, h } = size
-          // Names sit above the head and statuses below the feet, so the two
-          // never stack into a tower and the character stays between them.
-          const baseX = a.x - w / 2
-          const baseY = kind === 'name' ? a.head - GAP - h : a.feet + GAP
 
           /*
-           * Candidates in priority order: straight on, then shouldered left or
-           * right, then pushed further out. The first that clears everything
-           * already placed wins; if a crowd leaves nothing free, the last is
-           * used, which is the most displaced and so the least likely to sit
-           * on top of a neighbour.
+           * Horizontally the label is nailed to its character, and that is not
+           * negotiable.
+           *
+           * It used to be allowed to shoulder sideways to dodge a neighbour,
+           * which is what made tags appear to come loose while panning and
+           * zooming: a label offset by half its own width has nothing tying it
+           * to the person it names, and every change in zoom re-decided which
+           * labels were colliding, so they slid about independently of the
+           * cast. Vertical stacking keeps the tag directly over the head, and
+           * "directly over" is the entire reason anyone can tell whose it is.
            */
-          const step = kind === 'name' ? -(h + 3) : h + 3
-          const shoulder = w * 0.55
-          const candidates: [number, number][] = [
-            [0, 0],
-            [-shoulder, 0],
-            [shoulder, 0],
-            [0, step],
-            [-shoulder, step],
-            [shoulder, step],
-            [0, step * 2]
-          ]
+          const x = Math.round(a.x - w / 2)
+          let y = Math.round(kind === 'name' ? a.head - GAP - h : a.feet + GAP)
 
-          let spot: Rect | null = null
-          for (const [dx, dy] of candidates) {
-            const rect = {
-              x: Math.round(baseX + dx),
-              y: Math.round(baseY + dy),
-              w,
-              h
-            }
-            spot = rect
-            if (!placed.some((p) => overlaps(rect, p))) break
+          // Names climb away from the head, statuses drop away from the feet.
+          const step = kind === 'name' ? -(h + 2) : h + 2
+          for (let i = 0; i < MAX_STACK; i++) {
+            if (!placed.some((p) => overlaps({ x, y, w, h }, p))) break
+            y += step
           }
 
-          if (!spot) continue
-          placed.push(spot)
+          placed.push({ x, y, w, h })
           el.style.opacity = '1'
-          // Whole pixels: a label on a half pixel is a blurred label.
-          el.style.transform = `translate3d(${spot.x}px, ${spot.y}px, 0)`
+          /*
+           * Whole pixels, and a 2D translate — `translate3d` would promote
+           * each label to its own compositor layer, which is what made tags
+           * lag a frame behind the canvas while panning. See WorldLabel.
+           */
+          el.style.transform = `translate(${x}px, ${y}px)`
         }
       }
-    }
-
-    raf = requestAnimationFrame(frame)
-    return () => cancelAnimationFrame(raf)
+    })
   }, [engine, hoveredId, zoom])
 
   const nameSize = labelFontSize('character-name', zoom)

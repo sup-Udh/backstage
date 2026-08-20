@@ -257,6 +257,7 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
       engine.setHovered(hit?.id ?? null)
       setHover((prev) => {
         if (!hit) return prev === null ? prev : null
+        const cam = engine.getCamera()
         const offX = Math.round(cam.x * cam.scale)
         const offY = Math.round(cam.y * cam.scale)
         const left = Math.round(hit.x) * cam.scale - offX

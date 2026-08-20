@@ -48,6 +48,7 @@ export class WorldEngine {
   private droppable = new Set<string>()
   private views: AgentView[] = []
   private viewListeners = new Set<(v: AgentView[]) => void>()
+  private frameListeners = new Set<(anchors: LabelAnchor[]) => void>()
   private unsubscribe: (() => void) | null = null
 
   constructor(
@@ -172,6 +173,24 @@ export class WorldEngine {
    * fills up over a session.
    */
   private spawnArrivals(): void {
+    /*
+     * How far back in the queue this arrival starts.
+     *
+     * The roster loads over IPC, so on entering the workspace the whole team
+     * becomes visible within a frame or two of each other and every one of
+     * them was placed on the same pixel outside the same door. They then
+     * walked the lane as a single overlapping clump for several seconds —
+     * one visible body with four name tags stacked above it, which reads as
+     * the labels being broken rather than the cast being on top of itself.
+     *
+     * Spacing them out turns that into people filing in, which is both
+     * legible and what an office actually looks like at nine o'clock.
+     */
+    let queued = 0
+    for (const c of this.chars) {
+      if (c.x < 0) queued++
+    }
+
     for (const agent of this.runtime.getAgents()) {
       if (!agent.visible || this.placed.has(agent.id)) continue
 
@@ -180,8 +199,9 @@ export class WorldEngine {
         ownName: agent.useOwnName ? agent.name : undefined,
         def: castFor(this.theme, agent.slot),
         model: agent.model,
-        // Just off the left edge, so the walk in is visible.
-        x: -10,
+        // Just off the left edge, so the walk in is visible, and behind
+        // anyone still on their way in.
+        x: -10 - queued++ * ENTRY_SPACING,
         y: this.theme.scene.laneY,
         facing: 'right',
         state: 'walking',
@@ -484,6 +504,11 @@ export class WorldEngine {
     }
 
     this.paint()
+    
+    // Notify frame listeners synchronously after paint
+    const anchors = this.getLabelAnchors()
+    for (const fn of this.frameListeners) fn(anchors)
+    
     this.raf = requestAnimationFrame(this.tick)
   }
 
@@ -531,6 +556,11 @@ export class WorldEngine {
   subscribeViews = (fn: (v: AgentView[]) => void): (() => void) => {
     this.viewListeners.add(fn)
     return () => this.viewListeners.delete(fn)
+  }
+
+  subscribeFrame = (fn: (anchors: LabelAnchor[]) => void): (() => void) => {
+    this.frameListeners.add(fn)
+    return () => this.frameListeners.delete(fn)
   }
 
   /**
@@ -697,6 +727,14 @@ const HIT_H = WORLD_SPRITE_H + HIT_PAD * 2
  * can be asked to hit.
  */
 const LINK_HIT_PAD = 4
+
+/**
+ * Gap between characters queueing to walk in, in scene pixels.
+ *
+ * Wider than a sprite, so the labels above two people arriving together do
+ * not overlap either.
+ */
+const ENTRY_SPACING = 22
 
 /** Which of a theme's characters portrays the agent in this slot. */
 function castFor(theme: Theme, slot: number): CharacterDef {
