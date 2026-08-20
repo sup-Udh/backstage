@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import type {
+  Case,
   LegacyAdoption,
   Project,
   ProjectBootstrap,
@@ -7,6 +8,15 @@ import type {
   ProjectPatch,
   ProjectSnapshot
 } from '../../src/shared/projects'
+import type { AgentTask } from '../../src/shared/agents'
+import {
+  deleteCase,
+  getCase,
+  listCases,
+  renameCase,
+  setCaseStatus
+} from '../cases/caseStore'
+import { tasksInCase } from '../agents/taskStore'
 import {
   createProject,
   getActiveProject,
@@ -104,6 +114,47 @@ export function registerProjectsHandlers(): void {
     'projects:adoptLegacy',
     (_e, input: LegacyAdoption): ProjectSnapshot | null => adoptLegacy(input)
   )
+
+  /* ----------------------------------------------------------- cases -- */
+
+  ipcMain.handle('cases:list', (): Case[] => listCases())
+
+  /**
+   * The work done under one case.
+   *
+   * Read from the task ledger rather than from the case record, so a task that
+   * has aged out of the bounded in-memory log simply does not appear. The
+   * alternative — trusting the stored id list — would show entries the app can
+   * say nothing at all about.
+   */
+  ipcMain.handle('cases:tasks', (_e, caseId: unknown): AgentTask[] => {
+    const target = getCase(String(caseId ?? ''))
+    return target ? tasksInCase(target.id) : []
+  })
+
+  ipcMain.handle(
+    'cases:rename',
+    (_e, caseId: unknown, name: unknown): Case[] => {
+      renameCase(String(caseId ?? ''), String(name ?? ''))
+      return listCases()
+    }
+  )
+
+  ipcMain.handle(
+    'cases:setStatus',
+    (_e, caseId: unknown, status: unknown): Case[] => {
+      setCaseStatus(
+        String(caseId ?? ''),
+        status === 'closed' ? 'closed' : 'open'
+      )
+      return listCases()
+    }
+  )
+
+  ipcMain.handle('cases:remove', (_e, caseId: unknown): Case[] => {
+    deleteCase(String(caseId ?? ''))
+    return listCases()
+  })
 }
 
 /**

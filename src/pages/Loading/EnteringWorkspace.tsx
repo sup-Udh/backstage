@@ -103,9 +103,15 @@ export function EnteringWorkspace() {
        * being shown the wizard. The user already has a workspace, a team and a
        * theme; asking them to choose all three again would be asking them to
        * re-enter what the app is looking straight at.
+       *
+       * Only when there is a team to keep, though. A folder with no agents
+       * behind it is not a project anybody built — adopting it would open an
+       * empty office and leave the user to hire everyone by hand, when the
+       * wizard exists to do exactly that. It goes to setup instead, with the
+       * folder already filled in.
        */
       let opened = project
-      if (!opened && legacy?.workspacePath) {
+      if (!opened && legacy?.workspacePath && legacy.agentCount > 0) {
         opened = await adoptLegacy(folderName(legacy.workspacePath))
       }
       if (!live) return

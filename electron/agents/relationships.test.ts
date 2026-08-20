@@ -2,7 +2,9 @@ import {
   canConnect,
   connectionsOf,
   groupOf,
+  leadOf,
   threadIdFor,
+  workersOf,
   MAX_CONNECTIONS,
   MAX_GROUP,
   type Linkable
@@ -67,6 +69,12 @@ function join(list: Linkable[], aId: string, bId: string): void {
   const b = list.find((x) => x.id === bId)!
   if (!a.canTalkTo.includes(bId)) a.canTalkTo.push(bId)
   if (!b.canTalkTo.includes(aId)) b.canTalkTo.push(aId)
+}
+
+/** Make `aId` the lead of `bId`, the way `connectAgents` does. */
+function lead(list: Linkable[], aId: string, bId: string): void {
+  const a = list.find((x) => x.id === aId)!
+  a.leads = [...(a.leads ?? []), bId]
 }
 
 console.log('Relationships')
@@ -165,6 +173,68 @@ check('caps are what the product promises', [MAX_CONNECTIONS, MAX_GROUP], [2, 3]
     true
   )
   check('thread id is stable and sorted', threadIdFor(['c', 'a', 'b']), 'thread:a+b+c')
+}
+
+/* ----------------------------------------------------------- direction -- */
+
+/**
+ * Talking is mutual; authority is not. These check that the asymmetry holds,
+ * because it is what stops two connected agents handing the same task back and
+ * forth — each one entitled to reassign it to the other.
+ */
+{
+  const list = roster({ jane: ['lisbon'], lisbon: ['jane'] })
+  lead(list, 'jane', 'lisbon')
+
+  check('the lead has a worker', workersOf(list, 'jane'), ['lisbon'])
+  check('the worker leads nobody', workersOf(list, 'lisbon'), [])
+  check('the worker knows its lead', leadOf(list, 'lisbon'), 'jane')
+  check('the lead reports to nobody', leadOf(list, 'jane'), null)
+}
+
+/* One lead, two workers: the shape the god agent uses. */
+{
+  const list = roster({ jane: ['lisbon', 'cho'], lisbon: ['jane'], cho: ['jane'] })
+  lead(list, 'jane', 'lisbon')
+  lead(list, 'jane', 'cho')
+
+  check('a lead can hold several workers', workersOf(list, 'jane'), ['cho', 'lisbon'])
+  check('each worker reports to the lead', leadOf(list, 'cho'), 'jane')
+  check('workers do not lead each other', workersOf(list, 'cho'), [])
+}
+
+/* A chain: Jane leads Lisbon, Lisbon leads Patrick. */
+{
+  const list = roster({ jane: ['lisbon'], lisbon: ['jane', 'patrick'], patrick: ['lisbon'] })
+  lead(list, 'jane', 'lisbon')
+  lead(list, 'lisbon', 'patrick')
+
+  check('the middle of a chain both leads and reports', workersOf(list, 'lisbon'), [
+    'patrick'
+  ])
+  check('and knows who it reports to', leadOf(list, 'lisbon'), 'jane')
+  check('authority does not reach past one hop', leadOf(list, 'patrick'), 'lisbon')
+}
+
+/* Authority must never outlive the connection it came from. */
+{
+  const list = roster({ jane: [], lisbon: [] })
+  const jane = list.find((a) => a.id === 'jane')!
+  jane.leads = ['lisbon']
+
+  check(
+    'a lead entry with no connection behind it grants nothing',
+    workersOf(list, 'jane'),
+    []
+  )
+  check('and the worker has no lead', leadOf(list, 'lisbon'), null)
+}
+
+/* A roster written before direction existed leaves everyone a peer. */
+{
+  const list = roster({ jane: ['lisbon'], lisbon: ['jane'] })
+  check('an absent leads list means leading nobody', workersOf(list, 'jane'), [])
+  check('and reporting to nobody', leadOf(list, 'lisbon'), null)
 }
 
 {

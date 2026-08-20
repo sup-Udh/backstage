@@ -25,6 +25,7 @@ import type {
   Trigger
 } from './agents'
 import type {
+  Case,
   LegacyAdoption,
   Project,
   ProjectBootstrap,
@@ -312,6 +313,22 @@ export interface BackstageApi {
     update(projectId: string, patch: ProjectPatch): Promise<Project | null>
     /** Fold pre-project workspace, roster and theme into a real project. */
     adoptLegacy(input: LegacyAdoption): Promise<ProjectSnapshot | null>
+  }
+
+  /**
+   * Investigations within the open project.
+   *
+   * A case is what the user asked for; its tasks are how the team went about
+   * it. Cases persist and are project-scoped; the tasks under them are a
+   * record of this session's work and are not persisted, so a case can
+   * outlive the tasks it lists.
+   */
+  cases: {
+    list(): Promise<Case[]>
+    tasks(caseId: string): Promise<AgentTask[]>
+    rename(caseId: string, name: string): Promise<Case[]>
+    setStatus(caseId: string, status: 'open' | 'closed'): Promise<Case[]>
+    remove(caseId: string): Promise<Case[]>
   }
 
   agents: {

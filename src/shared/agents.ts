@@ -78,13 +78,16 @@ export interface AgentConfig {
   capabilities: CapabilityId[]
   profile: ExecutionProfile
   /**
-   * The theme whose cast the character was picked from. A character is only
-   * meaningful inside its own world, so the theme is stored with the slot.
-   */
-  themeId: string | null
-  /**
-   * Which of the active theme's characters portrays this agent. A slot rather
-   * than a character id, because the cast changes with the world.
+   * Which of the *project's* cast portrays this agent.
+   *
+   * An index into `Project.characterRoster`, not into a theme. There used to
+   * be a `themeId` here as well, so each agent carried its own world — which
+   * meant one project could hold people from four different worlds at once.
+   * The theme belongs to the project now, and changing it re-casts the whole
+   * team together.
+   *
+   * A slot rather than a character id, because the cast changes with the world
+   * and the agent underneath it does not.
    */
   characterSlot: number
   enabled: boolean
@@ -100,6 +103,15 @@ export interface AgentConfig {
   workspace: string | null
   /** Agents this one may send work or messages to. Directional. */
   canTalkTo: string[]
+  /**
+   * Agents this one leads, and may therefore assign work to.
+   *
+   * Always a subset of `canTalkTo`. The two are separate because they answer
+   * different questions: `canTalkTo` is whether a pair may exchange work at
+   * all, and this is which way it flows. When the user drags a connection from
+   * one character to another, the one they dragged *from* becomes the lead.
+   */
+  leads: string[]
   createdAt: number
   updatedAt: number
 }
@@ -185,7 +197,17 @@ export type TaskStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancel
 
 export interface AgentTask {
   id: string
+  /** The project this work belongs to. Never shown outside it. */
+  projectId: string
   agentId: string
+  /**
+   * The investigation this task is part of.
+   *
+   * Every task belongs to a case, so the Cases page can report work as the
+   * handful of investigations it actually was rather than as a flat list of
+   * every prompt ever sent.
+   */
+  caseId: string | null
   prompt: string
   /** Short headline, for lists. */
   title: string
@@ -261,15 +283,6 @@ export type RuntimeEventType =
   | 'git.changed'
   | 'terminal.started'
   | 'terminal.exited'
-  // Team Orchestration
-  | 'team.started'
-  | 'team.agent.started'
-  | 'team.agent.streaming'
-  | 'team.agent.completed'
-  | 'team.agent.failed'
-  | 'team.agent.skipped'
-  | 'team.cancelled'
-  | 'team.completed'
 
 /**
  * One thing that happened.
@@ -295,7 +308,6 @@ export interface RuntimeEvent {
   correlationId?: string
   depth?: number
 
-  teamExecutionId?: string
   error?: string
 
   /** Line for the activity rail. */

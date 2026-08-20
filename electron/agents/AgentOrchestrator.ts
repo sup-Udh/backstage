@@ -16,6 +16,7 @@ import {
 } from './taskStore'
 import { chainMessageCount, isRepeat, recordCollaboration } from './collaborationStore'
 import { getSettings } from './settingsStore'
+import { attachTask, caseForChain } from '../cases/caseStore'
 
 /**
  * The orchestrator.
@@ -113,11 +114,26 @@ export class AgentOrchestrator {
     const guard = this.guardChain(agent, prompt, correlationId, depth, request.origin)
     if (guard) return { rejected: true, error: guard }
 
+    const title = request.title?.trim() || headline(prompt)
+
+    /*
+     * Every task belongs to an investigation.
+     *
+     * The case is resolved from the correlation id, so a request broadcast to
+     * three agents — and everything they then delegate — lands in one case
+     * rather than three. It is opened on demand and named from the request
+     * that began the chain, which is why the user never has to create a case
+     * before asking a question.
+     */
+    const caseId = request.caseId ?? caseForChain(correlationId, title)
+
     const task: AgentTask = {
       id: makeId('task'),
+      projectId: agent.projectId,
+      caseId,
       agentId: agent.id,
       prompt,
-      title: request.title?.trim() || headline(prompt),
+      title,
       status: 'queued',
       origin: request.origin,
       originAgentId: request.originAgentId ?? null,
@@ -132,6 +148,7 @@ export class AgentOrchestrator {
       error: null
     }
     recordTask(task)
+    if (caseId) attachTask(caseId, task.id, agent.id)
 
     const lane = this.lane(agent.id)
     lane.queue.push({ task, history: request.history ?? this.historyFor(agent.id) })

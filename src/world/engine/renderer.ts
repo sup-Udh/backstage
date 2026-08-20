@@ -42,12 +42,21 @@ interface Mote {
   drift: number
 }
 
-/** A collaboration link between two characters in the room. */
+/**
+ * A collaboration link between two characters in the room.
+ *
+ * When `directed`, `a` leads `b` and the line is drawn with an arrowhead at
+ * `b`'s end. That is not decoration: a connection is what lets one agent hand
+ * work to another, and a line with no direction on it leaves the user unable
+ * to tell which way the work will actually flow.
+ */
 export interface WorldLink {
   a: string
   b: string
   /** Briefly true just after the pair exchanged something. */
   active: boolean
+  /** True when `a` leads `b`. False for a peer link with no stated direction. */
+  directed: boolean
 }
 
 /** A connection being dragged out from a character but not yet dropped. */
@@ -280,7 +289,8 @@ export class WorldRenderer {
     from: { x: number; y: number },
     to: { x: number; y: number },
     t: number,
-    active: boolean
+    active: boolean,
+    directed: boolean
   ): void {
     const ax = Math.round(from.x)
     const ay = Math.round(from.y - WORLD_SPRITE_H * 0.55)
@@ -308,13 +318,37 @@ export class WorldRenderer {
       ctx.fillRect(Math.round(ax + dx * p), Math.round(ay + dy * p), 1, 1)
     }
 
-    // A small mark at the midpoint, so a link is findable when the two
-    // characters are far apart and the dashes are sparse.
     const mx = Math.round(ax + dx / 2)
     const my = Math.round(ay + dy / 2)
     ctx.globalAlpha = active ? 1 : 0.65
-    ctx.fillRect(mx - 1, my, 3, 1)
-    ctx.fillRect(mx, my - 1, 1, 3)
+
+    if (directed) {
+      /*
+       * An arrowhead at the midpoint rather than at the worker's end.
+       *
+       * The ends of the line are behind the two characters' heads, where a
+       * mark is easily read as part of a sprite; the middle is clear floor and
+       * is also where the eye already goes to find the link. Drawn as two
+       * stepped pixel runs, not a stroked triangle, for the same reason the
+       * line itself is stamped: nothing in this scene may land on a half pixel.
+       */
+      const ux = dx / len
+      const uy = dy / len
+      const tip = { x: mx + Math.round(ux * 3), y: my + Math.round(uy * 3) }
+      for (let i = 0; i < 4; i++) {
+        // Step back from the tip, widening across the line's normal.
+        const bx2 = tip.x - Math.round(ux * i)
+        const by2 = tip.y - Math.round(uy * i)
+        const spread = Math.round((i / 2) * 1)
+        ctx.fillRect(bx2 - Math.round(-uy * spread), by2 - Math.round(ux * spread), 1, 1)
+        ctx.fillRect(bx2 + Math.round(-uy * spread), by2 + Math.round(ux * spread), 1, 1)
+      }
+    } else {
+      // A peer link gets a plain cross: findable when the two characters are
+      // far apart and the dashes are sparse, but claiming no direction.
+      ctx.fillRect(mx - 1, my, 3, 1)
+      ctx.fillRect(mx, my - 1, 1, 3)
+    }
     ctx.restore()
   }
 
@@ -525,7 +559,7 @@ export class WorldRenderer {
     for (const link of links) {
       const a = at.get(link.a)
       const b = at.get(link.b)
-      if (a && b) this.drawLink(ctx, a, b, t, link.active)
+      if (a && b) this.drawLink(ctx, a, b, t, link.active, link.directed)
     }
 
     if (pending) {

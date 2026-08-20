@@ -32,7 +32,7 @@ import {
 } from '../agents/threads'
 import { agentRegistry, validateAgent } from '../agents/AgentRegistry'
 import { orchestrator, wasRejected } from '../agents/AgentOrchestrator'
-import { teamOrchestrator } from '../agents/TeamOrchestrator'
+import { godAgent } from '../agents/GodAgent'
 import { initTriggerEngine } from '../agents/TriggerEngine'
 import { systemBus } from '../agents/EventBus'
 import { conversationStore } from '../agents/conversationStore'
@@ -188,29 +188,32 @@ export function registerAgentHandlers(): void {
 
     // Keep git fresh so the awareness block in the prompt is not stale.
     void refreshGit()
-    
-    // Team / Broadcast execution
-    if (Array.isArray(params?.target)) {
-      if (params.target.length === 0) {
-        return { accepted: false, error: 'No agents are spawned.' }
+
+    /*
+     * Talking to the whole team.
+     *
+     * It goes to one agent — the project's team lead — who splits it up and
+     * hands the parts out. Running every agent over the same prompt instead,
+     * which is what used to happen here, produced five overlapping answers to
+     * one question and billed five model calls to do it.
+     *
+     * The fallback matters: a project whose lead was deleted or never spawned
+     * still has to answer "talk to everyone" somehow, so it degrades to the
+     * old broadcast rather than refusing over a setting the user may not know
+     * exists.
+     */
+    if (params?.target === 'all' || Array.isArray(params?.target)) {
+      const led = godAgent.run(prompt)
+      if (!('error' in led)) {
+        conversationStore.append(workspaceId(), led.leadId, {
+          id: makeId('msg'),
+          kind: 'user',
+          agentId: led.leadId,
+          text: prompt,
+          at: Date.now()
+        })
+        return { accepted: true, taskIds: [led.taskId], agentIds: [led.leadId] }
       }
-      
-      const teamExecutionId = teamOrchestrator.runTeam(params.target, prompt, 'user')
-      
-      // Persist the user prompt in each recipient's conversation history
-      for (const agentId of params.target) {
-        if (!agentId.startsWith('cli-')) {
-          conversationStore.append(workspaceId(), agentId, {
-            id: makeId('msg'),
-            kind: 'user',
-            agentId,
-            text: prompt,
-            at: Date.now()
-          })
-        }
-      }
-      
-      return teamExecutionId
     }
 
     const targets = recipients(params?.target)
@@ -289,10 +292,12 @@ export function registerAgentHandlers(): void {
     orchestrator.cancel(String(agentId ?? ''))
   )
 
-  ipcMain.handle('agents:stopAll', async (): Promise<number> => {
-    teamOrchestrator.cancelAllTeams?.()
-    return orchestrator.stopAll()
-  })
+  /*
+   * The emergency stop. Cancelling every execution also stops anything the
+   * team lead was waiting on, so there is nothing separate to unwind: the
+   * synthesis only ever fires for a request whose lead task completed.
+   */
+  ipcMain.handle('agents:stopAll', async (): Promise<number> => orchestrator.stopAll())
 
   ipcMain.handle('agents:retry', (_e, taskId: unknown): RunTaskAck => {
     const result = orchestrator.retry(String(taskId ?? ''))

@@ -1,4 +1,5 @@
 import type { AgentTask, TaskStatus } from './agent.types'
+import { getActiveProjectId } from '../projects/projectStore'
 
 /**
  * The task ledger.
@@ -55,13 +56,52 @@ export function setTaskStatus(
   return task
 }
 
-/** Newest first, so the UI shows the current work at the top. */
+/**
+ * Newest first, so the UI shows the current work at the top.
+ *
+ * Scoped to the open project. Tasks are keyed by agent and agents are already
+ * project-scoped, so this is belt-and-braces — but the ledger is one flat map
+ * shared by every project, and "the roster happens to filter it" is not the
+ * same guarantee as filtering it.
+ */
 export function listTasks(limit = 60, agentId?: string): AgentTask[] {
+  const projectId = getActiveProjectId()
+  if (!projectId) return []
+
   const all = order
     .map((id) => tasks.get(id))
-    .filter((t): t is AgentTask => t !== undefined)
+    .filter((t): t is AgentTask => t !== undefined && t.projectId === projectId)
   const scoped = agentId ? all.filter((t) => t.agentId === agentId) : all
   return scoped.slice(-limit).reverse()
+}
+
+/** Every task in one case, oldest first. */
+export function tasksInCase(caseId: string): AgentTask[] {
+  return order
+    .map((id) => tasks.get(id))
+    .filter((t): t is AgentTask => t !== undefined && t.caseId === caseId)
+}
+
+/**
+ * The tasks one task handed out, oldest first.
+ *
+ * This is the task tree: a delegation becomes a child task carrying its
+ * parent's id, so a coordinator can ask what it is still waiting on without
+ * anything having to track that separately.
+ */
+export function listChildren(parentTaskId: string): AgentTask[] {
+  return order
+    .map((id) => tasks.get(id))
+    .filter((t): t is AgentTask => t !== undefined && t.parentTaskId === parentTaskId)
+}
+
+/** Whether every task handed out by this one has finished, one way or another. */
+export function childrenSettled(parentTaskId: string): boolean {
+  const children = listChildren(parentTaskId)
+  if (children.length === 0) return true
+  return children.every(
+    (t) => t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled'
+  )
 }
 
 export function activeTasks(): AgentTask[] {
@@ -75,6 +115,27 @@ export function chainSize(correlationId: string): number {
   let n = 0
   for (const t of tasks.values()) if (t.correlationId === correlationId) n++
   return n
+}
+
+/** Every task descended from one originating request, oldest first. */
+export function chainTasks(correlationId: string): AgentTask[] {
+  return order
+    .map((id) => tasks.get(id))
+    .filter((t): t is AgentTask => t !== undefined && t.correlationId === correlationId)
+}
+
+/**
+ * Whether everything descended from one request has finished.
+ *
+ * Measured on the correlation id rather than by walking parent links, because
+ * a delegate can itself delegate — the tree can be three deep — and the
+ * correlation id is the one thing every task in it shares however far it
+ * branched.
+ */
+export function chainSettled(correlationId: string): boolean {
+  return chainTasks(correlationId).every(
+    (t) => t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled'
+  )
 }
 
 /**

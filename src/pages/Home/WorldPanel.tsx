@@ -162,9 +162,25 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
         const key = [worker.id, otherId].sort().join('|')
         if (seen.has(key)) continue
         seen.add(key)
+
+        /*
+         * The lead is drawn first, so the arrowhead points at the worker.
+         *
+         * Which of the pair is reached first depends on the order of the
+         * worker list, so the direction has to be resolved rather than
+         * assumed — otherwise the same relationship would draw its arrow one
+         * way or the other depending on who was spawned first.
+         */
+        const other = findWorker(workers, otherId)
+        const leads = worker.leads.includes(otherId)
+        const ledBy = other?.leads.includes(worker.id) ?? false
+        const a = ledBy ? otherId : worker.id
+        const b = ledBy ? worker.id : otherId
+
         out.push({
-          a: worker.id,
-          b: otherId,
+          a,
+          b,
+          directed: leads || ledBy,
           active: recent.some(
             (m) =>
               (m.senderAgentId === worker.id && m.receiverAgentId === otherId) ||
@@ -508,9 +524,20 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
                 className="absolute z-30 -translate-x-1/2 -translate-y-full border-2 border-ink bg-cream shadow-[3px_3px_0_0_var(--color-ink)]"
                 style={{ left: linkMenu.left, top: linkMenu.top - 6 }}
               >
+                {/*
+                  Named in the direction work flows. `hitTestLink` returns the
+                  link as it was built, and those are built lead-first — so
+                  "Jane → Lisbon" is a statement about who assigns to whom, not
+                  just which end was clicked.
+                */}
                 <p className="border-b-2 border-rule px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink">
-                  {a.name} ↔ {b.name}
+                  {a.name} {a.leads.includes(b.id) ? '→' : '↔'} {b.name}
                 </p>
+                {a.leads.includes(b.id) && (
+                  <p className="border-b-2 border-rule px-2 py-1 font-ui text-[11px] leading-snug text-ink-3">
+                    {a.name} leads. {b.name} reports back.
+                  </p>
+                )}
                 <div className="flex">
                   <button
                     type="button"

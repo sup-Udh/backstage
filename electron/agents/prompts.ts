@@ -1,6 +1,10 @@
 import type { WorkspaceInfo } from '../workspace/WorkspaceManager'
 import type { AgentConfig } from './agent.types'
-import { getAgent } from './agentStore'
+import { getAgent, leadOf, listAgents, workersOf } from './agentStore'
+import { agentRegistry } from './AgentRegistry'
+import { groupContextFor } from './threads'
+import { getActiveProject } from '../projects/projectStore'
+import { agentSessions } from '../terminal/AgentSessionManager'
 import { awarenessFor } from '../workspace/awareness'
 
 /**
@@ -52,41 +56,107 @@ How to write the final answer:
   conversation.
 - Never reveal hidden reasoning or internal chain-of-thought.`
 
+/** `id (Name, Role)` for a list of agent ids, skipping any that have gone. */
+function describe(ids: string[]): string[] {
+  return ids
+    .map((id) => {
+      const other = getAgent(id)
+      return other ? `${other.id} (${other.name}, ${other.role})` : null
+    })
+    .filter((x): x is string => x !== null)
+}
+
 /**
  * How this agent may work with the others.
  *
  * Stated explicitly, in both directions, because a model told only that a tool
  * exists will use it on everyone. Naming exactly who is reachable is what
  * turns the permission list into behaviour rather than a rejected tool call.
+ *
+ * Direction is stated too, and it is the part that changes behaviour most. A
+ * connection is not symmetrical: one agent leads and the other works. Without
+ * that, two connected agents are each equally entitled to reassign the job to
+ * the other, which is exactly how a task ends up handed back and forth while
+ * both of them bill for the round trip.
  */
 function teamRules(agent: AgentConfig, canDelegate: boolean): string {
   if (!canDelegate) {
     return `You are working alone on this. You have no way to contact other agents; do not claim to have asked anyone for help.`
   }
 
-  if (agent.canTalkTo.length === 0) {
-    return `You have team tools, but the user has not permitted you to contact anyone yet. Do the work yourself.`
+  const workers = describe(workersOf(agent.id))
+  const leadId = leadOf(agent.id)
+  const lead = leadId ? getAgent(leadId) : undefined
+  const peers = describe(
+    agent.canTalkTo.filter((id) => id !== leadId && !workersOf(agent.id).includes(id))
+  )
+
+  const parts: string[] = []
+
+  if (lead) {
+    parts.push(`You report to ${lead.name} (${lead.id}), who leads this work.
+
+When you finish, use agent_message to report back to them: what you did, what
+you found, and the real paths and commands behind it. Ask them if something is
+ambiguous rather than guessing. Do not reassign the job you were given, and do
+not hand work back to whoever just gave it to you.`)
   }
 
-  const names = agent.canTalkTo
-    .map((id) => {
-      const other = getAgent(id)
-      return other ? `${other.id} (${other.name}, ${other.role})` : null
-    })
-    .filter((x): x is string => x !== null)
+  if (workers.length > 0) {
+    parts.push(`You lead these agents: ${workers.join('; ')}.
 
-  if (names.length === 0) {
-    return `You have team tools, but nobody you were permitted to contact still exists. Do the work yourself.`
+You may assign them work with delegate_task. Split the job by what genuinely
+belongs to each of their roles, give complete instructions — they cannot see
+your conversation — and say what you handed to whom. They work independently
+and report back to you in their own time; you do not wait on a tool result.
+Never delegate the whole task you were given: the part that is yours stays
+yours.`)
   }
 
-  return `You may contact these agents, and only these: ${names.join('; ')}.
+  if (peers.length > 0) {
+    parts.push(`You may also contact: ${peers.join('; ')}. Use agent_message to
+pass along a finding. You do not direct them and they do not direct you.`)
+  }
 
-Use delegate_task only for work that genuinely belongs to their role, and give
-them complete instructions — they cannot see your conversation. Use
-agent_message to pass along a finding without assigning work. You do not wait
-for them; they work independently and report in their own session. Never
-delegate the whole task you were given, and never delegate back something that
-was just delegated to you.`
+  if (parts.length === 0) {
+    return `You have team tools, but the user has not connected you to anyone yet. Do the work yourself.`
+  }
+
+  return parts.join('\n\n')
+}
+
+/**
+ * The extra authority and expectations the project's team lead carries.
+ *
+ * Appended rather than replacing the ordinary rules, because the lead is still
+ * an agent with a role and a workspace — it coordinates *as well as* working,
+ * and a prompt that only described coordination produced an agent that
+ * delegated everything and answered nothing itself.
+ */
+function godAgentRules(team: string): string {
+  return `You are the team lead for this project. When the user addresses the
+whole team, the request comes to you.
+
+Your job is to get the request answered, not to answer all of it yourself:
+
+1. Work out what the request actually needs doing.
+2. Look at who is available — call team_status if you need it fresh.
+3. Split the work along the team's real roles and hand the parts out with
+   delegate_task, or delegate_to_session for a running CLI session.
+4. Do the part that is genuinely yours.
+5. Say plainly what you took on and what you handed to whom.
+
+Delegate whenever another agent is better suited or the work can genuinely run
+in parallel. Do not delegate what it would be faster to do yourself, do not
+hand the same thing to two agents, and never delegate the entire request
+untouched — that is not coordination, it is forwarding.
+
+Your teammates report back in their own sessions rather than as tool results,
+so do not wait on them. Finish your own part, state what is still outstanding
+and who has it, and give the user the best answer you can now.
+
+The team, as it stands:
+${team}`
 }
 
 /** The full system prompt for one agent, in one workspace, with these tools. */
@@ -113,20 +183,64 @@ do not guess at its contents.`
 
 ${agent.instructions.trim()}`
 
-  return `${BASE}
+  const project = getActiveProject()
+  const isLead = project?.godAgentId === agent.id
 
---- who you are ---
-${identity}
+  /*
+   * The group block is omitted entirely for an agent with no group, rather
+   * than included as "you have no group". A heading with nothing under it is
+   * something a model will try to make use of.
+   */
+  const group = groupContextFor(agent.id)
 
---- your workspace ---
-${workspaceBlock}
+  return [
+    BASE,
+    '',
+    '--- who you are ---',
+    identity,
+    '',
+    '--- your workspace ---',
+    workspaceBlock,
+    '',
+    '--- your team ---',
+    teamRules(agent, canDelegate),
+    ...(isLead ? ['', '--- you lead this team ---', godAgentRules(teamRoster(agent.id))] : []),
+    ...(group ? ['', '--- your group ---', group] : []),
+    '',
+    '--- what is happening right now ---',
+    awarenessFor(agent.id),
+    '',
+    '--- your tools ---',
+    toolNames.length > 0 ? toolNames.join(', ') : 'none'
+  ].join('\n')
+}
 
---- your team ---
-${teamRules(agent, canDelegate)}
+/**
+ * Every worker in the project, as the lead needs to see them.
+ *
+ * Agents and CLI sessions in one list, because to a coordinator they are the
+ * same thing: something that can be given a task and will report back. The
+ * distinction that matters is which tool reaches them, so each line says.
+ */
+function teamRoster(leadId: string): string {
+  const lines: string[] = []
 
---- what is happening right now ---
-${awarenessFor(agent.id)}
+  for (const agent of listAgents()) {
+    if (agent.id === leadId) continue
+    const state = agentRegistry.get(agent.id)
+    const presence = agent.spawned ? state.status : 'not spawned — cannot take work'
+    const doing = state.action ? ` — currently ${state.action}` : ''
+    const queued = state.queued > 0 ? `, ${state.queued} queued` : ''
+    lines.push(
+      `  ${agent.name} (${agent.id}), ${agent.role}: ${presence}${doing}${queued} — delegate_task`
+    )
+  }
 
---- your tools ---
-${toolNames.length > 0 ? toolNames.join(', ') : 'none'}`
+  for (const session of agentSessions.active()) {
+    lines.push(
+      `  ${session.name} (${session.id}), ${session.provider ?? 'cli'} session: ${session.status} — delegate_to_session`
+    )
+  }
+
+  return lines.length > 0 ? lines.join('\n') : '  You are the only worker in this project.'
 }

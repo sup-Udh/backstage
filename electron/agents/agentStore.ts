@@ -10,6 +10,8 @@ import {
   canConnect,
   connectionsOf as graphConnectionsOf,
   groupOf as graphGroupOf,
+  leadOf as graphLeadOf,
+  workersOf as graphWorkersOf,
   type LinkResult
 } from './relationships'
 import { getActiveProjectId } from '../projects/projectStore'
@@ -167,13 +169,21 @@ function normalise(raw: unknown): AgentConfig | null {
     profile: PROFILES.includes(a.profile as ExecutionProfile)
       ? (a.profile as ExecutionProfile)
       : 'normal',
-    themeId: typeof a.themeId === 'string' && a.themeId ? a.themeId : null,
     characterSlot: Number.isFinite(a.characterSlot) ? Number(a.characterSlot) : 0,
     enabled: a.enabled !== false,
     spawned,
     workspace: typeof a.workspace === 'string' && a.workspace ? a.workspace : null,
     canTalkTo: Array.isArray(a.canTalkTo)
       ? a.canTalkTo.filter((x): x is string => typeof x === 'string')
+      : [],
+    /*
+     * Absent means "leads nobody", which is the right reading for a roster
+     * written before direction existed: those connections were symmetrical,
+     * and inventing a lead for them would grant an authority the user never
+     * expressed. They stay peers until somebody re-draws the link.
+     */
+    leads: Array.isArray(a.leads)
+      ? a.leads.filter((x): x is string => typeof x === 'string')
       : [],
     createdAt: Number.isFinite(a.createdAt) ? Number(a.createdAt) : Date.now(),
     updatedAt: Number.isFinite(a.updatedAt) ? Number(a.updatedAt) : Date.now()
@@ -340,9 +350,12 @@ export function deleteAgent(id: string): void {
    * — a link never crosses projects — so only they are swept.
    */
   for (const other of roster()) {
-    const before = other.canTalkTo.length
+    const before = other.canTalkTo.length + other.leads.length
     other.canTalkTo = other.canTalkTo.filter((x) => x !== id)
-    if (other.canTalkTo.length !== before) other.updatedAt = Date.now()
+    other.leads = other.leads.filter((x) => x !== id)
+    if (other.canTalkTo.length + other.leads.length !== before) {
+      other.updatedAt = Date.now()
+    }
   }
   persist()
 }
@@ -425,12 +438,17 @@ export { MAX_CONNECTIONS, MAX_GROUP, threadIdFor } from './relationships'
 export type { LinkResult } from './relationships'
 
 /**
- * Connect two agents, in both directions.
+ * Connect two agents, with `aId` as the lead.
  *
- * Collaboration is mutual: a link the user draws between two characters means
- * they can talk, not that one may lecture the other. The underlying
- * `canTalkTo` is directional because a trigger may legitimately be one-way,
- * so a link is stored as the pair of directions.
+ * Talking is mutual — both directions of `canTalkTo` are written, because a
+ * worker has to be able to report back and ask for clarification. *Authority*
+ * is not: the first agent, the one the user dragged the connection out of,
+ * becomes the lead and is the only one of the pair who may assign work.
+ *
+ * That asymmetry is the whole point. A symmetrical link left a three-agent
+ * group with no way to say who was in charge, so either of them could decide
+ * to reassign the whole job to the other — which is how two agents end up
+ * handing the same task back and forth.
  *
  * The rules live in `relationships.ts`, which is pure and tested; this applies
  * them and persists the result. The check happens here specifically because
@@ -450,6 +468,14 @@ export function connectAgents(aId: string, bId: string): LinkResult {
 
   if (!a.canTalkTo.includes(bId)) a.canTalkTo.push(bId)
   if (!b.canTalkTo.includes(aId)) b.canTalkTo.push(aId)
+
+  /*
+   * Direction, written once. Re-drawing an existing link does not flip it:
+   * the pair are already connected, and silently reversing who reports to whom
+   * because the user dragged the same line the other way is a change they did
+   * not ask for and would not see.
+   */
+  if (!a.leads.includes(bId) && !b.leads.includes(aId)) a.leads.push(bId)
 
   /*
    * Connecting also grants the ability to talk.
@@ -485,10 +511,18 @@ export function disconnectAgents(aId: string, bId: string): LinkResult {
   const b = getAgent(bId)
   if (!a || !b) return { ok: false, error: 'That agent no longer exists.' }
 
-  const before = a.canTalkTo.length + b.canTalkTo.length
+  const before =
+    a.canTalkTo.length + b.canTalkTo.length + a.leads.length + b.leads.length
   a.canTalkTo = a.canTalkTo.filter((x) => x !== bId)
   b.canTalkTo = b.canTalkTo.filter((x) => x !== aId)
-  if (a.canTalkTo.length + b.canTalkTo.length === before) return { ok: true }
+  // Authority goes with the connection. A lead entry outliving the link it
+  // came from is a permission nobody can see and nobody granted.
+  a.leads = a.leads.filter((x) => x !== bId)
+  b.leads = b.leads.filter((x) => x !== aId)
+
+  const after =
+    a.canTalkTo.length + b.canTalkTo.length + a.leads.length + b.leads.length
+  if (after === before) return { ok: true }
 
   a.updatedAt = Date.now()
   b.updatedAt = Date.now()
@@ -515,4 +549,14 @@ export function connectionsOf(agent: AgentConfig): string[] {
  */
 export function groupOf(agentId: string): string[] {
   return graphGroupOf(roster(), agentId)
+}
+
+/** Agents this one leads, and may therefore assign work to. */
+export function workersOf(agentId: string): string[] {
+  return graphWorkersOf(roster(), agentId)
+}
+
+/** The agent this one reports to, or null if it answers only to the user. */
+export function leadOf(agentId: string): string | null {
+  return graphLeadOf(roster(), agentId)
 }

@@ -35,6 +35,21 @@ export interface Linkable {
   name: string
   /** Directional, as stored. The rules read it as undirected. */
   canTalkTo: string[]
+  /**
+   * Agents this one leads.
+   *
+   * Always a subset of `canTalkTo` — you cannot lead somebody you are not
+   * connected to. Separate from it because the two answer different questions:
+   * `canTalkTo` is a permission ("may these two exchange work at all"), and
+   * this is a direction ("which way does work flow between them"). Collapsing
+   * them would make every connection symmetrical, which is what left a
+   * three-agent group with no way to say who was in charge.
+   *
+   * Optional so a roster written before direction existed still satisfies the
+   * type; an absent list reads as "leads nobody", which is the safe default —
+   * a connection with no stated direction grants no authority.
+   */
+  leads?: string[]
 }
 
 export interface LinkResult {
@@ -139,4 +154,41 @@ export function canConnect(
 /** The stable id for a group's shared conversation. */
 export function threadIdFor(members: string[]): string {
   return `thread:${[...members].sort().join('+')}`
+}
+
+/* ------------------------------------------------------------ direction -- */
+
+/**
+ * Who this agent leads.
+ *
+ * Only counts a worker who is genuinely still connected. A stale entry in
+ * `leads` — left by an agent being deleted, or by a roster edited by hand —
+ * would otherwise read as authority over somebody the graph says is not even a
+ * teammate, and authority is exactly the thing that must not be inferred from
+ * a leftover.
+ */
+export function workersOf(roster: Linkable[], agentId: string): string[] {
+  const agent = roster.find((a) => a.id === agentId)
+  if (!agent?.leads?.length) return []
+
+  const connected = new Set(connectionsOf(roster, agentId))
+  return agent.leads.filter((id) => connected.has(id)).sort()
+}
+
+/**
+ * Who leads this agent, or null.
+ *
+ * Sorted and first-wins rather than "any". Two agents both claiming to lead
+ * one worker should not be reachable — a worker at the connection cap can have
+ * at most two links — but if it ever happens, the answer has to be the same
+ * every time it is asked, or the worker would be told to report to a different
+ * lead on each turn.
+ */
+export function leadOf(roster: Linkable[], agentId: string): string | null {
+  const connected = new Set(connectionsOf(roster, agentId))
+  const leaders = roster
+    .filter((a) => connected.has(a.id) && (a.leads ?? []).includes(agentId))
+    .map((a) => a.id)
+    .sort()
+  return leaders[0] ?? null
 }

@@ -4,6 +4,7 @@ import { conversationStore } from './conversationStore'
 import { systemBus } from './EventBus'
 import { makeId } from './persist'
 import { orchestrator } from './AgentOrchestrator'
+import { agentRegistry } from './AgentRegistry'
 import { getWorkspaceRoot } from '../workspace/WorkspaceManager'
 
 /**
@@ -68,6 +69,52 @@ export function threadFor(agentId: string): ThreadInfo | null {
     names: members.map((id) => getAgent(id)?.name ?? id)
   }
 }
+
+/**
+ * The group, described for a prompt.
+ *
+ * Handed to the model as structured facts rather than left to be inferred from
+ * chat history. An agent asked to work with two teammates has to know who they
+ * are, what they do and what they are doing *now* — and history only carries
+ * whoever happens to have spoken recently, which is why an agent that had not
+ * heard from a teammate all session would answer as though it were alone.
+ *
+ * Returns an empty string for an agent with no group, so the caller can
+ * concatenate it without deciding whether to.
+ */
+export function groupContextFor(agentId: string): string {
+  const thread = threadFor(agentId)
+  if (!thread) return ''
+
+  const lines = thread.members
+    .filter((id) => id !== agentId)
+    .map((id) => {
+      const member = getAgent(id)
+      if (!member) return null
+      const state = agentRegistry.get(id)
+      const doing = state.action ? ` — currently ${state.action}` : ''
+      return `  ${member.name} (${member.id}), ${member.role}: ${state.status}${doing}`
+    })
+    .filter((line): line is string => line !== null)
+
+  const recent = conversationStore
+    .load(workspaceId(), thread.id)
+    .slice(-GROUP_HISTORY)
+    .map((m) => `  ${m.fromName ?? (m.kind === 'user' ? 'The user' : m.agentId)}: ${m.text}`)
+
+  return [
+    `You are in a group of ${thread.members.length}: ${thread.names.join(', ')}.`,
+    'The other members are:',
+    ...lines,
+    recent.length > 0 ? 'Recently in the group conversation:' : '',
+    ...recent
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+/** How many group lines to put in a prompt. Enough for context, not a log. */
+const GROUP_HISTORY = 6
 
 export function loadThread(threadId: string): ChatMessage[] {
   return conversationStore.load(workspaceId(), threadId)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Theme } from '../../themes/types'
+import type { CharacterDef } from '../../characters/character.types'
+import { castForSlot } from '../../project/cast'
 import type { AgentConfig, CapabilityId } from '../../shared/providerApi'
 import { CAPABILITIES, DEFAULT_CAPABILITIES } from '../../shared/capabilities'
 import { useBackstage } from '../../stores/backstageStore'
@@ -7,7 +8,13 @@ import { useTeam } from '../../stores/teamStore'
 import { CharacterSprite } from '../../world/CharacterSprite'
 
 interface Props {
-  theme: Theme
+  /**
+   * The project's cast — the only faces a new hire can be given.
+   *
+   * A spawned agent joins this project, so offering the whole theme would let
+   * somebody nobody chose walk into the office through the fast path.
+   */
+  cast: CharacterDef[]
   onClose: () => void
   /** Called with the new agent once it is actually in the world. */
   onSpawned: (agent: AgentConfig) => void
@@ -27,7 +34,7 @@ interface Props {
  * of that before someone can add a second Gemini agent would make the fast
  * path the slow one.
  */
-export function SpawnAgentDialog({ theme, onClose, onSpawned }: Props) {
+export function SpawnAgentDialog({ cast, onClose, onSpawned }: Props) {
   const providers = useBackstage((s) => s.providers)
   const agents = useTeam((s) => s.agents)
   const save = useTeam((s) => s.save)
@@ -73,7 +80,7 @@ export function SpawnAgentDialog({ theme, onClose, onSpawned }: Props) {
    * A free character.
    *
    * Slots already worn by a spawned agent are taken, so a new hire does not
-   * walk in wearing a face already at a desk. The theme's cast is finite and
+   * walk in wearing a face already at a desk. The project's cast is finite and
    * the roster is not, so the search wraps: past the end of the cast the same
    * characters come round again, which is better than refusing to spawn.
    */
@@ -84,17 +91,17 @@ export function SpawnAgentDialog({ theme, onClose, onSpawned }: Props) {
 
   useEffect(() => {
     if (!takenSlots.has(slot)) return
-    for (let i = 0; i < theme.characters.length; i++) {
+    for (let i = 0; i < cast.length; i++) {
       if (!takenSlots.has(i)) {
         setSlot(i)
         return
       }
     }
     // Every character is in use; the cast wraps rather than blocking a spawn.
-    setSlot(agents.length % theme.characters.length)
+    setSlot(agents.length % cast.length)
     // Only when the roster changes: this must not fight the user's own pick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [takenSlots.size, theme.id])
+  }, [takenSlots.size, cast])
 
   /** "Gemini agent 2" — the next free number for this provider. */
   const suggestedName = useMemo(() => {
@@ -123,7 +130,6 @@ export function SpawnAgentDialog({ theme, onClose, onSpawned }: Props) {
         providerId: provider.id,
         modelId,
         characterSlot: slot,
-        themeId: theme.id,
         capabilities,
         profile: 'normal',
         enabled: true,
@@ -162,7 +168,7 @@ export function SpawnAgentDialog({ theme, onClose, onSpawned }: Props) {
     }
   }
 
-  const character = theme.characters[slot % theme.characters.length]
+  const character = castForSlot(cast, slot)
 
   return (
     <div
@@ -259,7 +265,7 @@ export function SpawnAgentDialog({ theme, onClose, onSpawned }: Props) {
               </Field>
             </div>
 
-            <Field label={`Character — ${theme.name}`}>
+            <Field label="Character">
               <div className="flex items-center gap-2">
                 <div className="shrink-0 border-2 border-ink bg-ink-2 p-1">
                   <CharacterSprite
@@ -269,7 +275,7 @@ export function SpawnAgentDialog({ theme, onClose, onSpawned }: Props) {
                   />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-wrap gap-1">
-                  {theme.characters.map((c, i) => {
+                  {cast.map((c, i) => {
                     const taken = takenSlots.has(i)
                     return (
                       <button

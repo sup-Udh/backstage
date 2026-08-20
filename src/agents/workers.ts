@@ -62,6 +62,14 @@ export interface Worker {
   characterSlot: number
   /** Agents this one is connected to. Always agent ids. */
   connections: string[]
+  /**
+   * Of those, the ones this worker leads and may assign work to.
+   *
+   * Always empty for a CLI session: a session is a process the user started,
+   * and the relationships between two of them are peer links held in memory
+   * beside the processes rather than an authority anybody granted.
+   */
+  leads: string[]
   /** CLI only: the session and the PTY behind it. */
   sessionId?: string
   terminalSessionId?: string
@@ -227,7 +235,8 @@ export function buildWorkers({
       // cancelling clears the queue too.
       canStop: state?.executionId !== null || (state?.queued ?? 0) > 0,
       characterSlot: agent.characterSlot,
-      connections: agent.canTalkTo
+      connections: agent.canTalkTo,
+      leads: agent.leads
     })
   }
 
@@ -265,6 +274,9 @@ export function buildWorkers({
         .map((id) => sessions.find((s) => s.id === id))
         .filter((s): s is AgentSession => s !== undefined)
         .map(workerIdFor),
+      // Sessions are peers. Nothing in the app grants one authority over
+      // another, so claiming a direction here would draw one that is not real.
+      leads: [],
       sessionId: session.id,
       terminalSessionId: session.terminalSessionId
     })

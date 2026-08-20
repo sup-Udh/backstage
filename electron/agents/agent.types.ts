@@ -50,6 +50,14 @@ export interface TaskRequest {
   correlationId?: string
   depth?: number
   parentTaskId?: string | null
+  /**
+   * The investigation this belongs to.
+   *
+   * Omitted for ordinary work, which joins the case its chain already opened.
+   * Supplied only when the user started from an existing case and the chain
+   * would otherwise open a new one.
+   */
+  caseId?: string | null
   /** Prior turns to seed the model with. Trimmed again before the request. */
   history?: import('../providers/provider.types').Turn[]
 }

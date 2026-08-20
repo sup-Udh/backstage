@@ -70,6 +70,16 @@ const api: BackstageApi = {
     adoptLegacy: (input) => ipcRenderer.invoke('projects:adoptLegacy', input)
   },
 
+  /* Investigations within the open project. */
+  cases: {
+    list: () => ipcRenderer.invoke('cases:list'),
+    tasks: (caseId) => ipcRenderer.invoke('cases:tasks', caseId),
+    rename: (caseId, name) => ipcRenderer.invoke('cases:rename', caseId, name),
+    setStatus: (caseId, status) =>
+      ipcRenderer.invoke('cases:setStatus', caseId, status),
+    remove: (caseId) => ipcRenderer.invoke('cases:remove', caseId)
+  },
+
   agents: {
     list: () => ipcRenderer.invoke('agents:list'),
     save: (agent) => ipcRenderer.invoke('agents:save', agent),

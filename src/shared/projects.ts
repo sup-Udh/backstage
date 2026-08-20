@@ -92,6 +92,36 @@ export interface ProjectSnapshot {
   agents: AgentConfig[]
 }
 
+/* ----------------------------------------------------------------- cases -- */
+
+/**
+ * One investigation.
+ *
+ * A case is what the user asked for; the tasks under it are how the team went
+ * about it. Before this existed, the Cases page listed one card per task —
+ * so a single request broadcast to three agents read as three unrelated
+ * investigations, which is the one thing the page was supposed to make clear
+ * it was not.
+ *
+ * Cases are persisted and project-scoped. Tasks are not persisted: they are a
+ * record of a session's work, and reopening the app to a list of jobs that are
+ * no longer running is worse than reopening to the investigations they
+ * belonged to.
+ */
+export interface Case {
+  id: string
+  projectId: string
+  name: string
+  description: string
+  status: 'open' | 'closed'
+  createdAt: number
+  updatedAt: number
+  /** Tasks that have run under this case, oldest first. */
+  taskIds: string[]
+  /** Every agent that has worked on it. */
+  involvedAgentIds: string[]
+}
+
 /* ------------------------------------------------------------- bootstrap -- */
 
 /**

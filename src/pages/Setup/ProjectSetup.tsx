@@ -32,9 +32,18 @@ export function ProjectSetup() {
   const create = useProject((s) => s.create)
   const refreshTeam = useTeam((s) => s.refresh)
 
+  /*
+   * A folder the app already knows about, from an install that predates
+   * projects. Offered as the starting point rather than making the user
+   * navigate back to the folder Backstage is already pointed at.
+   */
+  const legacy = useProject((s) => s.legacy)
+
   const [step, setStep] = useState(0)
-  const [workspacePath, setWorkspacePath] = useState('')
-  const [name, setName] = useState('')
+  const [workspacePath, setWorkspacePath] = useState(legacy?.workspacePath ?? '')
+  const [name, setName] = useState(() =>
+    legacy?.workspacePath ? folderName(legacy.workspacePath) : ''
+  )
   const [themeId, setThemeId] = useState(defaultThemeId)
   const [picked, setPicked] = useState<string[]>([])
   const [lead, setLead] = useState<string | null>(null)
@@ -370,6 +379,11 @@ export function ProjectSetup() {
       </footer>
     </div>
   )
+}
+
+/** The last segment of a path, whichever separator it uses. */
+function folderName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path
 }
 
 function Section({
