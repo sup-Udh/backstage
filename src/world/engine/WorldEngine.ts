@@ -504,14 +504,14 @@ export interface LabelAnchor {
  * that to pin labels to the edge for characters who have walked out of view
  * entirely — a name with nobody under it.
  */
-const MARGIN = 16
+const MARGIN = 12
 
 /**
  * Slack around the sprite that still counts as clicking the character, in
  * scene pixels. Applied on every side, and below the feet as well, so the
  * shadow and the floor ring are part of the target rather than a dead zone.
  */
-const HIT_PAD = 3
+const HIT_PAD = 5
 const HIT_W = WORLD_SPRITE_W + HIT_PAD * 2
 const HIT_H = WORLD_SPRITE_H + HIT_PAD * 2
 

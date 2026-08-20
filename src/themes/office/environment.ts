@@ -7,9 +7,10 @@ import {
   meetingTable,
   plant,
   wallSign,
-  whiteboard
+  whiteboard,
+  coffeeStation
 } from '../shared/props'
-import { cubicle, poster, printer, waterCooler } from '../shared/furniture'
+import { cubicle, poster, printer, waterCooler, bookcase } from '../shared/furniture'
 
 /** Fluorescent beige, blue-grey cubicle fabric, hard-wearing carpet. */
 export const officePalette: ThemePalette = {
@@ -63,50 +64,114 @@ export const officePalette: ThemePalette = {
   steelDark: '#858B93'
 }
 
-const STATIONS = [8, 66, 190]
-const STATION_Y = 80
-const HORIZON = 60
+const STATIONS = [30, 85, 140, 195, 250, 305]
+const STATION_Y = 100
+const HORIZON = 72
 
 const desks = STATIONS.map((x, i) => deskUnit(x, STATION_Y, 320 + i * 11))
+const coffee = coffeeStation(390, 200)
 
 function props(): Prop[] {
   const list: Prop[] = []
-  list.push({ id: 'whiteboard', ops: whiteboard(96, 14, 46, 30), baseY: 0 })
-  list.push({ id: 'sign', ops: wallSign(176, 22), baseY: 0 })
-  list.push({ id: 'clock', ops: clockFace(232, 22, 7), baseY: 0 })
-  list.push({ id: 'poster', ops: poster(258, 12, 34, 28, 21), baseY: 0 })
-  list.push({ id: 'poster-2', ops: poster(20, 14, 30, 26, 9), baseY: 0 })
+  
+  // Wall elements (baseY = 0)
+  list.push({ id: 'whiteboard', ops: whiteboard(370, 14, 60, 36), baseY: 0 })
+  list.push({ id: 'sign', ops: wallSign(240, 26), baseY: 0 })
+  list.push({ id: 'clock', ops: clockFace(450, 26, 9), baseY: 0 })
+  list.push({ id: 'poster-1', ops: poster(40, 16, 36, 30, 21), baseY: 0 })
+  list.push({ id: 'poster-2', ops: poster(120, 16, 36, 30, 42), baseY: 0 })
+  list.push({ id: 'poster-3', ops: poster(300, 16, 36, 30, 9), baseY: 0 })
 
-  // Dividers stand on the floor behind each occupant, so they sort in front
-  // of the wall but behind the person sitting at the desk.
+  // Dividers and Desks
   STATIONS.forEach((x, i) => {
-    list.push({ id: `cubicle-${i}`, ops: cubicle(x, 84, 52), baseY: 84 })
+    list.push({ id: `cubicle-${i}`, ops: cubicle(x, 104, 55), baseY: 104 })
   })
   desks.forEach((d, i) => list.push({ id: `desk-${i}`, ops: d.ops, baseY: d.baseY }))
 
-  list.push({ id: 'printer', ops: printer(258, 104), baseY: 104 })
-  list.push({ id: 'cooler', ops: waterCooler(292, 112), baseY: 112 })
-  list.push({ id: 'table', ops: meetingTable(116, 152), baseY: 153 })
-  list.push({ id: 'cabinet', ops: cabinet(250, 156), baseY: 156 })
-  list.push({ id: 'plant', ops: plant(8, 138, 17), baseY: 138 })
+  // Office Equipment and Storage
+  list.push({ id: 'printer', ops: printer(446, 130), baseY: 130 })
+  list.push({ id: 'bookcase', ops: bookcase(10, 110, 20, 40), baseY: 110 })
+  list.push({ id: 'cabinet-1', ops: cabinet(360, 120), baseY: 120 })
+  list.push({ id: 'cabinet-2', ops: cabinet(385, 120), baseY: 120 })
+  
+  // Meeting Area
+  list.push({ id: 'table', ops: meetingTable(140, 210), baseY: 211 })
+  
+  // Break Area
+  list.push({ id: 'coffee-station', ops: coffee.ops, baseY: 200 })
+  list.push({ id: 'cooler', ops: waterCooler(360, 206), baseY: 206 })
+  
+  // Plants
+  list.push({ id: 'plant-1', ops: plant(16, 160, 17), baseY: 160 })
+  list.push({ id: 'plant-2', ops: plant(464, 220, 33), baseY: 220 })
+  list.push({ id: 'plant-3', ops: plant(90, 210, 55), baseY: 210 })
+  
   return list
 }
 
 export const officeScene: SceneDef = {
-  width: 320,
-  height: 160,
+  width: 480,
+  height: 240,
   horizon: HORIZON,
   background: backdrop({
-    width: 320,
-    height: 160,
+    width: 480,
+    height: 240,
     horizon: HORIZON,
     floorStyle: 'carpet',
     wallStyle: 'plain'
   }),
   props: props(),
-  ...standardLayout({ stations: STATIONS, stationY: STATION_Y, breakX: 266 }),
+  ...standardLayout({ stations: STATIONS, stationY: STATION_Y, breakX: 420 }),
+  laneY: 160,
+  boardSpots: [
+    { x: 390, y: 100, facing: 'up' },
+    { x: 415, y: 100, facing: 'up' },
+    { x: 440, y: 100, facing: 'up' }
+  ],
+  talkSpots: [
+    [
+      { x: 106, y: 215, facing: 'right' },
+      { x: 130, y: 215, facing: 'left' }
+    ],
+    [
+      { x: 210, y: 215, facing: 'right' },
+      { x: 234, y: 215, facing: 'left' }
+    ],
+    [
+      { x: 60, y: 190, facing: 'right' },
+      { x: 84, y: 190, facing: 'left' }
+    ],
+    [
+      { x: 420, y: 150, facing: 'right' },
+      { x: 444, y: 150, facing: 'left' }
+    ],
+    [
+      { x: 280, y: 200, facing: 'right' },
+      { x: 304, y: 200, facing: 'left' }
+    ]
+  ],
+  coffeeSpots: [
+    { x: 400, y: 196, facing: 'up' },
+    { x: 430, y: 196, facing: 'up' },
+    { x: 360, y: 202, facing: 'up' }
+  ],
+  wanderSpots: [
+    { x: 40, y: 160, facing: 'down' },
+    { x: 80, y: 155, facing: 'up' },
+    { x: 120, y: 165, facing: 'left' },
+    { x: 160, y: 160, facing: 'right' },
+    { x: 200, y: 155, facing: 'down' },
+    { x: 240, y: 165, facing: 'up' },
+    { x: 280, y: 160, facing: 'left' },
+    { x: 320, y: 155, facing: 'right' },
+    { x: 360, y: 165, facing: 'down' },
+    { x: 100, y: 180, facing: 'right' },
+    { x: 260, y: 190, facing: 'left' },
+    { x: 340, y: 210, facing: 'up' },
+    { x: 450, y: 170, facing: 'down' }
+  ],
   monitors: desks.map((d) => d.monitor),
-  steamVents: [{ x: 162, y: 131, baseY: 153 }],
-  leds: [...desks.map((d) => d.led), { x: 262, y: 92 }],
-  clock: { x: 232, y: 22, r: 7 }
+  steamVents: [{ x: coffee.steam.x, y: coffee.steam.y, baseY: 200 }],
+  leds: [...desks.map((d) => d.led), { x: 450, y: 118 }],
+  clock: { x: 450, y: 26, r: 9 }
 }

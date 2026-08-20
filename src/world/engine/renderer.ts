@@ -187,7 +187,7 @@ export class WorldRenderer {
         const a = (i / 4) * Math.PI * 2 + t * 2
         // Sized off the character, so the flourish punctuates the moment
         // rather than becoming the largest thing in the room.
-        const rad = 4 + life * 3.5
+        const rad = 3 + life * 2.5
         const sx = cx + Math.cos(a) * rad
         const sy = top + 2 + Math.sin(a) * rad * 0.6
         ctx.fillStyle = i % 2 === 0 ? this.pal.brand : this.pal.brandLite
@@ -197,8 +197,8 @@ export class WorldRenderer {
       return
     }
 
-    const bw = 13
-    const bh = 8
+    const bw = 10
+    const bh = 6
     const bx = cx - (bw >> 1)
     const by = top - bh - 2
 
@@ -210,18 +210,18 @@ export class WorldRenderer {
     // Tail: a stepped point for speech, two small puffs for thought.
     ctx.fillStyle = this.pal.ink
     if (c.bubble === 'talk') {
-      ctx.fillRect(cx - 2, by + bh, 3, 1)
+      ctx.fillRect(cx - 2, by + bh, 2, 1)
       ctx.fillRect(cx - 1, by + bh + 1, 1, 1)
     } else {
-      ctx.fillRect(cx - 3, by + bh + 1, 2, 2)
-      ctx.fillRect(cx - 4, by + bh + 3, 1, 1)
+      ctx.fillRect(cx - 2, by + bh + 1, 1, 1)
+      ctx.fillRect(cx - 3, by + bh + 2, 1, 1)
     }
 
     const rate = c.bubble === 'talk' ? 3.2 : 1.5
     const active = Math.floor(t * rate) % 3
     for (let i = 0; i < 3; i++) {
       ctx.fillStyle = i === active ? this.pal.brandDeep : this.pal.steelDark
-      ctx.fillRect(bx + 2 + i * 4, by + 3, 2, 2)
+      ctx.fillRect(bx + 2 + i * 2, by + 2, 2, 2)
     }
   }
 

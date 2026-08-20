@@ -135,11 +135,15 @@ export interface LayoutSpec {
   stations: number[]
   /** Top of the work surface. */
   stationY?: number
-  /** Two positions where an agent stands and studies something. */
-  focus?: [number, number]
+  /** Positions where an agent stands and studies something. */
+  focus?: number[]
   focusY?: number
   /** Centre x of the break area on the right. */
   breakX?: number
+  /** Width of the room. Defaults to 480. */
+  roomWidth?: number
+  /** Height of the room. Defaults to 240. */
+  roomHeight?: number
 }
 
 /**
@@ -152,10 +156,26 @@ export interface LayoutSpec {
  * the director and the renderer free of per-theme branching.
  */
 export function standardLayout(spec: LayoutSpec): SceneLayout {
-  const stationY = spec.stationY ?? 80
+  const stationY = spec.stationY ?? 100
   const focusY = spec.focusY ?? 86
-  const [fx1, fx2] = spec.focus ?? [122, 158]
-  const bx = spec.breakX ?? 268
+  const w = spec.roomWidth ?? 480
+  const h = spec.roomHeight ?? 240
+  const bx = spec.breakX ?? Math.floor(w * 0.8)
+
+  const focusSpots = spec.focus ?? [
+    Math.floor(w * 0.3),
+    Math.floor(w * 0.4),
+    Math.floor(w * 0.5)
+  ]
+
+  const wanderSpots = []
+  for (let i = 0; i < 16; i++) {
+    wanderSpots.push({
+      x: Math.floor(w * (0.1 + (i % 4) * 0.25) + (i % 2) * 10),
+      y: Math.floor(stationY + 40 + Math.floor(i / 4) * 20),
+      facing: ['up', 'down', 'left', 'right'][i % 4] as 'up' | 'down' | 'left' | 'right'
+    })
+  }
 
   return {
     desks: spec.stations.map((x) => ({
@@ -165,11 +185,12 @@ export function standardLayout(spec: LayoutSpec): SceneLayout {
     })),
     deskBaseY: stationY + DESK_BASE,
 
-    // Far enough apart that two people at the board do not overlap.
-    boardSpots: [
-      { x: fx1, y: focusY, facing: 'up' },
-      { x: fx2, y: focusY, facing: 'up' }
-    ],
+    // Far enough apart that people at the board do not overlap.
+    boardSpots: focusSpots.map(fx => ({
+      x: fx,
+      y: focusY,
+      facing: 'up' as const
+    })),
 
     /*
      * Conversation pairs stand 24px apart. The sprite is 20 wide, so the old
@@ -177,43 +198,39 @@ export function standardLayout(spec: LayoutSpec): SceneLayout {
      */
     talkSpots: [
       [
-        { x: 136, y: 118, facing: 'right' },
-        { x: 160, y: 118, facing: 'left' }
+        { x: Math.floor(w * 0.7) - 12, y: stationY + 38, facing: 'right' },
+        { x: Math.floor(w * 0.7) + 12, y: stationY + 38, facing: 'left' }
       ],
       [
-        { x: 66, y: 150, facing: 'right' },
-        { x: 90, y: 150, facing: 'left' }
+        { x: Math.floor(w * 0.2) - 12, y: h - 48, facing: 'right' },
+        { x: Math.floor(w * 0.2) + 12, y: h - 48, facing: 'left' }
       ],
       [
-        { x: 202, y: 146, facing: 'right' },
-        { x: 226, y: 146, facing: 'left' }
+        { x: Math.floor(w * 0.4) - 12, y: h - 44, facing: 'right' },
+        { x: Math.floor(w * 0.4) + 12, y: h - 44, facing: 'left' }
+      ],
+      [
+        { x: Math.floor(w * 0.6) - 12, y: h - 50, facing: 'right' },
+        { x: Math.floor(w * 0.6) + 12, y: h - 50, facing: 'left' }
+      ],
+      [
+        { x: Math.floor(w * 0.8) - 12, y: h - 46, facing: 'right' },
+        { x: Math.floor(w * 0.8) + 12, y: h - 46, facing: 'left' }
       ]
     ],
 
     coffeeSpots: [
-      { x: bx - 10, y: 106, facing: 'up' },
-      { x: bx + 16, y: 106, facing: 'up' }
+      { x: bx - 14, y: 106, facing: 'up' },
+      { x: bx + 12, y: 106, facing: 'up' },
+      { x: bx + 38, y: 106, facing: 'up' }
     ],
 
     /*
      * Loitering room for a full roster, kept clear of the board and desks so
      * a busy office does not pile characters on top of one another.
      */
-    wanderSpots: [
-      { x: 96, y: 120, facing: 'down' },
-      { x: 186, y: 118, facing: 'down' },
-      { x: 48, y: 126, facing: 'right' },
-      { x: 240, y: 122, facing: 'left' },
-      { x: 168, y: 150, facing: 'up' },
-      { x: 116, y: 148, facing: 'right' },
-      { x: 24, y: 150, facing: 'right' },
-      { x: 264, y: 152, facing: 'left' },
-      { x: 208, y: 134, facing: 'down' },
-      { x: 70, y: 108, facing: 'down' },
-      { x: 296, y: 138, facing: 'left' },
-      { x: 144, y: 134, facing: 'down' }
-    ],
+    wanderSpots,
 
-    laneY: 118
+    laneY: stationY + 65
   }
 }

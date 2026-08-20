@@ -18,8 +18,8 @@ interface Hover {
   top: number
 }
 
-const MIN_SCALE = 2
-const MAX_SCALE = 5
+const MIN_SCALE = 1
+const MAX_SCALE = 6
 /** How far below the fold the world may run before it steps down a size. */
 const BOTTOM_ALLOWANCE = 24
 

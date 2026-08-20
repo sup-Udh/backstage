@@ -60,7 +60,7 @@ export const WorldLabel = forwardRef<HTMLDivElement, Props>(function WorldLabel(
       ref={ref}
       className={[
         'pointer-events-none absolute left-0 top-0 z-20 flex items-center',
-        'border-2 border-ink font-pixel font-semibold uppercase whitespace-nowrap',
+        'border border-ink font-pixel font-semibold uppercase whitespace-nowrap',
         surface,
         label
       ].join(' ')}
@@ -70,8 +70,8 @@ export const WorldLabel = forwardRef<HTMLDivElement, Props>(function WorldLabel(
         lineHeight: 1,
         // Room to breathe: compressed pixel type turns into noise (#18).
         letterSpacing: '0.08em',
-        padding: '0.22em 0.4em',
-        gap: '0.35em',
+        padding: '0.15em 0.3em',
+        gap: '0.25em',
         willChange: 'transform'
       }}
     >

@@ -17,9 +17,9 @@ interface Props {
 const ACTIVE: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
 
 /** Clearance between a label and the character it belongs to, in CSS pixels. */
-const GAP = 6
+const GAP = 4
 /** Clearance from the edge of the viewport. */
-const EDGE = 3
+const EDGE = 2
 
 interface Rect {
   x: number

@@ -44,8 +44,8 @@ const REFERENCE_ZOOM = 3
  * legible stroke.
  */
 export const LABEL_SPEC: Record<WorldLabelKind, LabelSpec> = {
-  'character-name': { base: 14, min: 13, max: 20 },
-  'character-status': { base: 12, min: 11, max: 16 },
+  'character-name': { base: 10, min: 9, max: 14 },
+  'character-status': { base: 9, min: 8, max: 12 },
   'world-marker': { base: 13, min: 11, max: 18 },
   interaction: { base: 13, min: 12, max: 18 }
 }

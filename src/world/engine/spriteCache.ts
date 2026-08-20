@@ -47,11 +47,11 @@ const MAX_FRAMES = 4
  * at every zoom level and every window size — there is no size that is only
  * correct at one viewport.
  *
- * 0.8 rather than an arbitrary fraction because 20x30 x 0.8 is exactly 16x24:
+ * 0.6 rather than an arbitrary fraction because 20x30 x 0.6 is exactly 12x18:
  * both axes land on whole pixels and the 2:3 proportion is preserved exactly,
  * so nothing is stretched and no pixel is ever sampled between two others.
  */
-export const CHARACTER_SCALE = 0.8
+export const CHARACTER_SCALE = 0.6
 
 /** The character's footprint in the world, in scene pixels. */
 export const WORLD_SPRITE_W = Math.round(SPRITE_W * CHARACTER_SCALE)
