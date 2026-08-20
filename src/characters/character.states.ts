@@ -99,6 +99,7 @@ export const ACTIVE_STATUSES: AgentStatus[] = [
   'working',
   'talking',
   'waiting',
+  'stopping',
   'success'
 ]
 
