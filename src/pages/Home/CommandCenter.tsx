@@ -387,7 +387,7 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col border-l-[3px] border-ink bg-cream">
-      <TeamHeader cast={cast} workers={workers} onSpawn={onSpawn} />
+      <TeamHeader workers={workers} onSpawn={onSpawn} />
 
       {/* One surface at a time, chosen here. */}
       <nav className="flex shrink-0 border-b-[3px] border-ink bg-cream-2">

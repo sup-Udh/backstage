@@ -3,7 +3,8 @@ import type { DirEntry, ProjectCommand, TextResult } from '../shared/providerApi
 import { useBackstage } from '../stores/backstageStore'
 import { useTeam } from '../stores/teamStore'
 import { StatusChip } from '../components/AgentStatus/StatusChip'
-import type { Theme } from '../themes/types'
+import type { CharacterDef } from '../characters/character.types'
+import { castNameForSlot } from '../project/cast'
 
 /**
  * The command centre's working surfaces: files, git, commands and tasks.
@@ -422,10 +423,11 @@ export function CommandsPanel({
  * belong on the same surface. Selecting one focuses whoever is doing it.
  */
 export function TasksPanel({
-  theme,
+  cast,
   onFocus
 }: {
-  theme: Theme
+  /** The project's cast, so a task is attributed to somebody in this project. */
+  cast: CharacterDef[]
   onFocus: (session: { terminalSessionId: string; agentId: string }) => void
 }) {
   const sessions = useBackstage((s) => s.agentSessions)
@@ -442,8 +444,7 @@ export function TasksPanel({
   const nameFor = (agentId: string) => {
     const config = agents.find((a) => a.id === agentId)
     if (!config) return agentId
-    const cast = theme.characters
-    return cast[((config.characterSlot % cast.length) + cast.length) % cast.length].name
+    return castNameForSlot(cast, config.characterSlot)
   }
 
   /*

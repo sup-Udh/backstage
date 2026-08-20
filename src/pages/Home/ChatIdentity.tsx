@@ -1,4 +1,5 @@
-import type { Theme } from '../../themes/types'
+import type { CharacterDef } from '../../characters/character.types'
+import { castNameForSlot } from '../../project/cast'
 import type {
   AgentConfig,
   AgentRuntimeState,
@@ -9,7 +10,8 @@ import { useBackstage } from '../../stores/backstageStore'
 import { findWorker, type Worker } from '../../agents/workers'
 
 interface Props {
-  theme: Theme
+  /** The project's cast. Nobody outside it can be named here. */
+  cast: CharacterDef[]
   workers: Worker[]
   /** Everyone this message would reach. One agent, or the whole office. */
   recipients: AgentConfig[]
@@ -33,7 +35,7 @@ interface Props {
  * three agents by accident is expensive.
  */
 export function ChatIdentity({
-  theme,
+  cast,
   workers,
   recipients,
   isBroadcast,
@@ -46,10 +48,8 @@ export function ChatIdentity({
 }: Props) {
   const target = useBackstage((s) => s.chatTarget)
 
-  const characterName = (agent: AgentConfig) => {
-    const cast = theme.characters
-    return cast[((agent.characterSlot % cast.length) + cast.length) % cast.length].name
-  }
+  const characterName = (agent: AgentConfig) =>
+    castNameForSlot(cast, agent.characterSlot)
 
   /*
    * A group conversation, named as one. The point of the banner here is that

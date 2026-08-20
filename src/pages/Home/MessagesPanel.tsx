@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type { Theme } from '../../themes/types'
+import type { CharacterDef } from '../../characters/character.types'
+import { castNameForSlot } from '../../project/cast'
 import {
   ALL_AGENTS,
   transcriptFor,
@@ -13,7 +14,8 @@ import { ToolBlock } from './ToolBlock'
 import { SessionBlock } from './SessionBlock'
 
 interface Props {
-  theme: Theme
+  /** The project's cast, for naming an agent with no live worker entry. */
+  cast: CharacterDef[]
   workers: Worker[]
   onSubmit: (text: string) => void
 }
@@ -56,7 +58,7 @@ type Entry =
  * flattening them into one voice would be inventing a consensus none of them
  * reached.
  */
-export function MessagesPanel({ theme, workers, onSubmit }: Props) {
+export function MessagesPanel({ cast, workers, onSubmit }: Props) {
   const target = useBackstage((s) => s.chatTarget)
   const thread = useBackstage((s) => s.thread)
   const threadMessages = useBackstage((s) => s.threadMessages)
@@ -93,8 +95,7 @@ export function MessagesPanel({ theme, workers, onSubmit }: Props) {
     if (worker) return worker.name
     const config = agents.find((a) => a.id === agentId)
     if (!config) return 'Agent'
-    const cast = theme.characters
-    return cast[((config.characterSlot % cast.length) + cast.length) % cast.length].name
+    return castNameForSlot(cast, config.characterSlot)
   }
 
   const roleFor = (agentId?: string) =>

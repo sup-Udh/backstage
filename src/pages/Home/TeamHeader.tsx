@@ -29,11 +29,9 @@ const BUCKETS = ['working', 'thinking', 'talking', 'idle'] as const
  * Selecting only changes which conversation is shown. It never starts or
  * stops anything.
  */
-export function TeamHeader({ theme, workers, onSpawn }: Props) {
+export function TeamHeader({ workers, onSpawn }: Props) {
   const target = useBackstage((s) => s.chatTarget)
   const setTarget = useBackstage((s) => s.setChatTarget)
-
-  void theme
 
   const counts: Record<string, number> = {}
   for (const worker of workers) {
