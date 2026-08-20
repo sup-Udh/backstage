@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useBackstage } from '../../stores/backstageStore'
 import { useProject } from '../../stores/projectStore'
-import { useTeam } from '../../stores/teamStore'
 import { getTheme } from '../../themes'
 import { PixelMark } from '../../components/Header/PixelMark'
 import { WalkingCharacter } from './WalkingCharacter'
@@ -130,8 +129,16 @@ export function EnteringWorkspace() {
        */
       let known = projects
       if (known.length === 0 && legacy?.workspacePath && legacy.agentCount > 0) {
-        const adopted = await adoptLegacy(folderName(legacy.workspacePath))
-        if (adopted) known = [adopted]
+        await adoptLegacy(folderName(legacy.workspacePath))
+        /*
+         * Read the list back rather than trusting what adoption returned.
+         * StrictMode runs this effect twice, and the main process refuses a
+         * second adoption once a project exists — correctly, with a null that
+         * means "already done" and not "failed". Taking that null at face
+         * value would send the surviving pass to the wizard to build the
+         * project the other pass had just built.
+         */
+        known = useProject.getState().projects
       }
       if (!live) return
       mark(1)

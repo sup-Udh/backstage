@@ -133,7 +133,15 @@ export function ProjectPicker() {
                     <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
                       {theme.name}
                       <span className="mx-1.5 text-rule">·</span>
-                      {project.characterRoster.length} agents
+                      {/*
+                        Characters, not agents. The roster is who was cast from
+                        the theme; how many of them currently have an agent
+                        behind them is scoped to the open project, so this
+                        screen cannot know it for the others — and a count that
+                        is right for one card and wrong for the rest is worse
+                        than the honest number.
+                      */}
+                      {project.characterRoster.length} characters
                       <span className="mx-1.5 text-rule">·</span>
                       {when(project.updatedAt)}
                     </p>
