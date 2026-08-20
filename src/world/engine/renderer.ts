@@ -85,7 +85,7 @@ export class WorldRenderer {
 
   /**
    * @param cast The project's characters. Sheets are baked for these and only
-   *   these â€” an unchosen character has no art in this renderer at all, which
+   *   these — an unchosen character has no art in this renderer at all, which
    *   is a cheaper world as well as an isolated one.
    * @param scene The room as laid out for the current viewport. Passed in
    *   rather than read from the theme, because the room is rebuilt whenever
@@ -109,7 +109,7 @@ export class WorldRenderer {
 
     /*
      * Dust drifting in the window light. The columns come from the scene, so
-     * a world's motes hang where that world's windows actually are â€” the
+     * a world's motes hang where that world's windows actually are — the
      * positions used to be hard-coded to the first room ever built, which put
      * dust in the middle of a blank wall in every theme added since.
      */
@@ -278,7 +278,7 @@ export class WorldRenderer {
    *
    * Deliberately quiet. A room where six agents are linked is a room with
    * several of these in it, and drawn as anything more assertive they would
-   * become the subject of the picture â€” the office is what the panel is for,
+   * become the subject of the picture — the office is what the panel is for,
    * and the links are annotation on top of it.
    *
    * Dashed, and drawn between the characters' chests rather than their feet,
@@ -315,7 +315,7 @@ export class WorldRenderer {
     const steps = Math.ceil(len)
     const crawl = active ? t * 14 : 0
     for (let i = 0; i <= steps; i++) {
-      // 3 on, 3 off â€” long enough to read as a dash at any zoom.
+      // 3 on, 3 off — long enough to read as a dash at any zoom.
       if ((Math.floor(i - crawl) % 6 + 6) % 6 > 2) continue
       const p = i / steps
       ctx.fillRect(Math.round(ax + dx * p), Math.round(ay + dy * p), 1, 1)
@@ -528,7 +528,7 @@ export class WorldRenderer {
     for (const c of chars) {
       /*
        * Both ids are agent ids. `def.id` is the *character* being worn, which
-       * is re-cast whenever the theme changes â€” matching on it meant the
+       * is re-cast whenever the theme changes — matching on it meant the
        * outline and the floor ring only appeared in worlds where a character
        * happened to be named after an agent, while the name plate beside them
        * highlighted correctly. Selection has to look the same in every world.
@@ -550,7 +550,7 @@ export class WorldRenderer {
     /*
      * Links are drawn after the room rather than sorted into it.
      *
-     * A relationship is not a physical object in the office â€” it has no place
+     * A relationship is not a physical object in the office — it has no place
      * in the depth order, and sorting it by either end's y would make the
      * same connection pass in front of a desk at one moment and behind it the
      * next as the pair walked around. Painting them on top keeps a link

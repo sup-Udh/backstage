@@ -103,7 +103,7 @@ function wall(slot: WallSlot): Op[] {
 function zone(z: ZoneRect): ZoneFurnishing {
   /*
    * Left: the fireside. The hearth itself is against the side wall rather
-   * than standing in the middle of the room â€” a fireplace floating on a rug
+   * than standing in the middle of the room — a fireplace floating on a rug
    * read as a hole in the floor, and a chimney has to be in a wall.
    */
   if (z.index === 0) {

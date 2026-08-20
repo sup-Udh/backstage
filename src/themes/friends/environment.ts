@@ -94,7 +94,7 @@ function giltFrame(x: number, y: number, w: number, h: number): Op[] {
 /**
  * Big apartment windows at the ends, the gilt frame in the middle, posters
  * between them. Described by role, because the room decides how many panels
- * there are â€” the frame is the thing that says "this apartment", so it is
+ * there are — the frame is the thing that says "this apartment", so it is
  * pinned to the centre and exists at every width.
  */
 function wall(slot: WallSlot): Op[] {

@@ -146,7 +146,7 @@ function zone(z: ZoneRect): ZoneFurnishing {
 }
 
 /**
- * Fairy lights strung the whole way across the wall â€” the one thing that has
+ * Fairy lights strung the whole way across the wall — the one thing that has
  * to be there for the room to read as this world at all.
  */
 function accents(grid: OfficeGrid): Prop[] {

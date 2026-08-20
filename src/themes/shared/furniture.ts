@@ -223,6 +223,14 @@ export function crtSet(x: number, y: number): Op[] {
 
 /* ----------------------------------------------------------------- lab -- */
 
+/**
+ * How far the worktop sits above the floor line `labBench` is placed on.
+ *
+ * Exported because a bench used as a workstation has to be described the other
+ * way round — the grid gives a station its surface height, not its footing.
+ */
+export const LAB_BENCH_TOP = 18
+
 export function labBench(x: number, y: number, w: number): Op[] {
   const ops: Op[] = [[x - 2, y - 1, w + 4, 3, 'floorShadow']]
   ops.push([x - 1, y - 19, w + 2, 20, 'ink'])
@@ -253,6 +261,33 @@ export function glassware(x: number, y: number, seed: number): Op[] {
   for (let i = 0; i < 3; i++) {
     ops.push([x + 20 + i * 3, y - 11, 2, 7, 'ink'])
     ops.push([x + 20 + i * 3, y - 8, 2, 3, rng() > 0.5 ? 'accent' : 'sageLite'])
+  }
+  return ops
+}
+
+/**
+ * The same bench in miniature: one flask and a pair of tubes, 14 wide.
+ *
+ * A workstation has exactly one band free for something tall — the strip past
+ * the occupant's shoulder — and the full set is twice as wide as that. Standing
+ * it in the middle of the bench instead put a flask stand through the chest of
+ * whoever was working there, and a bench that sorts in front of its own chemist
+ * simply looks unmanned.
+ */
+export function glasswareCompact(x: number, y: number, seed: number): Op[] {
+  const rng = makeRng(seed)
+  const ops: Op[] = []
+  // Flask on a ring stand.
+  ops.push([x + 3, y - 14, 2, 6, 'ink'])
+  ops.push([x + 1, y - 8, 6, 1, 'ink'])
+  ops.push([x, y - 7, 8, 7, 'ink'])
+  ops.push([x + 1, y - 6, 6, 5, 'white'])
+  ops.push([x + 1, y - 4, 6, 3, 'accent'])
+  // Two tubes in a short rack.
+  ops.push([x + 8, y - 5, 6, 5, 'ink'])
+  for (let i = 0; i < 2; i++) {
+    ops.push([x + 9 + i * 3, y - 11, 2, 7, 'ink'])
+    ops.push([x + 9 + i * 3, y - 8, 2, 3, rng() > 0.5 ? 'accent' : 'sageLite'])
   }
   return ops
 }

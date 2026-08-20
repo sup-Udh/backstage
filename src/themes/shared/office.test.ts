@@ -6,6 +6,20 @@ import {
   ROOM_W,
   type OfficeGrid
 } from './office'
+import {
+  DESK_VARIANTS,
+  DESK_W,
+  deskUnit,
+  SEAT_CLEAR_FROM,
+  SEAT_CLEAR_TO
+} from './props'
+import type { SceneDef } from '../types'
+import { detectiveScene } from '../detective/environment/scene'
+import { officeScene } from '../office/environment'
+import { friendsScene } from '../friends/environment'
+import { sherlockScene } from '../sherlock/environment'
+import { strangerScene } from '../stranger/environment'
+import { labScene } from '../lab/environment'
 
 /**
  * Checks for the office grid.
@@ -180,6 +194,102 @@ for (const [w, h] of sizes) {
     g.zones.every((z) => z.x >= 0 && z.x + z.w <= g.width)
   )
   ok(`${label}: two flanks, one per side`, g.flanks.length === 2)
+}
+
+/* -------------------------------------------------------- desk clearance -- */
+
+/**
+ * Nothing tall may stand where the occupant sits.
+ *
+ * A desk sorts in front of the character at it, so a screen parked over the
+ * seat does not overlap them, it deletes them — and the room then shows a
+ * labelled, WORKING workstation with nobody at it. Two of the four variants
+ * did exactly that, and it is not visible in a screenshot of an empty desk,
+ * which is how it survived.
+ *
+ * "Tall" is measured from the desk surface up: ops that reach more than a few
+ * pixels above `y` are objects standing on the desk. Anything at or below the
+ * surface is clutter sitting on it, in front of a lap the desk already hides.
+ */
+console.log('\nDesk variants leave the seat clear')
+
+/** How far above the surface an op may reach and still count as clutter. */
+const CLUTTER_H = 4
+
+for (const variant of DESK_VARIANTS) {
+  // A large seed so the random clutter is included rather than skipped.
+  const offenders: string[] = []
+  for (let seed = 0; seed < 24; seed++) {
+    const { ops } = deskUnit(0, 0, seed, variant)
+    for (const [ox, oy, ow, oh] of ops) {
+      const tall = oy < -CLUTTER_H
+      const overlaps = ox < SEAT_CLEAR_TO && ox + ow > SEAT_CLEAR_FROM
+      if (tall && overlaps) offenders.push(`[${ox},${oy},${ow},${oh}]`)
+    }
+  }
+  ok(
+    `${variant}: nothing tall stands in the seat's columns`,
+    offenders.length === 0,
+    [...new Set(offenders)].join(' ')
+  )
+}
+
+for (const variant of DESK_VARIANTS) {
+  const { ops, monitors } = deskUnit(0, 0, 7, variant)
+  ok(
+    `${variant}: every desk still fits its own footprint`,
+    ops.every(([ox, , ow]) => ox >= -2 && ox + ow <= DESK_W + 2),
+    ops
+      .filter(([ox, , ow]) => ox < -2 || ox + ow > DESK_W + 2)
+      .map(([ox, , ow]) => `${ox}..${ox + ow}`)
+      .join(' ')
+  )
+  ok(
+    `${variant}: animated screens sit clear of the seat too`,
+    monitors.every((m) => m.x >= SEAT_CLEAR_TO || m.x < SEAT_CLEAR_FROM),
+    monitors.map((m) => m.x).join(' ')
+  )
+}
+
+/*
+ * And the same rule against the real scenes, because a theme may supply its
+ * own workstation — the lab does, and its bench had the identical fault while
+ * the shared desk was already fixed. Checking the composed props is the only
+ * version of this check that cannot be sidestepped by not using `deskUnit`.
+ */
+const SCENES: [string, SceneDef][] = [
+  ['detective', detectiveScene],
+  ['office', officeScene],
+  ['friends', friendsScene],
+  ['sherlock', sherlockScene],
+  ['stranger', strangerScene],
+  ['lab', labScene]
+]
+
+const sceneGrid = officeGrid(ROOM_W, ROOM_H)
+
+for (const [name, scene] of SCENES) {
+  const offenders: string[] = []
+
+  for (const slot of sceneGrid.stations) {
+    const prop = scene.props.find((p) => p.id === `station-${slot.index}`)
+    if (!prop) {
+      offenders.push(`station-${slot.index} missing`)
+      continue
+    }
+    for (const [ox, oy, ow, oh] of prop.ops) {
+      const local = ox - slot.x
+      if (oy < slot.y - CLUTTER_H && local < SEAT_CLEAR_TO && local + ow > SEAT_CLEAR_FROM) {
+        offenders.push(`station-${slot.index} [${local},${oy - slot.y},${ow},${oh}]`)
+      }
+    }
+  }
+
+  ok(
+    `${name}: no workstation hides its occupant`,
+    offenders.length === 0,
+    [...new Set(offenders)].slice(0, 4).join(' ')
+  )
 }
 
 /* --------------------------------------------------------- responsiveness -- */

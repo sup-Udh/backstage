@@ -28,6 +28,8 @@ import {
   barrel,
   doorway,
   glassware,
+  glasswareCompact,
+  LAB_BENCH_TOP,
   labBench,
   lockers,
   noticeBoard,
@@ -94,15 +96,24 @@ export const labPalette: ThemePalette = {
  *
  * Deliberately built to the same footprint and seat offset as `deskUnit`: the
  * grid places it, the director seats a character at it, and the renderer
- * animates its screen â€” all of which only work because the contract is
+ * animates its screen — all of which only work because the contract is
  * identical whatever the surface is made of. Only the material changes.
  */
 function labStation(slot: StationSlot): DeskParts {
   const { x, y } = slot
   const ops: Op[] = []
 
-  // The bench itself.
-  ops.push(...labBench(x, y, DESK_W))
+  /*
+   * The bench itself, dropped so its worktop lands on `y`.
+   *
+   * `labBench` takes the floor line and builds upward — it is normally placed
+   * against a wall, where that is the natural way to describe it. A station's
+   * `y` is the work *surface*, so passing it straight through raised the whole
+   * bench into the seat: an 19px steel wall standing exactly where the chemist
+   * is, with the chemist sorted behind it. The offset is the bench's own height
+   * above its worktop, so the two descriptions agree.
+   */
+  ops.push(...labBench(x, y + LAB_BENCH_TOP, DESK_W))
 
   // A monitor at the left end, where a desk would have one.
   ops.push([x + 10, y - 3, 3, 3, 'ink'])
@@ -111,8 +122,9 @@ function labStation(slot: StationSlot): DeskParts {
   ops.push([x + 3, y - 17, 17, 13, 'screen'])
   ops.push([x + 3, y - 17, 17, 1, 'screenLite'])
 
-  // Glassware in place of desk clutter, varied per station.
-  ops.push(...glassware(x + 24, y - 1, slot.seed))
+  // Glassware in place of desk clutter, varied per station — past the seat,
+  // where an office desk keeps its lamp, so the chemist stays visible.
+  ops.push(...glasswareCompact(x + 38, y - 1, slot.seed))
 
   return {
     ops,

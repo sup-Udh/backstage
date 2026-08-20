@@ -147,6 +147,23 @@ export const DESK_BASE = 22
 export const SEAT_DX = 30
 export const SEAT_DY = 5
 
+/**
+ * The columns a seated character occupies, relative to the desk's left edge.
+ *
+ * A desk sorts in front of its occupant — that is what makes them read as
+ * sitting at it rather than standing behind it — so anything tall standing on
+ * the surface between these two columns does not partly overlap the character,
+ * it erases them. The symptom is a desk with a name plate over it, a WORKING
+ * chip on it and nobody there, which is worse than no character at all: the
+ * room says an agent is at that desk and the picture says it is empty.
+ *
+ * The sprite is `WORLD_SPRITE_W` wide and drawn centred on the seat, so the
+ * band is the seat plus half a sprite either side. Stated in one place because
+ * every variant has to respect it, and two of the original four did not.
+ */
+export const SEAT_CLEAR_FROM = 22
+export const SEAT_CLEAR_TO = 38
+
 export interface DeskParts {
   ops: Op[]
   baseY: number
@@ -176,11 +193,15 @@ export const DESK_VARIANTS: DeskVariant[] = ['single', 'dual', 'laptop', 'paperw
 /**
  * A desk with screens, lamp and clutter. `y` is the desk surface top.
  *
- * The primary monitor is deliberately parked at the left end rather than
- * centred: the occupant sits at SEAT_DX and the desk sorts in front of them,
- * so a centred monitor would cover the character's face. Clutter sits on the
- * surface itself, below the character's visible waistline, for the same
- * reason.
+ * Everything tall is parked in one of the two bands either side of
+ * SEAT_CLEAR_FROM..SEAT_CLEAR_TO: the primary monitor at the left end, the
+ * second screen or the lamp at the right. The occupant sits between them and
+ * stays visible from the shoulders up. Clutter is allowed in the middle, but
+ * only if it is short enough to sit below the character's visible waistline.
+ *
+ * A variant therefore chooses what stands in the *right* band — a lamp, a
+ * second monitor, a laptop, a stack of files — and only one thing can, which
+ * is also why no two variants light the same way.
  */
 export function deskUnit(
   x: number,
@@ -203,28 +224,32 @@ export function deskUnit(
 
   if (variant === 'dual') {
     /*
-     * A second screen, angled in beside the first and one pixel shorter so
-     * the pair reads as two monitors rather than one wide one.
+     * A second screen at the far end, one pixel shorter than the primary so
+     * the pair reads as two monitors rather than one wide one. It used to be
+     * angled in at x+19, which is the seat: the desk then drew a screen over
+     * the person sitting at it and the workstation looked unoccupied.
      */
-    ops.push([x + 25, y - 3, 3, 3, 'ink'])
-    ops.push([x + 22, y - 1, 9, 2, 'ink'])
-    ops.push([x + 19, y - 16, 16, 14, 'ink'])
-    ops.push([x + 20, y - 15, 14, 11, 'screen'])
-    ops.push([x + 20, y - 15, 14, 1, 'screenLite'])
-    monitors.push({ x: x + 20, y: y - 15 })
+    ops.push([x + 44, y - 3, 3, 3, 'ink'])
+    ops.push([x + 41, y - 1, 9, 2, 'ink'])
+    ops.push([x + 38, y - 16, 14, 14, 'ink'])
+    ops.push([x + 39, y - 15, 12, 11, 'screen'])
+    ops.push([x + 39, y - 15, 12, 1, 'screenLite'])
+    monitors.push({ x: x + 39, y: y - 15 })
   } else if (variant === 'laptop') {
-    // An open laptop: lid, hinge and a lit keyboard deck.
-    ops.push([x + 23, y - 11, 14, 11, 'ink'])
-    ops.push([x + 24, y - 10, 12, 9, 'screen'])
-    ops.push([x + 24, y - 10, 12, 1, 'screenLite'])
-    ops.push([x + 21, y - 1, 18, 2, 'ink'])
-    ops.push([x + 22, y - 1, 16, 1, 'steel'])
-    monitors.push({ x: x + 24, y: y - 10 })
+    // An open laptop: lid, hinge and a lit keyboard deck. Also at the far
+    // end, and for the same reason.
+    ops.push([x + 38, y - 11, 13, 11, 'ink'])
+    ops.push([x + 39, y - 10, 11, 9, 'screen'])
+    ops.push([x + 39, y - 10, 11, 1, 'screenLite'])
+    ops.push([x + 37, y - 1, 15, 2, 'ink'])
+    ops.push([x + 38, y - 1, 13, 1, 'steel'])
+    monitors.push({ x: x + 39, y: y - 10 })
   }
 
-  // Desk lamp, right end: the yellow light source at floor level. The
-  // paperwork desk does without one, so the row is not a line of lamps.
-  if (variant !== 'paperwork') {
+  // Desk lamp: the yellow light source at floor level. Only on the plain
+  // desk, because it stands in the same band as the second screen and the
+  // file stack — which is what keeps the row from being a line of lamps.
+  if (variant === 'single') {
     ops.push([x + 42, y - 3, 6, 3, 'ink'])
     ops.push([x + 44, y - 13, 2, 10, 'ink'])
     ops.push([x + 41, y - 18, 9, 5, 'ink'])
@@ -245,20 +270,22 @@ export function deskUnit(
   ops.push([x + 1, y + 16, 3, 5, 'ink'])
   ops.push([x + DESK_W - 4, y + 16, 3, 5, 'ink'])
   ops.push([x - 2, y + 21, DESK_W + 4, 2, 'floorShadow'])
-  if (variant !== 'paperwork') {
+  if (variant === 'single') {
     // Pool of lamplight on the surface, not a rectangle on the wall.
     ops.push([x + 37, y + 1, 13, 2, 'brandPale'])
   }
 
   if (variant === 'paperwork') {
-    // In place of the lamp: a leaning stack of files and an in-tray.
+    // In place of the lamp: a leaning stack of files, and an in-tray on the
+    // surface. The tray is kept low on purpose — it stands in the seat's own
+    // columns, so anything taller would take the occupant's chest with it.
     ops.push([x + 38, y - 9, 12, 9, 'ink'])
     ops.push([x + 39, y - 8, 10, 3, 'paper'])
     ops.push([x + 39, y - 5, 10, 3, 'cream2'])
     ops.push([x + 39, y - 2, 10, 2, 'paper'])
     ops.push([x + 40, y - 8, 8, 1, 'rust'])
-    ops.push([x + 24, y - 6, 10, 6, 'ink'])
-    ops.push([x + 25, y - 5, 8, 4, 'cork'])
+    ops.push([x + 24, y - 3, 10, 3, 'ink'])
+    ops.push([x + 25, y - 2, 8, 1, 'cork'])
   }
 
   // Clutter, varied per desk so they do not read as clones.
@@ -275,9 +302,10 @@ export function deskUnit(
     ops.push([x + 35, y + 2, 7, 1, 'paper'])
   }
   if (rng() > 0.45) {
-    // A sticky note on the monitor bezel.
-    ops.push([x + 19, y - 16, 5, 5, 'ink'])
-    ops.push([x + 19, y - 16, 4, 4, 'brand'])
+    // A sticky note on the primary monitor's bezel — on the bezel, not past
+    // its right edge, which would clip the occupant's shoulder.
+    ops.push([x + 16, y - 16, 5, 5, 'ink'])
+    ops.push([x + 16, y - 16, 4, 4, 'brand'])
   }
 
   return { ops, baseY: y + DESK_BASE, monitors, led }

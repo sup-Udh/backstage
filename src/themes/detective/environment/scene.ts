@@ -48,7 +48,7 @@ import { evidenceBoard } from './props'
  * and notices in between.
  *
  * Described by role rather than by index, because the room decides how many
- * panels there are â€” five at the default width, three in a narrow window,
+ * panels there are — five at the default width, three in a narrow window,
  * more on a wide one. The evidence board is what makes this room the bureau,
  * so it is pinned to the centre and exists at every size.
  */

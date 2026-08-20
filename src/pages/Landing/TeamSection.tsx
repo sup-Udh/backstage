@@ -15,8 +15,13 @@ export function TeamSection({ theme, agents }: Props) {
           <h2 className="font-ui text-4xl font-extrabold uppercase leading-[1.02] tracking-[-0.04em] text-ink sm:text-5xl">
             Meet your team
           </h2>
+          {/*
+            Counted rather than written down. The cast grew from four to eight
+            and this line did not, so the page introduced "four agents" above a
+            grid of eight of them.
+          */}
           <p className="font-ui text-[15px] text-ink-3">
-            Four agents. One office. Status is live.
+            {theme.characters.length} agents. One office. Status is live.
           </p>
         </header>
 
