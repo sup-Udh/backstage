@@ -341,14 +341,11 @@ export function AgentInspector({
             >
               Settings
             </button>
-            <button
-              type="button"
-              onClick={onFocus}
-              title="Centre the camera on this character"
-              className="shrink-0 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand"
-            >
-              ⌖
-            </button>
+            {/*
+              There used to be a "centre the camera" button here. The room is
+              laid out to fit the panel now, so every character is already on
+              screen and there is nothing for it to do.
+            */}
           </div>
         </div>
       </div>
