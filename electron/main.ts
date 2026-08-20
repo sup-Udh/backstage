@@ -16,14 +16,19 @@ function createWindow() {
     }
   })
 
-  if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL)
+  /*
+   * The renderer URL is only set when Vite is serving, so it doubles as the
+   * test for "is this a development run". DevTools opens there and nowhere
+   * else — it used to open unconditionally, which meant a packaged build
+   * greeted every user with an inspector docked over half their office.
+   */
+  const devUrl = process.env.ELECTRON_RENDERER_URL
+  if (devUrl) {
+    win.loadURL(devUrl)
+    win.webContents.openDevTools()
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
-  
-  // Always open DevTools for debugging
-  win.webContents.openDevTools()
 }
 
 app.whenReady().then(() => {

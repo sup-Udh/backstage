@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useBackstage } from '../../stores/backstageStore'
 import { useProject } from '../../stores/projectStore'
 import { useTeam } from '../../stores/teamStore'
@@ -65,12 +65,26 @@ export function EnteringWorkspace() {
    */
   const walker = getTheme().characters[0]
 
-  const settled = useRef(false)
-
+  /*
+   * No "have I already run" guard here, deliberately, and it took a hang to
+   * learn why.
+   *
+   * StrictMode mounts, unmounts and remounts every component in development.
+   * A ref that latched on the first pass survived that remount, so the second
+   * pass returned immediately — while the first pass's cleanup had already set
+   * `live = false` and cleared the backstop below. Every callback the first
+   * run owned then short-circuited, nothing was left to hand over, and the
+   * walk-in screen sat there for ever. Production never showed it, because
+   * production only mounts once.
+   *
+   * So the effect is written to be safe to run twice instead of being stopped
+   * from running twice: each pass owns its own `live` flag and its own timers,
+   * and the pass that is still mounted is the one that hands over. The work it
+   * repeats is a disk read and a roster fetch, and adopting a legacy install
+   * is refused by the main process once a project exists — running it again
+   * costs a few milliseconds and changes nothing.
+   */
   useEffect(() => {
-    if (settled.current) return
-    settled.current = true
-
     let live = true
     const startedAt = performance.now()
 
@@ -137,9 +151,22 @@ export function EnteringWorkspace() {
      */
     const cap = window.setTimeout(() => {
       if (!live) return
-      void window.backstage?.projects
+
+      /*
+       * Setup is the answer when there is no main process to ask. The optional
+       * chain used to be the whole story, which meant a renderer whose preload
+       * had not attached evaluated to `undefined` and simply did nothing — a
+       * backstop that quietly declined to fire is not a backstop.
+       */
+      const api = window.backstage?.projects
+      if (!api) {
+        showSetup()
+        return
+      }
+      void api
         .active()
         .then((p) => (p ? openProject() : showSetup()))
+        .catch(() => showSetup())
     }, MAX_MS)
 
     return () => {
