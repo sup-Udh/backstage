@@ -66,6 +66,6 @@ export const LABEL_SPEC: Record<WorldLabelKind, LabelSpec> = {
  */
 export function labelFontSize(kind: WorldLabelKind, zoom: number): number {
   const spec = LABEL_SPEC[kind]
-  const scaled = (spec.base * zoom) / REFERENCE_ZOOM
-  return Math.round(Math.min(spec.max, Math.max(spec.min, scaled)))
+  // Return a constant UI size regardless of world zoom.
+  return spec.max
 }

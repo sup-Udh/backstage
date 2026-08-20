@@ -166,12 +166,11 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
 
           placed.push({ x, y, w, h })
           el.style.opacity = '1'
-          /*
-           * Whole pixels, and a 2D translate — `translate3d` would promote
-           * each label to its own compositor layer, which is what made tags
-           * lag a frame behind the canvas while panning. See WorldLabel.
-           */
-          el.style.transform = `translate(${x}px, ${y}px)`
+          // Main thread positioning instead of GPU transform to ensure perfect
+          // sync with canvas paint without compositor lag.
+          el.style.transform = 'none'
+          el.style.left = `${x}px`
+          el.style.top = `${y}px`
         }
       }
     })
