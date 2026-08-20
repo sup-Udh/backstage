@@ -28,9 +28,17 @@ const STEPS = ['Workspace', 'World', 'Cast', 'Team lead'] as const
 
 export function ProjectSetup() {
   const exitToLanding = useBackstage((s) => s.exitToLanding)
+  const showProjects = useBackstage((s) => s.showProjects)
   const openProject = useBackstage((s) => s.openProject)
   const create = useProject((s) => s.create)
   const refreshTeam = useTeam((s) => s.refresh)
+
+  /*
+   * Where cancelling goes. Back to the list if there is one to go back to,
+   * and out to the landing page only when this is the first project — leaving
+   * by the same door you came in by.
+   */
+  const projects = useProject((s) => s.projects)
 
   /*
    * A folder the app already knows about, from an install that predates
@@ -128,7 +136,7 @@ export function ProjectSetup() {
 
   const back = () => {
     setError(null)
-    if (step === 0) return exitToLanding()
+    if (step === 0) return projects.length > 0 ? showProjects() : exitToLanding()
     setStep((s) => s - 1)
   }
 
