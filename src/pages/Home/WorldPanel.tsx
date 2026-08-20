@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { WorldEngine } from '../../world/engine/WorldEngine'
+import type { WorldLink } from '../../world/engine/renderer'
 import { CharacterTooltip } from '../../components/CharacterCard/CharacterTooltip'
 import { AgentInspector } from './AgentInspector'
 import { WorldLabelLayer } from '../../world/labels/WorldLabelLayer'
 import { useBackstage } from '../../stores/backstageStore'
+import { useTeam } from '../../stores/teamStore'
+import { MAX_CONNECTIONS, findWorker, type Worker } from '../../agents/workers'
 
 interface Props {
   engine: WorldEngine
   switching: boolean
+  workers: Worker[]
 }
 
 interface Hover {
@@ -16,6 +20,9 @@ interface Hover {
   top: number
 }
 
+/** How far the pointer must move on a character before it counts as a drag. */
+const DRAG_SLOP = 5
+
 /**
  * The world.
  *
@@ -23,26 +30,38 @@ interface Hover {
  * the office is as large as the window allows and the user can drag around it
  * and zoom in. Whole-number zoom only — a fractional scale would put sprite
  * edges between device pixels.
+ *
+ * The world is also part of the orchestration UI: dragging one character onto
+ * another connects them, and every connection drawn here is one the main
+ * process has accepted and persisted.
  */
-export function WorldPanel({ engine, switching }: Props) {
+export function WorldPanel({ engine, switching, workers }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const pointer = useRef<{ x: number; y: number } | null>(null)
-  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  /** The gesture in progress: panning the camera, or pulling out a link. */
+  const gesture = useRef<
+    | { kind: 'pan'; x: number; y: number; moved: boolean }
+    | { kind: 'link'; from: string; x: number; y: number; moved: boolean }
+    | null
+  >(null)
 
   const [hover, setHover] = useState<Hover | null>(null)
-  const [zoom, setZoom] = useState(3)
+  const [zoom, setZoom] = useState(2)
   const [dragging, setDragging] = useState(false)
+  const [linking, setLinking] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
-  const agents = useSyncExternalStore(engine.subscribeViews, engine.getViews)
+  const views = useSyncExternalStore(engine.subscribeViews, engine.getViews)
   const setChatTarget = useBackstage((s) => s.setChatTarget)
+  const setTab = useBackstage((s) => s.setTab)
+  const setThread = useBackstage((s) => s.setThreadTarget)
+  const collaboration = useBackstage((s) => s.collaboration)
+  const agents = useTeam((s) => s.agents)
+  const connect = useTeam((s) => s.connect)
+  const disconnect = useTeam((s) => s.disconnect)
+  const cancel = useTeam((s) => s.cancel)
 
-  /*
-   * Selection is shared, not local. Clicking a character here and choosing one
-   * in the TALK TO selector are the same act, and opening a CLI session
-   * highlights whoever is running it — so the world reads its focus from the
-   * store and pushes it down to the engine, which draws the ring.
-   */
   const selected = useBackstage((s) => s.selectedAgentId)
   const selectAgent = useBackstage((s) => s.selectAgent)
 
@@ -50,7 +69,90 @@ export function WorldPanel({ engine, switching }: Props) {
     engine.setSelected(selected)
   }, [engine, selected])
 
-  /* The canvas backing store matches the panel, so the camera has room to work. */
+  /** A short-lived message for a refused gesture. */
+  const say = useCallback((text: string) => {
+    setNotice(text)
+    window.setTimeout(() => setNotice((n) => (n === text ? null : n)), 2600)
+  }, [])
+
+  /* ------------------------------------------------------------- links -- */
+
+  /**
+   * The links to draw, mirrored from the roster.
+   *
+   * A link is active for a moment after the pair actually exchanged
+   * something, which is what makes a live hand-off visible without every
+   * connection in the room animating all the time.
+   */
+  const links = useMemo<WorldLink[]>(() => {
+    const now = Date.now()
+    const recent = collaboration.filter((m) => now - m.at < 4000)
+    const seen = new Set<string>()
+    const out: WorldLink[] = []
+
+    for (const agent of agents) {
+      if (!agent.spawned || !agent.enabled) continue
+      for (const otherId of agent.canTalkTo) {
+        const other = agents.find((a) => a.id === otherId)
+        if (!other?.spawned || !other.enabled) continue
+        const key = [agent.id, otherId].sort().join('|')
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push({
+          a: agent.id,
+          b: otherId,
+          active: recent.some(
+            (m) =>
+              (m.senderAgentId === agent.id && m.receiverAgentId === otherId) ||
+              (m.senderAgentId === otherId && m.receiverAgentId === agent.id)
+          )
+        })
+      }
+    }
+    return out
+  }, [agents, collaboration])
+
+  useEffect(() => {
+    engine.setLinks(links)
+  }, [engine, links])
+
+  /** How many teammates each agent already has, for the drop rules. */
+  const degree = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const link of links) {
+      counts.set(link.a, (counts.get(link.a) ?? 0) + 1)
+      counts.set(link.b, (counts.get(link.b) ?? 0) + 1)
+    }
+    return counts
+  }, [links])
+
+  /**
+   * Who a link from this agent could legally land on.
+   *
+   * Mirrors the rules the main process enforces so the gesture can show its
+   * own outcome — a target that would be refused is never highlighted, and
+   * dropping on one says why instead of failing silently.
+   */
+  const droppableFor = useCallback(
+    (fromId: string): string[] => {
+      if ((degree.get(fromId) ?? 0) >= MAX_CONNECTIONS) return []
+      const from = agents.find((a) => a.id === fromId)
+      if (!from) return []
+      return workers
+        .filter(
+          (w) =>
+            w.kind === 'agent' &&
+            w.id !== fromId &&
+            !from.canTalkTo.includes(w.id) &&
+            (degree.get(w.id) ?? 0) < MAX_CONNECTIONS
+        )
+        .map((w) => w.id)
+    },
+    [agents, workers, degree]
+  )
+
+  /* ------------------------------------------------------------ canvas -- */
+
   const resize = useCallback(() => {
     const canvas = canvasRef.current
     const wrap = wrapRef.current
@@ -84,7 +186,7 @@ export function WorldPanel({ engine, switching }: Props) {
   useEffect(() => {
     const id = window.setInterval(() => {
       const p = pointer.current
-      if (!p || drag.current) return
+      if (!p || gesture.current) return
       const s = engine.toScene(p.x, p.y)
       const hit = engine.hitTest(s.x, s.y)
       engine.setHovered(hit?.id ?? null)
@@ -107,55 +209,125 @@ export function WorldPanel({ engine, switching }: Props) {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top }
   }
 
+  /*
+   * Pressing on a character starts a possible connection; pressing on the
+   * floor pans. Which one it is cannot be known until the pointer moves, so
+   * both begin as an undecided press and are resolved by the first movement.
+   */
   const onDown = (e: React.MouseEvent) => {
     const p = local(e)
-    drag.current = { x: p.x, y: p.y, moved: false }
+    const s = engine.toScene(p.x, p.y)
+    const hit = engine.hitTest(s.x, s.y)
+    const worker = findWorker(workers, hit?.id ?? null)
+
+    if (hit && worker?.kind === 'agent') {
+      gesture.current = { kind: 'link', from: hit.id, x: p.x, y: p.y, moved: false }
+    } else {
+      gesture.current = { kind: 'pan', x: p.x, y: p.y, moved: false }
+    }
     setDragging(true)
   }
 
   const onMove = (e: React.MouseEvent) => {
     const p = local(e)
     pointer.current = p
-    const d = drag.current
-    if (!d) return
-    const dx = p.x - d.x
-    const dy = p.y - d.y
-    // A few pixels of slop, so a click is never read as a tiny drag.
-    if (!d.moved && Math.hypot(dx, dy) < 4) return
-    d.moved = true
-    engine.panBy(dx, dy)
-    d.x = p.x
-    d.y = p.y
+    const g = gesture.current
+    if (!g) return
+
+    const dx = p.x - g.x
+    const dy = p.y - g.y
+    if (!g.moved && Math.hypot(dx, dy) < DRAG_SLOP) return
+    g.moved = true
+
+    if (g.kind === 'pan') {
+      engine.panBy(dx, dy)
+      g.x = p.x
+      g.y = p.y
+      setHover(null)
+      return
+    }
+
+    // Pulling a connection out of a character.
+    const scene = engine.toScene(p.x, p.y)
+    const over = engine.hitTest(scene.x, scene.y)
+    const allowed = droppableFor(g.from)
+    const target = over && over.id !== g.from ? over.id : null
+
+    if (linking !== g.from) setLinking(g.from)
+    engine.setPendingLink(
+      {
+        from: g.from,
+        x: scene.x,
+        y: scene.y,
+        target: target && allowed.includes(target) ? target : null,
+        blocked: !!target && !allowed.includes(target)
+      },
+      allowed
+    )
     setHover(null)
   }
 
-  const onUp = (e: React.MouseEvent) => {
-    const d = drag.current
-    drag.current = null
+  const finish = () => {
+    gesture.current = null
     setDragging(false)
-    if (!d || d.moved) return
+    setLinking(null)
+    engine.setPendingLink(null)
+  }
 
-    // A click selects whoever is under the cursor, or clears the selection.
-    const p = local(e)
-    const s = engine.toScene(p.x, p.y)
-    const hit = engine.hitTest(s.x, s.y)
-    const next = hit?.id ?? null
-    /*
-     * Selecting someone in the world is the same as choosing them in the
-     * command centre. `setChatTarget` carries the highlight with it, so a
-     * configured agent needs only the one call; a CLI session has no entry in
-     * the TALK TO list, so it is highlighted directly instead.
-     */
-    if (next && !next.startsWith('cli-')) setChatTarget(next)
-    else selectAgent(next)
+  const onUp = (e: React.MouseEvent) => {
+    const g = gesture.current
+    if (!g) return finish()
+
+    if (!g.moved) {
+      /*
+       * A press that did not move is a click: select whoever is under it.
+       * Choosing someone in the world and choosing them in the TALK TO
+       * selector are the same act, so both go through `setChatTarget`, which
+       * carries the highlight with it.
+       */
+      const p = local(e)
+      const s = engine.toScene(p.x, p.y)
+      const hit = engine.hitTest(s.x, s.y)
+      const next = hit?.id ?? null
+      if (next) setChatTarget(next)
+      else selectAgent(null)
+      return finish()
+    }
+
+    if (g.kind === 'link') {
+      const p = local(e)
+      const s = engine.toScene(p.x, p.y)
+      const over = engine.hitTest(s.x, s.y)
+
+      if (over && over.id !== g.from) {
+        const target = findWorker(workers, over.id)
+        const allowed = droppableFor(g.from)
+        if (target?.kind !== 'agent') {
+          say('CLI sessions cannot be connected.')
+        } else if (!allowed.includes(over.id)) {
+          say(
+            (degree.get(g.from) ?? 0) >= MAX_CONNECTIONS ||
+              (degree.get(over.id) ?? 0) >= MAX_CONNECTIONS
+              ? 'Connection limit reached.'
+              : 'Those two are already connected.'
+          )
+        } else {
+          // The main process decides; a refusal is reported, never hidden.
+          void connect(g.from, over.id).then((error) => {
+            if (error) say(error)
+          })
+        }
+      }
+    }
+
+    finish()
   }
 
   const onLeave = () => {
     pointer.current = null
-    drag.current = null
-    setDragging(false)
     engine.setHovered(null)
     setHover(null)
+    finish()
   }
 
   const onWheel = (e: React.WheelEvent) => {
@@ -169,19 +341,19 @@ export function WorldPanel({ engine, switching }: Props) {
     setZoom(engine.getCamera().scale)
   }
 
-  const hoveredAgent = hover
-    ? agents.find((a) => a.characterId === hover.id)
-    : undefined
-  const selectedAgent = selected
-    ? agents.find((a) => a.characterId === selected)
-    : undefined
-  /*
-   * The cast is chosen by slot and re-cast on every theme change, so the
-   * engine is the only thing that knows which body is currently playing an
-   * agent. Matching on ids here would silently break the moment the user
-   * switches worlds.
-   */
+  const hoveredView = hover ? views.find((v) => v.characterId === hover.id) : undefined
+  const selectedWorker = findWorker(workers, selected)
   const selectedChar = engine.characterFor(selected)
+
+  /** The teammates of whoever is selected, as workers. */
+  const connections = useMemo(() => {
+    if (!selectedWorker || selectedWorker.kind !== 'agent') return []
+    const config = agents.find((a) => a.id === selectedWorker.id)
+    if (!config) return []
+    return config.canTalkTo
+      .map((id) => findWorker(workers, id))
+      .filter((w): w is Worker => w !== null)
+  }, [selectedWorker, agents, workers])
 
   return (
     <section className="relative flex h-full min-h-0 min-w-0 flex-col">
@@ -194,7 +366,15 @@ export function WorldPanel({ engine, switching }: Props) {
           onMouseLeave={onLeave}
           onWheel={onWheel}
           className="pixelated block h-full w-full"
-          style={{ cursor: dragging ? 'grabbing' : hover ? 'pointer' : 'grab' }}
+          style={{
+            cursor: linking
+              ? 'crosshair'
+              : dragging
+                ? 'grabbing'
+                : hover
+                  ? 'pointer'
+                  : 'grab'
+          }}
         />
 
         {/*
@@ -217,12 +397,28 @@ export function WorldPanel({ engine, switching }: Props) {
           }}
         />
 
-        {hover && hoveredAgent && hover.id !== selected && (
+        {hover && hoveredView && hover.id !== selected && !linking && (
           <CharacterTooltip
-            agent={hoveredAgent}
+            agent={hoveredView}
             left={hover.left}
             top={hover.top - 6}
           />
+        )}
+
+        {/* Why a gesture was refused, said where the gesture happened. */}
+        {(notice || linking) && (
+          <div className="pointer-events-none absolute left-1/2 top-4 z-30 -translate-x-1/2">
+            <p
+              className={[
+                'border-2 px-2 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.08em]',
+                notice
+                  ? 'border-rust bg-paper text-rust'
+                  : 'border-ink bg-brand text-ink'
+              ].join(' ')}
+            >
+              {notice ?? 'Connecting… drop on a teammate'}
+            </p>
+          </div>
         )}
 
         {/* Camera controls, bottom-right so they never sit over the desks. */}
@@ -254,13 +450,50 @@ export function WorldPanel({ engine, switching }: Props) {
           </span>
         </div>
 
-        {/* Inspector for the selected character. */}
-        {selectedAgent && selectedChar && (
+        {selectedWorker && selectedChar && (
           <AgentInspector
-            agent={selectedAgent}
+            worker={selectedWorker}
             character={selectedChar}
+            others={workers}
+            connections={connections}
             onFocus={() => engine.focusOn(selectedChar.id)}
             onClose={() => selectAgent(null)}
+            onOpenChat={() => {
+              setThread(null)
+              setChatTarget(selectedWorker.id)
+              setTab('messages')
+            }}
+            onOpenThread={() => {
+              setThread(selectedWorker.id)
+              setTab('messages')
+            }}
+            onStop={() => {
+              if (selectedWorker.kind === 'cli') {
+                if (selectedWorker.sessionId) {
+                  void window.backstage.sessions.interrupt(selectedWorker.sessionId)
+                }
+              } else {
+                void cancel(selectedWorker.id)
+              }
+            }}
+            onConnect={(otherId) => {
+              void connect(selectedWorker.id, otherId).then((error) => {
+                if (error) say(error)
+              })
+            }}
+            onDisconnect={(otherId) => {
+              void disconnect(selectedWorker.id, otherId).then((error) => {
+                if (error) say(error)
+              })
+            }}
+            onRename={(name) => {
+              if (selectedWorker.kind !== 'cli' || !selectedWorker.sessionId) return
+              void window.backstage.sessions
+                .rename(selectedWorker.sessionId, name)
+                .then((result) => {
+                  if (!result.ok && result.error) say(result.error)
+                })
+            }}
           />
         )}
       </div>

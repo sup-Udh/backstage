@@ -56,6 +56,16 @@ interface TeamState {
   stopAll: () => Promise<number>
   retry: (taskId: string) => Promise<string | null>
 
+  /**
+   * Collaboration links. Resolve to an error message, or null on success.
+   *
+   * The main process owns the limits and can refuse, so these report back
+   * rather than assuming. The roster it returns replaces the mirror, which is
+   * what keeps a refused link from lingering in the UI as though it existed.
+   */
+  connect: (a: string, b: string) => Promise<string | null>
+  disconnect: (a: string, b: string) => Promise<string | null>
+
   saveTrigger: (trigger: Partial<Trigger>) => Promise<void>
   removeTrigger: (triggerId: string) => Promise<void>
   updateSettings: (patch: Partial<OrchestrationSettings>) => Promise<void>
@@ -166,6 +176,18 @@ export const useTeam = create<TeamState>((set, get) => ({
   retry: async (taskId) => {
     const ack = await window.backstage.agents.retry(taskId)
     return ack.accepted ? null : (ack.error ?? 'Could not retry that task.')
+  },
+
+  connect: async (a, b) => {
+    const result = await window.backstage.agents.connect(a, b)
+    set({ agents: result.agents })
+    return result.ok ? null : (result.error ?? 'Could not connect those agents.')
+  },
+
+  disconnect: async (a, b) => {
+    const result = await window.backstage.agents.disconnect(a, b)
+    set({ agents: result.agents })
+    return result.ok ? null : (result.error ?? 'Could not remove that connection.')
   },
 
   saveTrigger: async (trigger) => {

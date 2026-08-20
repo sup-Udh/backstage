@@ -147,6 +147,23 @@ interface BackstageState {
    */
   selectedAgentId: string | null
 
+  /**
+   * Whose group conversation is on screen, or null for the private one.
+   *
+   * A second, deliberately separate view preference. `chatTarget` chooses
+   * which worker the user is talking to; this chooses whether they are seeing
+   * that worker's private session or the thread it shares with its
+   * teammates. Keeping them apart is what stops a group conversation from
+   * ever becoming part of a private one — switching views cannot move a
+   * message between them, because the two are stored separately and neither
+   * is derived from the other.
+   */
+  threadTarget: string | null
+  /** The group behind `threadTarget`, resolved from the main process. */
+  thread: ThreadInfo | null
+  /** The group conversation itself, keyed by thread id. */
+  threadMessages: Record<string, ChatMessage[]>
+
   /** The command centre's active tab, and the file being viewed in it. */
   tab: TabId
   openFile: string | null
