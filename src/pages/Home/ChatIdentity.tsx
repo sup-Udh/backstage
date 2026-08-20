@@ -1,17 +1,26 @@
 import type { Theme } from '../../themes/types'
-import type { AgentConfig, AgentRuntimeState } from '../../shared/providerApi'
+import type {
+  AgentConfig,
+  AgentRuntimeState,
+  ThreadInfo
+} from '../../shared/providerApi'
 import { StatusChip } from '../../components/AgentStatus/StatusChip'
 import { useBackstage } from '../../stores/backstageStore'
+import { findWorker, type Worker } from '../../agents/workers'
 
 interface Props {
   theme: Theme
+  workers: Worker[]
   /** Everyone this message would reach. One agent, or the whole office. */
   recipients: AgentConfig[]
   isBroadcast: boolean
   states: Record<string, AgentRuntimeState>
+  /** Set when the group conversation is on screen rather than a private one. */
+  thread: ThreadInfo | null
   providerName: (agent: AgentConfig) => string
   modelName: (agent: AgentConfig) => string
   onStop: (agentId: string) => void
+  onLeaveThread: () => void
 }
 
 /**

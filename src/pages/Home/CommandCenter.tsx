@@ -21,6 +21,7 @@ import {
   TasksPanel
 } from '../../workspace/panels'
 import { useProviders } from '../../providers/useProviders'
+import { findWorker, type Worker } from '../../agents/workers'
 
 interface Props {
   theme: Theme
@@ -69,6 +70,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
   const queueCommand = useBackstage((s) => s.queueCommand)
   const requestSession = useBackstage((s) => s.requestSession)
   const selectAgent = useBackstage((s) => s.selectAgent)
+  const setThreadTarget = useBackstage((s) => s.setThreadTarget)
   const activeTerminalId = useBackstage((s) => s.activeTerminalId)
   const terminalSessions = useBackstage((s) => s.terminalSessions)
   const agentSessions = useBackstage((s) => s.agentSessions)
@@ -385,18 +387,30 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
       {tab === 'messages' && (
         <ChatIdentity
           theme={theme}
+          workers={workers}
           recipients={recipients}
           isBroadcast={isBroadcast}
           states={agentStates}
+          thread={inThread ? thread : null}
           providerName={providerName}
           modelName={modelName}
-          onStop={(agentId) => void cancel(agentId)}
+          onStop={(agentId) => {
+            const worker = findWorker(workers, agentId)
+            if (worker?.kind === 'cli' && worker.sessionId) {
+              void window.backstage.sessions.interrupt(worker.sessionId)
+            } else {
+              void cancel(agentId)
+            }
+          }}
+          onLeaveThread={() => void setThreadTarget(null)}
         />
       )}
 
       {/* The active surface. Only this scrolls. */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === 'messages' && <MessagesPanel theme={theme} onSubmit={submit} />}
+        {tab === 'messages' && (
+          <MessagesPanel theme={theme} workers={workers} onSubmit={submit} />
+        )}
 
         {tab === 'files' &&
           (openFile ? (
