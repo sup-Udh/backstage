@@ -39,8 +39,16 @@ interface ProjectState {
   /** True while the world is veiled mid-theme-change. */
   switching: boolean
 
-  /** Read what the main process found on disk. Called once, on entering. */
-  bootstrap: () => Promise<{ project: Project | null; legacy: LegacyState | null }>
+  /**
+   * Read what the main process found on disk. Called once, on entering.
+   *
+   * Returns the projects rather than "the active one", because the walk-in
+   * screen's job is to find out what exists — not to choose. Whatever the main
+   * process happens to have marked active is still loaded into `project` so a
+   * reopened session's scoped reads resolve, but nothing is opened on the
+   * strength of it.
+   */
+  bootstrap: () => Promise<{ projects: Project[]; legacy: LegacyState | null }>
   create: (draft: ProjectDraft) => Promise<{ project?: Project; error?: string }>
   open: (projectId: string) => Promise<Project | null>
   update: (patch: ProjectPatch) => Promise<Project | null>
@@ -59,7 +67,7 @@ export const useProject = create<ProjectState>((set, get) => ({
 
   bootstrap: async () => {
     const api = window.backstage?.projects
-    if (!api) return { project: null, legacy: null }
+    if (!api) return { projects: [], legacy: null }
 
     const state = await api.bootstrap()
     set({
@@ -68,7 +76,7 @@ export const useProject = create<ProjectState>((set, get) => ({
       legacy: state.legacy,
       loaded: true
     })
-    return { project: state.activeProject, legacy: state.legacy }
+    return { projects: state.projects, legacy: state.legacy }
   },
 
   create: async (draft) => {
