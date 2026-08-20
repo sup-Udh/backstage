@@ -206,6 +206,29 @@ class AgentRegistry {
     this.announce(agentId)
   }
 
+  /**
+   * Mark an execution as stopping.
+   *
+   * Cancellation is not instant: it takes effect at the next step or tool
+   * boundary, because neither provider SDK can abort a request already in
+   * flight. Reporting idle the moment the user clicks would be the interface
+   * claiming work has ended while it is still being billed — this says
+   * truthfully that it is on its way down, and `endExecution` moves it to
+   * idle when it genuinely has.
+   *
+   * Guarded by executionId like every other transition here, so a stop
+   * arriving just as an execution finishes cannot mark the next one stopping.
+   */
+  beginStop(agentId: string, executionId: string): void {
+    const state = this.states.get(agentId)
+    if (!state || state.executionId !== executionId) return
+    if (state.status === 'stopping') return
+    state.status = 'stopping'
+    state.action = 'Stopping'
+    state.updatedAt = Date.now()
+    this.announce(agentId)
+  }
+
   /** Clear a sticky error once the user has acted on it. */
   clearError(agentId: string): void {
     const state = this.states.get(agentId)

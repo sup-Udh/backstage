@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react'
 import { teamRuntime } from '../agents/team'
 import { useBackstage, localId } from '../stores/backstageStore'
 import type { AgentSession } from '../shared/providerApi'
-import { lifecycleForSession, workerIdFor } from '../agents/workers'
+import { lifecycleForSession, sessionSlots, workerIdFor } from '../agents/workers'
+import { useTeam } from '../stores/teamStore'
+import { getTheme } from '../themes'
 
 /**
  * Real workspace events into the world and the session surfaces.
@@ -47,8 +49,21 @@ export function useWorkspaceEvents(): void {
     if (!window.backstage?.sessions) return
 
     return window.backstage.sessions.onChanged((sessions: AgentSession[]) => {
+      /*
+       * The same casting decision the selector makes, from the same function.
+       * Working it out separately here is exactly how the world and the
+       * dropdown end up showing a session as two different characters.
+       */
+      const cast = getTheme(useBackstage.getState().themeId).characters
+      const slots = sessionSlots(
+        useTeam.getState().agents,
+        sessions,
+        cast.length
+      )
+
       for (const session of sessions) {
         const agentId = workerIdFor(session)
+        const slot = slots.get(session.id) ?? 0
 
         if (!known.current.has(session.id)) {
           known.current.set(session.id, session.status)
@@ -57,9 +72,7 @@ export function useWorkspaceEvents(): void {
             name: session.name,
             role: 'CLI session',
             model: `${session.provider ?? 'cli'} cli`,
-            // The slot is assigned by the main process, which is the only
-            // place that knows how many sessions have existed this run.
-            slot: session.characterSlot
+            slot
           })
           ingestEvent({
             id: localId('cli'),
@@ -76,10 +89,7 @@ export function useWorkspaceEvents(): void {
          * user renames it, or recasts it — and neither is a status change, so
          * both are applied on every update rather than only on arrival.
          */
-        teamRuntime.updateExternal(agentId, {
-          name: session.name,
-          slot: session.characterSlot
-        })
+        teamRuntime.updateExternal(agentId, { name: session.name, slot })
 
         const previous = known.current.get(session.id)
         if (previous === session.status) continue

@@ -2,7 +2,9 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { terminals } from '../terminal/TerminalSessionManager'
 import { agentSessions } from '../terminal/AgentSessionManager'
 import { sessionTranscripts } from '../terminal/sessionTranscript'
-import { MAX_CONNECTIONS, MAX_GROUP } from '../agents/agentStore'
+// Straight from the rules module rather than the store: sessions share the
+// limits but have nothing to do with the persisted roster.
+import { MAX_CONNECTIONS, MAX_GROUP } from '../agents/relationships'
 import { fileWatcher, type FileChange } from '../workspace/FileWatcher'
 import { systemBus } from '../agents/EventBus'
 import { refreshGit } from '../workspace/awareness'

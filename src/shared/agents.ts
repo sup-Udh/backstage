@@ -111,6 +111,7 @@ export interface AgentConfig {
  *   working   running tools
  *   talking   reporting, or sending to another agent
  *   waiting   blocked on another agent or on approval
+ *   stopping  cancelled, but the current step has not unwound yet
  *   error     the last execution failed
  */
 export type AgentLifecycle =
@@ -122,15 +123,24 @@ export type AgentLifecycle =
   | 'working'
   | 'talking'
   | 'waiting'
+  | 'stopping'
   | 'error'
 
-/** Statuses that mean the agent is actively occupied. */
+/**
+ * Statuses that mean the agent is actively occupied.
+ *
+ * `stopping` is one of them. A cancelled execution is still running until it
+ * reaches the next step or tool boundary — neither provider SDK can abort a
+ * request already in flight — so treating it as free would let the UI hand it
+ * new work that would queue behind something the user believes has ended.
+ */
 export const BUSY_STATUSES: AgentLifecycle[] = [
   'queued',
   'thinking',
   'working',
   'talking',
-  'waiting'
+  'waiting',
+  'stopping'
 ]
 
 /**

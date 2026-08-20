@@ -103,6 +103,64 @@ export function workerIdFor(session: AgentSession): string {
   return `cli-${session.terminalSessionId}`
 }
 
+/**
+ * Which character each CLI session wears.
+ *
+ * Decided here because it needs the theme: slots wrap around the active cast,
+ * so "a free character" is only answerable once you know how many there are
+ * and who is already at a desk. The main process, which creates sessions, has
+ * neither fact — it used to offset them past the configured team and hope,
+ * which put the first Claude session on slot 8 of an eight-character cast,
+ * wrapping it straight back onto the first agent's face.
+ *
+ * A slot the user picked deliberately is never reassigned. If every character
+ * is taken the cast wraps, because refusing to show a running session is
+ * worse than showing two people who look alike.
+ */
+export function sessionSlots(
+  agents: AgentConfig[],
+  sessions: AgentSession[],
+  castSize: number
+): Map<string, number> {
+  const wrap = (n: number) => ((n % castSize) + castSize) % castSize
+
+  const taken = new Set<number>()
+  for (const agent of agents) {
+    if (agent.enabled && agent.spawned) taken.add(wrap(agent.characterSlot))
+  }
+
+  const out = new Map<string, number>()
+  // Deliberate choices first, so they claim their character before the
+  // automatic ones start looking for a free one.
+  for (const session of sessions) {
+    if (session.status === 'exited' || !session.characterChosen) continue
+    const slot = wrap(session.characterSlot)
+    out.set(session.id, slot)
+    taken.add(slot)
+  }
+
+  let next = 0
+  for (const session of sessions) {
+    if (session.status === 'exited' || out.has(session.id)) continue
+    let slot = -1
+    for (let i = 0; i < castSize; i++) {
+      const candidate = wrap(next + i)
+      if (taken.has(candidate)) continue
+      slot = candidate
+      next = candidate + 1
+      break
+    }
+    if (slot === -1) {
+      // Everybody is in use; wrap rather than leave the session bodiless.
+      slot = wrap(next++)
+    }
+    out.set(session.id, slot)
+    taken.add(slot)
+  }
+
+  return out
+}
+
 export function isCliWorker(id: string): boolean {
   return id.startsWith('cli-')
 }
@@ -135,6 +193,7 @@ export function buildWorkers({
     cast[((slot % cast.length) + cast.length) % cast.length].name
 
   const workers: Worker[] = []
+  const slots = sessionSlots(agents, sessions, cast.length)
 
   for (const agent of agents) {
     if (!agent.enabled || !agent.spawned) continue
@@ -189,7 +248,7 @@ export function buildWorkers({
       busy: session.status === 'working' || session.status === 'starting',
       // Interrupting a session at its prompt does nothing worth offering.
       canStop: session.status === 'working' || session.status === 'starting',
-      characterSlot: session.characterSlot,
+      characterSlot: slots.get(session.id) ?? 0,
       /*
        * Session links are held as session ids in the main process, but every
        * surface above this line addresses workers. Translated once here so a

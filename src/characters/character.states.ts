@@ -26,6 +26,13 @@ export function characterStateForAgent(status: AgentStatus): CharacterState {
       return 'waiting'
     case 'queued':
       return 'waiting'
+    case 'stopping':
+      /*
+       * Still winding down, so still at the desk — but no longer typing. The
+       * pose has to differ from `working`, or clicking Stop would appear to
+       * have done nothing until the execution finally unwound.
+       */
+      return 'waiting'
     case 'success':
       return 'success'
     case 'error':
@@ -66,6 +73,7 @@ export const STATUS_GLYPH: Record<AgentStatus, string> = {
   working: '✦',
   talking: '◑',
   waiting: '◒',
+  stopping: '◍',
   success: '◆',
   error: '✕'
 }
@@ -79,6 +87,7 @@ export const STATUS_LABEL: Record<AgentStatus, string> = {
   working: 'WORKING',
   talking: 'TALKING',
   waiting: 'WAITING',
+  stopping: 'STOPPING',
   success: 'DONE',
   error: 'ERROR'
 }

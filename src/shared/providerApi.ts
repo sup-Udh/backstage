@@ -159,8 +159,16 @@ export interface AgentSession {
   lastOutput?: string
   /** "Claude 1" until the user renames it. Unique across live sessions. */
   name: string
-  /** Which of the active theme's characters stands in for this session. */
+  /**
+   * Which of the active theme's characters stands in for this session.
+   *
+   * -1 until somebody decides. The renderer picks a free character when the
+   * user has not, because choosing one needs the theme's cast — which the
+   * process that creates sessions has no knowledge of.
+   */
   characterSlot: number
+  /** True once the user picked deliberately, so nothing reassigns it. */
+  characterChosen: boolean
   /** Other live sessions this one is connected to. */
   connections: string[]
 }

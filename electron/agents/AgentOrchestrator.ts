@@ -352,6 +352,13 @@ export class AgentOrchestrator {
 
     if (lane.current) {
       lane.current.cancel()
+      /*
+       * Say so immediately. The execution unwinds at the next step or tool
+       * boundary, which can be a few seconds away, and a button that appears
+       * to do nothing gets pressed again — so the agent reports `stopping`
+       * from here until it actually stops.
+       */
+      agentRegistry.beginStop(agentId, lane.current.id)
       return true
     }
     agentRegistry.refresh(agentId)

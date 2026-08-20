@@ -37,8 +37,15 @@ export interface AgentSession {
    * next launch. It lives exactly as long as the thing it names.
    */
   name: string
-  /** Which of the active theme's characters stands in for this session. */
+  /**
+   * Which of the active theme's characters stands in for this session.
+   *
+   * -1 until somebody decides. The renderer picks a free character when the
+   * user has not, because choosing one requires knowing the theme's cast.
+   */
   characterSlot: number
+  /** True once the user picked deliberately, so nothing reassigns it. */
+  characterChosen: boolean
   /** Other sessions this one is connected to. Derived, never stored. */
   connections: string[]
 }
@@ -51,13 +58,20 @@ export interface AgentSession {
 const IDLE_AFTER_MS = 2500
 
 /**
- * Where CLI sessions are cast from, past the configured team's own slots.
+ * The slot a session is given when the user has not chosen one.
  *
- * Sessions and agents draw characters from the same theme, so they have to
- * draw from different parts of it or the first Claude session would appear
- * wearing Jane's face while Jane was still at her desk.
+ * Deliberately a placeholder rather than an attempt at a free character. Slots
+ * wrap around the active theme's cast, and this process has no idea how large
+ * that is or which characters are already at a desk — an earlier version
+ * offset these past the configured team and claimed that avoided collisions,
+ * which was wrong the moment the cast size and the offset matched: every
+ * theme has eight characters, so slot 8 wrapped straight back onto slot 0 and
+ * the first Claude session appeared wearing Jane's face.
+ *
+ * Choosing a free character needs the theme, so the renderer does it. What is
+ * held here is only what the user explicitly picked.
  */
-const CLI_SLOT_BASE = 8
+const UNASSIGNED_SLOT = -1
 
 class AgentSessions extends EventEmitter {
   private sessions = new Map<string, AgentSession>()
@@ -71,7 +85,6 @@ class AgentSessions extends EventEmitter {
    * transcript is precisely the confusion the numbering exists to prevent.
    */
   private counts = new Map<string, number>()
-  private slots = 0
 
   constructor() {
     super()
@@ -89,7 +102,8 @@ class AgentSessions extends EventEmitter {
         status: 'starting',
         startedAt: Date.now(),
         name: `${kind.replace(/^./, (c) => c.toUpperCase())} ${n}`,
-        characterSlot: CLI_SLOT_BASE + this.slots++,
+        characterSlot: UNASSIGNED_SLOT,
+        characterChosen: false,
         connections: []
       }
       this.sessions.set(session.id, session)
@@ -195,11 +209,18 @@ class AgentSessions extends EventEmitter {
     return { ok: true }
   }
 
-  /** Put a session in front of a different character. */
+  /**
+   * Put a session in front of a different character.
+   *
+   * Marks the choice as the user's, which stops the renderer from reassigning
+   * it later while looking for a free face. Someone who deliberately put
+   * Claude 1 on the same character as an agent gets to keep that.
+   */
   setCharacter(id: string, slot: number): boolean {
     const session = this.sessions.get(id)
     if (!session || !Number.isFinite(slot)) return false
     session.characterSlot = Math.max(0, Math.floor(slot))
+    session.characterChosen = true
     this.emit('changed', this.list())
     return true
   }
