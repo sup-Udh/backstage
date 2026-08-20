@@ -87,6 +87,20 @@ export function useTeamSync(): void {
     })
   }, [ingestEvent])
 
+  /*
+   * Connection state can change without anyone asking: the keys on disk are
+   * verified in the background after launch. Without this the app spends its
+   * first seconds insisting no provider is connected, and refuses to send.
+   */
+  useEffect(() => {
+    if (!window.backstage?.providers) return
+    return window.backstage.providers.onChanged((statuses) => {
+      setProviders(statuses)
+      // Whether an agent can run depends on this, so re-derive the roster too.
+      void useTeam.getState().refresh()
+    })
+  }, [setProviders])
+
   /* Approvals: raised by a tool that is genuinely blocked waiting for one. */
   useEffect(() => {
     if (!window.backstage?.approvals) return

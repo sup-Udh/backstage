@@ -121,6 +121,20 @@ function normalise(raw: unknown): AgentConfig | null {
   const capabilitySource =
     a.capabilities !== undefined ? a.capabilities : (a as { tools?: unknown }).tools
 
+  /*
+   * Presence, and the one place it is inferred.
+   *
+   * `spawned` did not exist before agents could be spawned, so a roster from
+   * an earlier build has no opinion on it. Treating that silence as "not in
+   * the office" emptied teams that were already working and made the app look
+   * broken on upgrade. An absent field therefore means "this agent predates
+   * the idea", and an enabled agent from that era is restored to the office it
+   * was already in. An explicitly false field is the user's own decision and
+   * is always honoured.
+   */
+  const declaresSpawn = Object.prototype.hasOwnProperty.call(a, 'spawned')
+  const spawned = declaresSpawn ? a.spawned === true : a.enabled !== false
+
   return {
     id,
     name,
@@ -139,7 +153,7 @@ function normalise(raw: unknown): AgentConfig | null {
     themeId: typeof a.themeId === 'string' && a.themeId ? a.themeId : null,
     characterSlot: Number.isFinite(a.characterSlot) ? Number(a.characterSlot) : 0,
     enabled: a.enabled !== false,
-    spawned: a.spawned === true,
+    spawned,
     workspace: typeof a.workspace === 'string' && a.workspace ? a.workspace : null,
     canTalkTo: Array.isArray(a.canTalkTo)
       ? a.canTalkTo.filter((x): x is string => typeof x === 'string')
@@ -219,6 +233,9 @@ export function upsertAgent(input: Partial<AgentConfig> & { id?: string }): Agen
   const created = normalise({
     characterSlot: list.length,
     capabilities: [...DEFAULT_CAPABILITIES],
+    // Stated rather than left absent, so a newly created agent is never
+    // mistaken for one migrated from a roster that predates spawning.
+    spawned: false,
     ...input,
     id: input.id?.trim() || idFor(String(input.name ?? 'agent'), taken),
     createdAt: Date.now(),

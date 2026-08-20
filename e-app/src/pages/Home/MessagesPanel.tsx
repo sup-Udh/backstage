@@ -99,9 +99,19 @@ export function MessagesPanel({ theme, onSubmit }: Props) {
             </h2>
             <p className="mt-1.5 font-ui text-[13px] leading-[1.6] text-ink-3">
               {present.length === 0
-                ? 'Spawn an agent on the Agents page and they will appear in the world.'
+                ? 'Spawn an agent and they walk into the world, ready for work.'
                 : 'Give an agent a task and watch them figure it out. You can talk to someone else while they work.'}
             </p>
+
+            {present.length === 0 && (
+              <button
+                type="button"
+                onClick={() => useBackstage.getState().setPage('agents')}
+                className="mt-3 border-[3px] border-ink bg-brand px-4 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
+              >
+                Open Agents
+              </button>
+            )}
 
             {present.length > 0 && (
               <>

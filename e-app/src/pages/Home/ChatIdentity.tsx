@@ -1,6 +1,7 @@
 import type { Theme } from '../../themes/types'
 import type { AgentConfig, AgentRuntimeState } from '../../shared/providerApi'
 import { StatusChip } from '../../components/AgentStatus/StatusChip'
+import { useBackstage } from '../../stores/backstageStore'
 
 interface Props {
   theme: Theme
@@ -38,13 +39,22 @@ export function ChatIdentity({
 
   if (recipients.length === 0) {
     return (
-      <div className="shrink-0 border-b-2 border-rule bg-cream-2 px-3 py-2">
+      <div className="shrink-0 border-b-2 border-rule bg-brand-pale px-3 py-2">
         <p className="font-pixel text-[11px] font-bold uppercase tracking-[0.08em] text-ink">
           Nobody is in the office
         </p>
         <p className="mt-0.5 font-ui text-[11px] leading-snug text-ink-3">
-          Spawn an agent on the Agents page to start working.
+          Agents exist until you spawn them; spawning is what brings one into
+          the workspace so it can take work.
         </p>
+        {/* The way out, rather than a description of the way out. */}
+        <button
+          type="button"
+          onClick={() => useBackstage.getState().setPage('agents')}
+          className="mt-1.5 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px"
+        >
+          Open Agents
+        </button>
       </div>
     )
   }

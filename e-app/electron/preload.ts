@@ -4,6 +4,7 @@ import type {
   ApprovalRequest,
   BackstageApi,
   FileChange,
+  ProviderStatus,
   RunTaskParams,
   RuntimeEvent,
   TerminalSession
@@ -41,7 +42,8 @@ const api: BackstageApi = {
     disconnect: (providerId) => ipcRenderer.invoke('providers:disconnect', providerId),
     test: (providerId) => ipcRenderer.invoke('providers:test', providerId),
     selectModel: (providerId, modelId) =>
-      ipcRenderer.invoke('providers:selectModel', providerId, modelId)
+      ipcRenderer.invoke('providers:selectModel', providerId, modelId),
+    onChanged: (handler) => subscribe<ProviderStatus[]>('providers:changed', handler)
   },
 
   workspace: {

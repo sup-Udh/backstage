@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import type {
   ConnectionResult,
   ProviderDescriptor,
@@ -28,6 +28,21 @@ import {
 
 /** Per-provider: did the last authenticated call succeed, this app run. */
 const lastCheckOk = new Map<string, boolean>()
+
+/**
+ * Tell every window the provider picture has changed.
+ *
+ * Connection state is not something the renderer can derive or poll for: a key
+ * is verified asynchronously at startup, and until that finishes a perfectly
+ * good key reads as disconnected. Pushing the result is what stops the app
+ * opening in a state where it refuses to work for no reason the user can see.
+ */
+function broadcastStatus(): void {
+  const payload = PROVIDERS.map((p) => statusFor(p.id))
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('providers:changed', payload)
+  }
+}
 /** Per-provider model cache, so the picker does not re-query on every render. */
 const cachedModels = new Map<string, ProviderModel[]>()
 
@@ -183,4 +198,5 @@ export async function primeProviders(): Promise<void> {
       if (result.success && result.models) cachedModels.set(p.id, result.models)
     })
   )
+  broadcastStatus()
 }

@@ -51,6 +51,12 @@ export function useProviders() {
     void refresh()
   }, [refresh])
 
+  /* Keep this hook's own copy in step with a background re-verification. */
+  useEffect(() => {
+    if (!window.backstage?.providers) return
+    return window.backstage.providers.onChanged(setStatuses)
+  }, [])
+
   const withBusy = useCallback(
     async <T,>(key: string, fn: () => Promise<T>): Promise<T> => {
       setBusy(key)

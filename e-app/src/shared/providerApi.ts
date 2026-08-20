@@ -199,6 +199,11 @@ export interface BackstageApi {
     disconnect(providerId: string): Promise<ProviderStatus>
     test(providerId: string): Promise<ConnectionResult>
     selectModel(providerId: string, modelId: string): Promise<ProviderStatus>
+    /**
+     * Pushed when connection state changes on its own — notably when the keys
+     * stored on disk finish being verified after launch.
+     */
+    onChanged(handler: (statuses: ProviderStatus[]) => void): () => void
   }
 
   workspace: {
