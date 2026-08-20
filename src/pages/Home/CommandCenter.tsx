@@ -172,6 +172,22 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
     }
   }, [tab, activeTerminalId, agentSessions, selectAgent])
 
+  /*
+   * And the other direction: choosing a session anywhere — in the world, in
+   * the selector — brings its terminal forward too.
+   *
+   * The user should never have to work out which Claude they are talking to.
+   * Selection is one fact, and the world, the chat header and the terminal
+   * are three views of it; any of them showing a different session than the
+   * others is the failure this is here to prevent.
+   */
+  useEffect(() => {
+    if (activeWorker?.kind !== 'cli' || !activeWorker.terminalSessionId) return
+    if (activeWorker.terminalSessionId === activeTerminalId) return
+    lastHighlighted.current = activeWorker.id
+    requestSession(activeWorker.terminalSessionId)
+  }, [activeWorker, activeTerminalId, requestSession])
+
   const providerName = (agent: AgentConfig) =>
     providers.find((p) => p.id === agent.providerId)?.name ?? agent.providerId
 

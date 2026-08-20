@@ -119,8 +119,21 @@ export function registerTerminalHandlers(): void {
     if (typeof id === 'string') terminals.kill(String(id))
   })
 
+  /*
+   * Closing a terminal disposes everything hanging off it. The PTY is gone,
+   * so the session that was running in it, its reconstructed transcript and
+   * any links it held are all describing something that no longer exists —
+   * keeping them would leave a worker in the selector with no process behind
+   * it and a connection slot occupied by a ghost.
+   */
   ipcMain.handle('terminal:close', (_e, id: unknown) => {
-    if (typeof id === 'string') terminals.remove(String(id))
+    if (typeof id === 'string') {
+      for (const session of agentSessions.list()) {
+        if (session.terminalSessionId === id) sessionTranscripts.forget(session.id)
+      }
+      agentSessions.forgetTerminal(id)
+      terminals.remove(id)
+    }
     return terminals.list()
   })
 
