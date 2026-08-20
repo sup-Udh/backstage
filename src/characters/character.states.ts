@@ -112,7 +112,20 @@ export const ACTIVE_STATUSES: AgentStatus[] = [
 export type StatusBucket = 'working' | 'thinking' | 'talking' | 'idle'
 
 export function bucketFor(status: AgentStatus): StatusBucket {
-  if (status === 'working' || status === 'success' || status === 'queued') return 'working'
+  /*
+   * `stopping` counts as working. The execution is still unwinding and still
+   * being billed, so counting it as idle would tell the user the office is
+   * quieter than it is at exactly the moment they are watching for it to
+   * settle.
+   */
+  if (
+    status === 'working' ||
+    status === 'success' ||
+    status === 'queued' ||
+    status === 'stopping'
+  ) {
+    return 'working'
+  }
   if (status === 'thinking') return 'thinking'
   if (status === 'talking') return 'talking'
   return 'idle'

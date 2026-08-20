@@ -47,7 +47,12 @@ export function Home() {
           needs in order to fit the room correctly.
         */}
         <div className="min-w-0 flex-1">
-          <WorldPanel engine={engine} switching={switching} workers={workers} />
+          <WorldPanel
+            engine={engine}
+            switching={switching}
+            workers={workers}
+            theme={theme}
+          />
         </div>
 
         {open ? (

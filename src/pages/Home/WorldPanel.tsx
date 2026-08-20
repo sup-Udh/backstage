@@ -4,6 +4,7 @@ import type { WorldLink } from '../../world/engine/renderer'
 import { CharacterTooltip } from '../../components/CharacterCard/CharacterTooltip'
 import { AgentInspector } from './AgentInspector'
 import { WorldLabelLayer } from '../../world/labels/WorldLabelLayer'
+import type { Theme } from '../../themes/types'
 import { useBackstage } from '../../stores/backstageStore'
 import { useTeam } from '../../stores/teamStore'
 import { MAX_CONNECTIONS, findWorker, type Worker } from '../../agents/workers'
@@ -12,6 +13,7 @@ interface Props {
   engine: WorldEngine
   switching: boolean
   workers: Worker[]
+  theme: Theme
 }
 
 interface Hover {
@@ -35,7 +37,7 @@ const DRAG_SLOP = 5
  * another connects them, and every connection drawn here is one the main
  * process has accepted and persisted.
  */
-export function WorldPanel({ engine, switching, workers }: Props) {
+export function WorldPanel({ engine, switching, workers, theme }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const pointer = useRef<{ x: number; y: number } | null>(null)
@@ -55,6 +57,7 @@ export function WorldPanel({ engine, switching, workers }: Props) {
   const views = useSyncExternalStore(engine.subscribeViews, engine.getViews)
   const setChatTarget = useBackstage((s) => s.setChatTarget)
   const setTab = useBackstage((s) => s.setTab)
+  const setPage = useBackstage((s) => s.setPage)
   const setThread = useBackstage((s) => s.setThreadTarget)
   const collaboration = useBackstage((s) => s.collaboration)
   const connect = useTeam((s) => s.connect)
@@ -492,10 +495,36 @@ export function WorldPanel({ engine, switching, workers }: Props) {
           <AgentInspector
             worker={selectedWorker}
             character={selectedChar}
+            cast={theme.characters}
             others={workers}
             connections={connections}
             onFocus={() => engine.focusOn(selectedChar.id)}
             onClose={() => selectAgent(null)}
+            onViewTask={() => {
+              setChatTarget(selectedWorker.id)
+              setTab('tasks')
+            }}
+            /*
+             * An agent's character, instructions and permissions live together
+             * in the editor, so Settings goes there. A session has no such
+             * record — only a name and a face — so its Settings is the
+             * character picker in this panel.
+             */
+            onSettings={
+              selectedWorker.kind === 'agent'
+                ? () => {
+                    selectAgent(selectedWorker.id)
+                    setPage('agents')
+                  }
+                : null
+            }
+            onRecast={(slot) => {
+              if (selectedWorker.kind !== 'cli' || !selectedWorker.sessionId) return
+              void window.backstage.sessions.setCharacter(
+                selectedWorker.sessionId,
+                slot
+              )
+            }}
             onOpenChat={() => {
               setThread(null)
               setChatTarget(selectedWorker.id)

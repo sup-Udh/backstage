@@ -531,6 +531,47 @@ export class WorldEngine {
     this.links = links
   }
 
+  /**
+   * Hit-test the connection lines, in scene pixels.
+   *
+   * A link is a one-pixel dashed line, which is far too fine to ask anyone to
+   * click, so the target is the whole segment within a generous band either
+   * side — the same reasoning as the padding around a character. Distance is
+   * measured to the segment rather than to its midpoint, so the whole line is
+   * clickable and not just the marker on it.
+   *
+   * Characters win: `hitTest` is asked first by the caller, because a link
+   * that passes behind somebody must not steal the click on them.
+   */
+  hitTestLink(sx: number, sy: number): { a: string; b: string; x: number; y: number } | null {
+    const at = new Map(this.chars.map((c) => [c.agentId, c]))
+
+    for (const link of this.links) {
+      const a = at.get(link.a)
+      const b = at.get(link.b)
+      if (!a || !b) continue
+
+      const ax = a.x
+      const ay = a.y - WORLD_SPRITE_H * 0.55
+      const bx = b.x
+      const by = b.y - WORLD_SPRITE_H * 0.55
+
+      const dx = bx - ax
+      const dy = by - ay
+      const lenSq = dx * dx + dy * dy
+      if (lenSq < 1) continue
+
+      // Position along the segment, clamped so the ends do not extend past it.
+      const t = Math.max(0, Math.min(1, ((sx - ax) * dx + (sy - ay) * dy) / lenSq))
+      const px = ax + dx * t
+      const py = ay + dy * t
+      if (Math.hypot(sx - px, sy - py) > LINK_HIT_PAD) continue
+
+      return { a: link.a, b: link.b, x: (ax + bx) / 2, y: (ay + by) / 2 }
+    }
+    return null
+  }
+
   /** Begin, update or end a drag-to-connect gesture. */
   setPendingLink(pending: PendingLink | null, droppable: string[] = []): void {
     this.pending = pending
@@ -635,6 +676,13 @@ const DEFAULT_ZOOM = 2
 const HIT_PAD = 7
 const HIT_W = WORLD_SPRITE_W + HIT_PAD * 2
 const HIT_H = WORLD_SPRITE_H + HIT_PAD * 2
+
+/**
+ * How far from a connection line still counts as clicking it, in scene
+ * pixels. The line itself is one pixel wide, which is not something anyone
+ * can be asked to hit.
+ */
+const LINK_HIT_PAD = 4
 
 /** Which of a theme's characters portrays the agent in this slot. */
 function castFor(theme: Theme, slot: number): CharacterDef {

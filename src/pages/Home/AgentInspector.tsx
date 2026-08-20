@@ -7,6 +7,8 @@ import { MAX_CONNECTIONS, type Worker } from '../../agents/workers'
 interface Props {
   worker: Worker
   character: CharacterDef
+  /** The active theme's cast, for recasting a session. */
+  cast: CharacterDef[]
   /** Every other worker, for the connect picker. */
   others: Worker[]
   /** Resolved names for this worker's existing connections. */
@@ -15,10 +17,14 @@ interface Props {
   onClose: () => void
   onOpenChat: () => void
   onOpenThread: () => void
+  onViewTask: () => void
   onStop: () => void
   onConnect: (otherId: string) => void
   onDisconnect: (otherId: string) => void
   onRename: (name: string) => void
+  /** Open this agent's full configuration. Absent for CLI sessions. */
+  onSettings: (() => void) | null
+  onRecast: (slot: number) => void
 }
 
 const ACTIVE = ['working', 'thinking', 'talking', 'success']
@@ -35,19 +41,24 @@ const ACTIVE = ['working', 'thinking', 'talking', 'success']
 export function AgentInspector({
   worker,
   character,
+  cast,
   others,
   connections,
   onFocus,
   onClose,
   onOpenChat,
   onOpenThread,
+  onViewTask,
   onStop,
   onConnect,
   onDisconnect,
-  onRename
+  onRename,
+  onSettings,
+  onRecast
 }: Props) {
   const active = ACTIVE.includes(worker.status)
   const [connecting, setConnecting] = useState(false)
+  const [recasting, setRecasting] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(worker.name)
   const renameRef = useRef<HTMLInputElement>(null)
@@ -168,7 +179,51 @@ export function AgentInspector({
           <p className="mt-1 font-ui text-[12px] leading-snug text-cream">
             {worker.action ?? worker.task ?? 'Nothing right now.'}
           </p>
+          {/*
+            Only offered when there is something to look at. A button that
+            opens an empty task list teaches the user it is not worth pressing.
+          */}
+          {(worker.task || worker.busy) && (
+            <button
+              type="button"
+              onClick={onViewTask}
+              className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-brand underline-offset-2 transition-colors hover:text-brand-lite hover:underline"
+            >
+              View task →
+            </button>
+          )}
         </div>
+
+        {/*
+          Recasting, for a session. An agent's character is part of its
+          configuration and belongs in the editor with the rest of it; a
+          session has no editor, so this is the only place it can be chosen.
+        */}
+        {recasting && (
+          <div>
+            <Label>Character</Label>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {cast.map((c, i) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    onRecast(i)
+                    setRecasting(false)
+                  }}
+                  className={[
+                    'border-2 px-1.5 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors',
+                    c.id === character.id
+                      ? 'border-brand bg-brand text-ink'
+                      : 'border-ink-3 bg-ink-2 text-cream hover:border-brand hover:text-brand'
+                  ].join(' ')}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {
           <div>
@@ -272,14 +327,27 @@ export function AgentInspector({
               }
               className="flex-1 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-rust hover:text-rust-lite disabled:text-dim disabled:hover:border-ink-3 disabled:hover:text-dim"
             >
-              Stop
+              {worker.status === 'stopping' ? 'Stopping…' : 'Stop'}
+            </button>
+            <button
+              type="button"
+              onClick={() => (onSettings ? onSettings() : setRecasting((v) => !v))}
+              title={
+                onSettings
+                  ? 'Open this agent’s full configuration'
+                  : 'Choose which character stands in for this session'
+              }
+              className="flex-1 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand"
+            >
+              Settings
             </button>
             <button
               type="button"
               onClick={onFocus}
-              className="flex-1 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand"
+              title="Centre the camera on this character"
+              className="shrink-0 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand"
             >
-              Centre
+              ⌖
             </button>
           </div>
         </div>
