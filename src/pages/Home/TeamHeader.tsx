@@ -39,6 +39,7 @@ export function TeamHeader({ theme, workers, onSpawn }: Props) {
     counts[bucket] = (counts[bucket] ?? 0) + 1
   }
   const errored = workers.filter((w) => w.status === 'error').length
+  const agentCount = workers.filter((w) => w.kind === 'agent').length
 
   const groups = groupWorkers(workers)
 
@@ -93,8 +94,14 @@ export function TeamHeader({ theme, workers, onSpawn }: Props) {
           onChange={(e) => setTarget(e.target.value)}
           className="min-w-0 flex-1 border-2 border-ink bg-paper px-2 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink outline-none focus:border-brand-deep"
         >
+          {/*
+            The count is agents only, because that is who a broadcast reaches.
+            CLI sessions are listed below and can be talked to individually,
+            but sending one prompt to every running process at once is not
+            something to do by accident.
+          */}
           <option value={ALL_AGENTS}>
-            All agents{workers.length > 0 ? ` (${workers.length})` : ''}
+            All agents{agentCount > 0 ? ` (${agentCount})` : ''}
           </option>
           {/*
             Grouped, and only for groups that exist — a user who has never
