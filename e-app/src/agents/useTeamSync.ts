@@ -28,7 +28,6 @@ export function useTeamSync(): void {
   const setCollaboration = useBackstage((s) => s.setCollaboration)
   const setProviders = useBackstage((s) => s.setProviders)
   const addApproval = useBackstage((s) => s.addApproval)
-  const removeApproval = useBackstage((s) => s.removeApproval)
   const setApprovals = useBackstage((s) => s.setApprovals)
 
   const agents = useTeam((s) => s.agents)
@@ -95,17 +94,26 @@ export function useTeamSync(): void {
   }, [addApproval])
 
   /*
-   * An answered approval is removed here rather than optimistically at the
-   * click, so what is on screen is always what the main process is still
-   * holding open.
+   * Keep the dock in step with what main is actually still holding open.
+   *
+   * The list is re-read rather than edited locally, because the authority on
+   * whether a tool call is still waiting is the process holding it. An
+   * approval can also be resolved without the user clicking — a timeout, or an
+   * execution being cancelled out from under it — and a locally-edited list
+   * would keep showing a prompt that no longer decides anything.
    */
   useEffect(() => {
     if (!window.backstage?.agents) return
     return window.backstage.agents.onEvent((event: RuntimeEvent) => {
-      if (event.type === 'agent.tool.started' || event.type === 'agent.tool.completed') {
+      if (
+        event.type === 'agent.tool.started' ||
+        event.type === 'agent.tool.completed' ||
+        event.type === 'agent.tool.failed' ||
+        event.type === 'agent.cancelled' ||
+        event.type === 'agent.idle'
+      ) {
         void window.backstage.approvals.pending().then(setApprovals)
       }
-      if (event.type === 'agent.cancelled') removeApproval(event.executionId ?? '')
     })
-  }, [setApprovals, removeApproval])
+  }, [setApprovals])
 }

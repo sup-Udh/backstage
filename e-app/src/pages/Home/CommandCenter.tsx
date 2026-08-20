@@ -1,10 +1,16 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Theme } from '../../themes/types'
-import type { WorldEngine } from '../../world/engine/WorldEngine'
-import { teamRuntime } from '../../agents/team'
-import { useBackstage, type TabId } from '../../stores/backstageStore'
+import type { AgentConfig } from '../../shared/providerApi'
+import {
+  ALL_AGENTS,
+  localId,
+  useBackstage,
+  type TabId
+} from '../../stores/backstageStore'
+import { recipientsFor, spawnedAgents, useTeam } from '../../stores/teamStore'
 import { PromptBox } from './PromptBox'
 import { TeamHeader } from './TeamHeader'
+import { ChatIdentity } from './ChatIdentity'
 import { MessagesPanel } from './MessagesPanel'
 import { TerminalPanel } from '../../workspace/TerminalPanel'
 import {
@@ -15,13 +21,9 @@ import {
   TasksPanel
 } from '../../workspace/panels'
 import { useProviders } from '../../providers/useProviders'
-import { useAgentConfigs } from '../../agents/useAgentConfigs'
-import { useRuntimeEvents } from '../../agents/useRuntimeEvents'
-import type { GenerationTurn } from '../../shared/providerApi'
 
 interface Props {
   theme: Theme
-  engine: WorldEngine
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -40,22 +42,18 @@ const TABS: { id: TabId; label: string }[] = [
  * reading their files, watching their sessions, running their commands. The
  * world next door tells the story; this is where the work is done.
  *
- * The shape is fixed on purpose — team, tabs, one surface, one input — and only
- * the surface in the middle scrolls. An input that scrolls away is an input the
- * user has to go looking for, and a live session must always be one keystroke
- * from a reply.
- *
- * It renders from the store and the engine's published views, never from the
- * world's per-frame state, so a busy office does not re-render the panel.
+ * Switching agents is the operation this panel exists to make cheap. It moves
+ * `chatTarget`, reloads that agent's own transcript, and does nothing else —
+ * no runtime is touched, no execution is paused, nobody else's state changes.
+ * That is what lets the user hand Michael a task while Jane is mid-investigation
+ * and have both keep going.
  */
-export function CommandCenter({ theme, engine }: Props) {
-  const agents = useSyncExternalStore(engine.subscribeViews, engine.getViews)
-  const pushUserMessage = useBackstage((s) => s.pushUserMessage)
-  const pushSystemMessage = useBackstage((s) => s.pushSystemMessage)
+export function CommandCenter({ theme }: Props) {
   const target = useBackstage((s) => s.chatTarget)
-  const messages = useBackstage((s) => s.agentMessages[s.chatTarget]) || []
-  const task = useBackstage((s) => s.agentTasks[s.chatTarget]) || null
-  const mode = useBackstage((s) => s.mode)
+  const pushMessage = useBackstage((s) => s.pushMessage)
+  const pushToMany = useBackstage((s) => s.pushToMany)
+  const agentStates = useBackstage((s) => s.agentStates)
+  const providers = useBackstage((s) => s.providers)
   const setPage = useBackstage((s) => s.setPage)
 
   const tab = useBackstage((s) => s.tab)
@@ -70,31 +68,43 @@ export function CommandCenter({ theme, engine }: Props) {
   const agentSessions = useBackstage((s) => s.agentSessions)
   const terminalOpened = useBackstage((s) => s.terminalEverOpened)
   const markTerminalOpened = useBackstage((s) => s.markTerminalOpened)
+  const loadConversation = useBackstage((s) => s.loadConversation)
 
-  const { statuses, workspace, anyConnected } = useProviders()
-  const { agents: configs } = useAgentConfigs()
+  const agents = useTeam((s) => s.agents)
+  const cancel = useTeam((s) => s.cancel)
+  const refreshTasks = useTeam((s) => s.refreshTasks)
+
+  const { workspace, anyConnected } = useProviders()
 
   /** The footer's query, for the surfaces that filter rather than send. */
   const [query, setQuery] = useState('')
 
-  // Runtime events drive both the world and this panel.
-  useRuntimeEvents()
-
-  const connected = anyConnected
-  const live = mode === 'real'
-  const busy = task?.status === 'running'
+  const present = spawnedAgents(agents)
+  const recipients = recipientsFor(agents, target)
+  const isBroadcast = target === ALL_AGENTS
 
   /* Once opened the terminal stays mounted, or its scrollback dies with it. */
   useEffect(() => {
     if (tab === 'terminal') markTerminalOpened()
   }, [tab, markTerminalOpened])
 
-  const loadConversation = useBackstage((s) => s.loadConversation)
+  /*
+   * Load whichever conversations are on screen. Switching to an agent brings
+   * back exactly where that conversation was — including work they finished
+   * while the user was talking to somebody else.
+   */
   useEffect(() => {
-    if (workspace?.root) {
-      void loadConversation(workspace.root, target)
+    const workspaceId = workspace?.root ?? 'no-workspace'
+    for (const agent of recipients) {
+      void loadConversation(workspaceId, agent.id)
     }
-  }, [workspace?.root, target, loadConversation])
+    // Recipient ids rather than the objects: a re-render must not refetch.
+  }, [workspace?.root, recipients.map((a) => a.id).join(','), loadConversation])
+
+  /* The tasks surface wants a fresh ledger whenever it comes forward. */
+  useEffect(() => {
+    if (tab === 'tasks' || tab === 'messages') void refreshTasks()
+  }, [tab, refreshTasks])
 
   /* A tab change starts a fresh query; carrying one over only confuses. */
   useEffect(() => {
@@ -142,71 +152,90 @@ export function CommandCenter({ theme, engine }: Props) {
     }
   }, [tab, activeTerminalId, agentSessions, selectAgent])
 
-  /*
-   * The configured name loses to the character's: this is the user's agent,
-   * wearing whichever costume the active world provides.
-   */
-  const nameFor = (agentId?: string) => {
-    const cfg = configs.find((a) => a.id === agentId)
-    if (cfg) {
-      const cast = theme.characters
-      return cast[((cfg.characterSlot % cast.length) + cast.length) % cast.length].name
-    }
-    return agents.find((v) => v.characterId === agentId)?.name ?? 'Agent'
+  const providerName = (agent: AgentConfig) =>
+    providers.find((p) => p.id === agent.providerId)?.name ?? agent.providerId
+
+  const modelName = (agent: AgentConfig) =>
+    agent.modelId ??
+    providers.find((p) => p.id === agent.providerId)?.selectedModel ??
+    'no model'
+
+  const characterName = (agent: AgentConfig) => {
+    const cast = theme.characters
+    return cast[((agent.characterSlot % cast.length) + cast.length) % cast.length].name
   }
 
-  const targetName = target === 'all' ? 'the team' : nameFor(target)
+  const targetName = isBroadcast
+    ? `all agents (${recipients.length})`
+    : recipients[0]
+      ? characterName(recipients[0])
+      : 'nobody'
 
+  /**
+   * Send.
+   *
+   * The prompt is echoed into every recipient's transcript immediately so the
+   * interface never appears to swallow a message, then handed to the main
+   * process. Nothing is awaited: the task runs there and reports back as
+   * events, which is what lets the world animate while it works.
+   */
   const submit = (text: string) => {
-    pushUserMessage(text)
-    const currentWorkspaceId = workspace?.root || 'default'
-
-    // The runtime resolves 'all' to the enabled team. Do the same here to persist.
-    const assigned = target === 'all' ? configs.filter((a) => a.enabled) : configs.filter((a) => a.id === target)
-    for (const agent of assigned) {
-      void window.backstage.agents.appendChat(currentWorkspaceId, agent.id, {
-        id: Date.now().toString(),
-        role: 'user',
-        agentId: agent.id,
-        text,
-        timestamp: Date.now()
+    if (recipients.length === 0) {
+      const anyone = present[0]?.id ?? target
+      pushMessage(anyone, {
+        id: localId('sys'),
+        kind: 'system',
+        agentId: anyone,
+        text: 'No agents are spawned. Spawn one on the Agents page first.',
+        at: Date.now()
       })
-    }
-
-    if (!live) {
-      teamRuntime.submitTask(text)
       return
     }
 
-    if (!connected) {
-      // Never make a network call we know will fail.
-      pushSystemMessage(
-        'No AI provider is connected. Connect one in Account to start working.'
+    if (!anyConnected) {
+      // Never make a network call we already know will fail.
+      pushToMany(
+        recipients.map((a) => a.id),
+        (agentId) => ({
+          id: localId('sys'),
+          kind: 'system',
+          agentId,
+          text: 'No AI provider is connected. Connect one in Connections to start working.',
+          at: Date.now()
+        })
       )
       return
     }
 
-    /*
-     * Prior turns for continuity. The transcript is the source of truth here;
-     * the main process trims it again before it goes out, so a long session
-     * cannot quietly grow the request.
-     */
-    const history: GenerationTurn[] = messages
-      .filter((m) => m.kind === 'user' || m.kind === 'agent')
-      .slice(-12)
-      .map((m) => ({
-        role: m.kind === 'user' ? ('user' as const) : ('assistant' as const),
-        content: m.text
-      }))
+    const at = Date.now()
+    pushToMany(
+      recipients.map((a) => a.id),
+      (agentId) => ({ id: localId('user'), kind: 'user', agentId, text, at })
+    )
 
-    /*
-     * Fire and forget: the task runs in the main process and reports back as
-     * events, which is what lets the world animate while it works rather than
-     * freezing until a promise resolves.
-     */
-    void window.backstage.agents.run({ prompt: text, history, target }).then((ack) => {
+    void window.backstage.agents.run({ prompt: text, target }).then((ack) => {
       if (!ack.accepted) {
-        pushSystemMessage(ack.error ?? 'Could not start that task.')
+        pushToMany(
+          recipients.map((a) => a.id),
+          (agentId) => ({
+            id: localId('sys'),
+            kind: 'system',
+            agentId,
+            text: ack.error ?? 'Could not start that task.',
+            at: Date.now()
+          })
+        )
+        return
+      }
+      // Some of a broadcast can be refused while the rest runs; say which.
+      for (const refusal of ack.rejected ?? []) {
+        pushMessage(refusal.agentId, {
+          id: localId('sys'),
+          kind: 'system',
+          agentId: refusal.agentId,
+          text: refusal.error,
+          at: Date.now()
+        })
       }
     })
   }
@@ -241,7 +270,7 @@ export function CommandCenter({ theme, engine }: Props) {
     messages: {
       mode: 'send' as const,
       placeholder: `Ask ${targetName}…`,
-      disabled: false,
+      disabled: recipients.length === 0,
       onSend: submit
     },
     terminal: {
@@ -254,8 +283,8 @@ export function CommandCenter({ theme, engine }: Props) {
     },
     tasks: {
       mode: 'send' as const,
-      placeholder: 'Create a task…',
-      disabled: busy,
+      placeholder: `Create a task for ${targetName}…`,
+      disabled: recipients.length === 0,
       onSend: submit
     },
     files: { mode: 'filter' as const, placeholder: 'Search files…' },
@@ -265,7 +294,7 @@ export function CommandCenter({ theme, engine }: Props) {
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col border-l-[3px] border-ink bg-cream">
-      <TeamHeader theme={theme} agents={agents} configs={configs} />
+      <TeamHeader theme={theme} />
 
       {/* One surface at a time, chosen here. */}
       <nav className="flex shrink-0 border-b-[3px] border-ink bg-cream-2">
@@ -291,17 +320,22 @@ export function CommandCenter({ theme, engine }: Props) {
         })}
       </nav>
 
+      {/* Who is listening. Always visible on the conversation surface. */}
+      {tab === 'messages' && (
+        <ChatIdentity
+          theme={theme}
+          recipients={recipients}
+          isBroadcast={isBroadcast}
+          states={agentStates}
+          providerName={providerName}
+          modelName={modelName}
+          onStop={(agentId) => void cancel(agentId)}
+        />
+      )}
+
       {/* The active surface. Only this scrolls. */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === 'messages' && (
-          <MessagesPanel
-            theme={theme}
-            agents={agents}
-            configs={configs}
-            statuses={statuses}
-            onSubmit={submit}
-          />
-        )}
+        {tab === 'messages' && <MessagesPanel theme={theme} onSubmit={submit} />}
 
         {tab === 'files' &&
           (openFile ? (
@@ -315,6 +349,7 @@ export function CommandCenter({ theme, engine }: Props) {
         {tab === 'tasks' && (
           <div className="flex h-full min-h-0 flex-col">
             <TasksPanel
+              theme={theme}
               onFocus={({ terminalSessionId, agentId }) => {
                 requestSession(terminalSessionId)
                 selectAgent(agentId)
@@ -350,14 +385,14 @@ export function CommandCenter({ theme, engine }: Props) {
 
       {/* Always here, always for whatever is on screen. */}
       <div className="shrink-0 border-t-[3px] border-ink bg-cream p-2.5">
-        {tab === 'messages' && live && (!connected || !workspace?.root) && (
+        {tab === 'messages' && (!anyConnected || !workspace?.root) && (
           <div className="mb-2 border-2 border-ink bg-brand-pale px-2.5 py-1.5">
             <p className="font-pixel text-[10px] font-semibold uppercase tracking-[0.1em] text-ink">
-              {!connected ? 'No provider connected' : 'No project open'}
+              {!anyConnected ? 'No provider connected' : 'No project open'}
             </p>
             <p className="mt-0.5 font-ui text-[11px] leading-snug text-ink-3">
-              {!connected
-                ? 'Connect a provider in Account to start working.'
+              {!anyConnected
+                ? 'Connect a provider in Connections to start working.'
                 : 'Agents can inspect your code once you open a project folder.'}
             </p>
             <button
@@ -365,7 +400,7 @@ export function CommandCenter({ theme, engine }: Props) {
               onClick={() => setPage('account')}
               className="mt-1.5 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px"
             >
-              {!connected ? 'Open Account' : 'Open a folder'}
+              {!anyConnected ? 'Open Connections' : 'Open a folder'}
             </button>
           </div>
         )}

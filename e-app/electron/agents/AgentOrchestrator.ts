@@ -444,8 +444,7 @@ export class AgentOrchestrator {
       originAgentId: from.id,
       correlationId,
       depth,
-      parentTaskId: event.taskId ?? null,
-      history: this.historyFor(to.id)
+      parentTaskId: event.taskId ?? null
     })
 
     if (wasRejected(result)) {

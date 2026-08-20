@@ -120,9 +120,43 @@ export class WorldEngine {
   /* ------------------------------------------------------------- arrivals -- */
 
   /**
-   * Give any newly activated agent a character and walk them in from the door.
-   * The runtime calls reserves in as the workload grows, so this is how the
-   * room visibly fills up over a session.
+   * Take away the body of anyone who has left.
+   *
+   * Despawning and deleting both land here. A character whose agent is gone
+   * cannot be selected, configured or stopped, so leaving it standing at a
+   * desk would be the office claiming somebody is at work who is not even on
+   * the team any more.
+   */
+  private removeDepartures(): void {
+    const present = new Set(
+      this.runtime
+        .getAgents()
+        .filter((a) => a.visible)
+        .map((a) => a.id)
+    )
+
+    let removed = false
+    for (let i = this.chars.length - 1; i >= 0; i--) {
+      const c = this.chars[i]
+      if (present.has(c.agentId)) continue
+
+      // Give the desk and any reserved spot back, or the next arrival will
+      // find the room full of furniture nobody is using.
+      this.director.release(c)
+      this.chars.splice(i, 1)
+      this.placed.delete(c.agentId)
+      if (this.selected === c.agentId) this.selected = null
+      if (this.hovered === c.agentId) this.hovered = null
+      removed = true
+    }
+
+    if (removed) this.rebuildViews()
+  }
+
+  /**
+   * Give any newly spawned agent a character and walk them in from the door.
+   * Spawning is the user hiring somebody, so this is how the room visibly
+   * fills up over a session.
    */
   private spawnArrivals(): void {
     for (const agent of this.runtime.getAgents()) {
@@ -334,6 +368,7 @@ export class WorldEngine {
     this.clock += dt
 
     this.runtime.tick(dt)
+    this.removeDepartures()
     this.spawnArrivals()
 
     for (const c of this.chars) {

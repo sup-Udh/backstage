@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DirEntry, ProjectCommand, TextResult } from '../shared/providerApi'
 import { useBackstage } from '../stores/backstageStore'
-import { ActivityRail } from './ActivityRail'
+import { useTeam } from '../stores/teamStore'
+import { StatusChip } from '../components/AgentStatus/StatusChip'
+import type { Theme } from '../themes/types'
 
 /**
  * The command centre's working surfaces: files, git, commands and tasks.
@@ -420,89 +422,163 @@ export function CommandsPanel({
  * belong on the same surface. Selecting one focuses whoever is doing it.
  */
 export function TasksPanel({
+  theme,
   onFocus
 }: {
+  theme: Theme
   onFocus: (session: { terminalSessionId: string; agentId: string }) => void
 }) {
-  const chatTarget = useBackstage((s) => s.chatTarget)
-  const task = useBackstage((s) => s.agentTasks[chatTarget])
   const sessions = useBackstage((s) => s.agentSessions)
+  const agentStates = useBackstage((s) => s.agentStates)
+  const agents = useTeam((s) => s.agents)
+  const tasks = useTeam((s) => s.tasks)
+  const cancel = useTeam((s) => s.cancel)
+  const retry = useTeam((s) => s.retry)
+  const refreshTasks = useTeam((s) => s.refreshTasks)
 
   const running = sessions.filter((s) => s.status !== 'exited' && s.status !== 'error')
   const finished = sessions.filter((s) => s.status === 'exited' || s.status === 'error')
 
+  const nameFor = (agentId: string) => {
+    const config = agents.find((a) => a.id === agentId)
+    if (!config) return agentId
+    const cast = theme.characters
+    return cast[((config.characterSlot % cast.length) + cast.length) % cast.length].name
+  }
+
+  /*
+   * One queue per agent, shown as one queue per agent. A single merged list
+   * would suggest the work is serialised, which is exactly the impression this
+   * product exists to correct: these run at the same time.
+   */
+  const lanes = agents
+    .filter((a) => a.spawned && a.enabled)
+    .map((agent) => ({
+      agent,
+      state: agentStates[agent.id],
+      current: tasks.find((t) => t.agentId === agent.id && t.status === 'running'),
+      recent: tasks
+        .filter((t) => t.agentId === agent.id && t.status !== 'running')
+        .slice(0, 3)
+    }))
+    .filter((lane) => lane.current || lane.recent.length > 0)
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-      {task && (
-        <div className="mb-3 border-2 border-ink bg-paper px-2.5 py-2">
-          <p className="flex items-center gap-1.5">
-            <span
-              aria-hidden
-              className={`font-pixel text-[11px] ${
-                task.status === 'running'
-                  ? 'blink text-brand-deep'
-                  : task.status === 'failed'
-                    ? 'text-ink-3'
-                    : 'text-brand-deep'
-              }`}
-            >
-              {task.status === 'running' ? '●' : task.status === 'failed' ? '◇' : '◆'}
-            </span>
-            <span className="font-pixel text-[10px] font-semibold uppercase tracking-[0.12em] text-ink">
-              {task.status === 'running'
-                ? 'Working'
-                : task.status === 'failed'
-                  ? 'Failed'
-                  : 'Complete'}
-            </span>
-          </p>
-          <p className="mt-1 font-ui text-[13px] leading-snug text-ink">{task.title}</p>
-          {task.result && (
-            <p className="mt-1 font-ui text-xs leading-[1.6] text-ink-3">
-              {task.result}
-            </p>
-          )}
-        </div>
+      <div className="mb-2 flex items-center gap-2">
+        <p className={heading}>Agent tasks</p>
+        <button
+          type="button"
+          onClick={() => void refreshTasks()}
+          className="ml-auto border-2 border-rule px-1.5 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors hover:border-ink hover:text-ink"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {lanes.length === 0 ? (
+        <Empty>No agent tasks yet. Give someone work from the Messages tab.</Empty>
+      ) : (
+        <ul className="mb-4 flex flex-col gap-2">
+          {lanes.map(({ agent, state, current, recent }) => (
+            <li key={agent.id} className="border-2 border-ink bg-paper px-2.5 py-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink">
+                  {nameFor(agent.id)}
+                </p>
+                <StatusChip status={state?.status ?? 'idle'} />
+              </div>
+
+              {current ? (
+                <div className="mt-1.5">
+                  <p className="font-ui text-[12px] leading-snug text-ink">
+                    {current.title}
+                  </p>
+                  {state?.action && (
+                    <p className="mt-0.5 truncate font-mono text-[10px] text-ink-3">
+                      {state.action}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void cancel(agent.id)}
+                    className="mt-1.5 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
+                  >
+                    Stop
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-1 font-ui text-[12px] text-ink-3">Nothing running.</p>
+              )}
+
+              {(state?.queued ?? 0) > 0 && (
+                <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                  {state?.queued} waiting in their queue
+                </p>
+              )}
+
+              {recent.length > 0 && (
+                <ul className="mt-1.5 flex flex-col gap-0.5 border-t-2 border-rule pt-1.5">
+                  {recent.map((task) => (
+                    <li key={task.id} className="flex items-baseline gap-1.5">
+                      <span
+                        aria-hidden
+                        className={`font-pixel text-[10px] ${
+                          task.status === 'failed' ? 'text-rust' : 'text-brand-deep'
+                        }`}
+                      >
+                        {task.status === 'failed'
+                          ? '✕'
+                          : task.status === 'cancelled'
+                            ? '○'
+                            : '◆'}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-ui text-[11px] text-ink-3">
+                        {task.title}
+                      </span>
+                      {task.status === 'failed' && (
+                        <button
+                          type="button"
+                          onClick={() => void retry(task.id)}
+                          className="shrink-0 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink-3 underline decoration-rule underline-offset-2 hover:text-ink"
+                        >
+                          Retry
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
 
       {running.length > 0 && (
         <>
           <p className={`mb-1.5 ${heading}`}>Live sessions</p>
-          <ul className="mb-3 flex flex-col gap-1">
-            {running.map((s) => (
-              <li key={s.id}>
+          <ul className="mb-3 flex flex-col gap-1.5">
+            {running.map((session) => (
+              <li key={session.id}>
                 <button
                   type="button"
                   onClick={() =>
                     onFocus({
-                      terminalSessionId: s.terminalSessionId,
-                      agentId: `cli-${s.terminalSessionId}`
+                      terminalSessionId: session.terminalSessionId,
+                      agentId: `cli-${session.terminalSessionId}`
                     })
                   }
-                  title="Open this session"
                   className="w-full border-2 border-rule bg-paper px-2.5 py-1.5 text-left transition-colors hover:border-ink hover:bg-brand-pale"
                 >
-                  <p className="flex items-center gap-1.5">
-                    <span
-                      aria-hidden
-                      className={`font-pixel text-[11px] text-brand-deep ${
-                        s.status === 'working' ? 'blink' : ''
-                      }`}
-                    >
-                      {s.status === 'working' ? '✦' : '●'}
-                    </span>
-                    <span className="font-pixel text-[10px] font-semibold uppercase tracking-[0.12em] text-ink">
-                      {s.status}
-                    </span>
-                    <span className="font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
-                      · {s.provider}
-                    </span>
-                  </p>
-                  {s.lastOutput && (
-                    <p className="mt-0.5 truncate font-mono text-[10px] text-ink-3">
-                      {s.lastOutput}
-                    </p>
-                  )}
+                  <span className="font-pixel text-[10px] font-semibold uppercase tracking-[0.08em] text-ink">
+                    {(session.provider ?? 'cli').toUpperCase()}
+                  </span>
+                  <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                    {session.status}
+                  </span>
+                  <span className="mt-0.5 block truncate font-mono text-[10px] text-ink-3">
+                    {session.cwd}
+                  </span>
                 </button>
               </li>
             ))}
@@ -512,37 +588,19 @@ export function TasksPanel({
 
       {finished.length > 0 && (
         <>
-          <p className={`mb-1.5 ${heading}`}>Finished</p>
-          <ul className="mb-3 flex flex-col gap-1">
-            {finished.slice(-4).map((s) => (
+          <p className={`mb-1.5 ${heading}`}>Ended</p>
+          <ul className="flex flex-col gap-1">
+            {finished.slice(-6).map((session) => (
               <li
-                key={s.id}
-                className="flex items-baseline gap-1.5 border-2 border-rule bg-cream px-2.5 py-1"
+                key={session.id}
+                className="truncate font-mono text-[10px] text-ink-3"
               >
-                <span aria-hidden className="font-pixel text-[11px] text-ink-3">
-                  {s.status === 'error' ? '◇' : '○'}
-                </span>
-                <span className="font-pixel text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3">
-                  {s.status}
-                </span>
-                <span className="font-pixel text-[11px] font-semibold uppercase text-ink-3">
-                  · {s.provider}
-                </span>
+                {(session.provider ?? 'cli').toUpperCase()} — {session.status}
               </li>
             ))}
           </ul>
         </>
       )}
-
-      {!task && sessions.length === 0 && (
-        <Empty>
-          Nothing running. Give your team a task, or start a CLI session in the
-          terminal.
-        </Empty>
-      )}
-
-      {/* What the work actually consisted of, rather than a separate feed. */}
-      <ActivityRail limit={8} label="Recent activity" />
     </div>
   )
 }

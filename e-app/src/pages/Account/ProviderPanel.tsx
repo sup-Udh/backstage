@@ -9,6 +9,8 @@ interface Props {
   descriptor: ProviderDescriptor
   provider: ProviderStatus | undefined
   result: ConnectionResult | undefined
+  /** How many agents are configured against this provider. */
+  agentCount: number
   busy: string | null
   onConnect: (providerId: string, apiKey: string) => Promise<ConnectionResult>
   onTest: (providerId: string) => Promise<ConnectionResult>
@@ -28,6 +30,7 @@ export function ProviderPanel({
   descriptor,
   provider,
   result,
+  agentCount,
   busy,
   onConnect,
   onTest,
@@ -145,6 +148,15 @@ export function ProviderPanel({
                 {provider?.models.find((m) => m.id === provider?.selectedModel)
                   ?.description ?? 'Fetched from your account.'}
               </p>
+              <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                {provider?.models.length ?? 0} models available
+                {agentCount > 0 && (
+                  <>
+                    <span className="mx-1.5 text-rule">·</span>
+                    {agentCount} agent{agentCount === 1 ? '' : 's'} using it
+                  </>
+                )}
+              </p>
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -162,7 +174,7 @@ export function ProviderPanel({
                 disabled={busy !== null}
                 className="border-[3px] border-ink bg-cream px-4 py-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 shadow-[3px_3px_0_0_var(--color-ink)] transition-colors hover:text-ink disabled:opacity-45"
               >
-                Disconnect
+                {agentCount > 0 ? `Remove (${agentCount} agents)` : 'Remove'}
               </button>
             </div>
           </>

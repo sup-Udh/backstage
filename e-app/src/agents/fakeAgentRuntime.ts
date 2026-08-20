@@ -4,13 +4,17 @@ import { EventBus } from './agentEvents'
 import { buildTaskScript, type Beat } from './taskScript'
 
 /**
- * A stand-in for the real agent event stream.
+ * The landing page's simulated office.
  *
- * It exists so the world has something to react to today. When real provider
- * events arrive, this class is replaced by one that implements the same
- * AgentRuntime interface and the world layer does not change:
+ * This was scaffolding for a world that had no real agents behind it. It now
+ * has exactly one job: making the shop window look like a working office
+ * before anyone has connected a provider. The workspace uses LiveTeamRuntime
+ * instead, and deliberately has no ambient scheduler — a character that mimes
+ * working while its agent is idle is the interface lying about the one thing
+ * it exists to report.
  *
- *     fakeAgent.status = 'working'   ->   realAgent.status = 'working'
+ * It implements the same AgentRuntime interface, which is why the renderer
+ * cannot tell the two apart.
  */
 
 interface Plan {
@@ -20,7 +24,7 @@ interface Plan {
   task: string | null
 }
 
-const TASKS: Record<AgentStatus, string[]> = {
+const TASKS: Partial<Record<AgentStatus, string[]>> = {
   working: [
     'Refactoring auth middleware',
     'Writing migration 0042',
@@ -56,7 +60,7 @@ const WEIGHTS: [AgentStatus, number][] = [
   ['success', 0.08]
 ]
 
-const DURATIONS: Record<AgentStatus, [number, number]> = {
+const DURATIONS: Partial<Record<AgentStatus, [number, number]>> = {
   working: [16, 30],
   thinking: [9, 15],
   talking: [9, 14],
@@ -109,9 +113,14 @@ export class FakeAgentRuntime implements AgentRuntime {
       role: s.role ?? 'Agent',
       slot: s.slot ?? i,
       model: s.model,
+      provider: 'simulated',
       status: 'idle',
       task: null,
+      taskId: null,
+      executionId: null,
+      queued: 0,
       active: true,
+      spawned: true,
       visible: false
     }))
     this.remaining = specs.map(() => 0)
@@ -188,9 +197,14 @@ export class FakeAgentRuntime implements AgentRuntime {
       slot: spec.slot ?? this.agents.length,
       useOwnName: spec.useOwnName,
       model: spec.model,
+      provider: 'simulated',
       status: 'idle',
       task: null,
+      taskId: null,
+      executionId: null,
+      queued: 0,
       active: true,
+      spawned: true,
       visible: false
     }
     this.agents.push(agent)
@@ -271,7 +285,7 @@ export class FakeAgentRuntime implements AgentRuntime {
   }
 
   private duration(status: AgentStatus): number {
-    const [lo, hi] = DURATIONS[status]
+    const [lo, hi] = DURATIONS[status] ?? [8, 14]
     return lo + this.rng() * (hi - lo)
   }
 

@@ -46,7 +46,7 @@ export function Home() {
           */
           <div className="relative w-[38%] min-w-[380px] max-w-[620px] shrink-0">
             <DockToggle open onClick={() => setOpen(false)} />
-            <CommandCenter theme={theme} engine={engine} />
+            <CommandCenter theme={theme} />
           </div>
         ) : (
           <DockToggle open={false} onClick={() => setOpen(true)} />

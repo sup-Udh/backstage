@@ -1,22 +1,11 @@
 import type { Theme } from '../../themes/types'
 import type { AgentConfig } from '../../shared/providerApi'
-import type { AgentView } from '../../world/world.types'
-import type { AgentStatus } from '../../agents/agent.types'
-import { STATUS_GLYPH } from '../../characters/character.states'
-import { useBackstage } from '../../stores/backstageStore'
+import { bucketFor, STATUS_GLYPH } from '../../characters/character.states'
+import { ALL_AGENTS, useBackstage } from '../../stores/backstageStore'
+import { useTeam, spawnedAgents } from '../../stores/teamStore'
 
 interface Props {
   theme: Theme
-  agents: AgentView[]
-  configs: AgentConfig[]
-}
-
-/** The four buckets the header reports on. */
-function bucket(status: AgentStatus): 'working' | 'thinking' | 'talking' | 'idle' {
-  if (status === 'working' || status === 'success') return 'working'
-  if (status === 'thinking') return 'thinking'
-  if (status === 'talking') return 'talking'
-  return 'idle'
 }
 
 const BUCKETS = ['working', 'thinking', 'talking', 'idle'] as const
@@ -29,21 +18,36 @@ const BUCKETS = ['working', 'thinking', 'talking', 'idle'] as const
  * has to stay on screen while the surfaces below it change — the panel is a
  * tool, and a tool does not hide its own status bar.
  *
- * The selector is named for the active world's cast: the agent underneath is
- * the same configuration, and only who plays it changes with the theme. It can
- * therefore never offer a character from a world the user is not in.
+ * The counts come from the same per-agent runtime state the world renders
+ * from, so "2 working" here and two characters typing next door are the same
+ * two agents. The selector only changes which conversation is shown; it never
+ * starts or stops anything.
  */
-export function TeamHeader({ theme, agents, configs }: Props) {
+export function TeamHeader({ theme }: Props) {
   const target = useBackstage((s) => s.chatTarget)
   const setTarget = useBackstage((s) => s.setChatTarget)
+  const agentStates = useBackstage((s) => s.agentStates)
+  const agents = useTeam((s) => s.agents)
 
-  const counts = agents.reduce<Record<string, number>>((acc, a) => {
-    const k = bucket(a.status)
-    acc[k] = (acc[k] ?? 0) + 1
-    return acc
-  }, {})
+  const present = spawnedAgents(agents)
 
-  const enabled = configs.filter((a) => a.enabled)
+  const counts: Record<string, number> = {}
+  for (const agent of present) {
+    const status = agentStates[agent.id]?.status ?? 'idle'
+    const bucket = bucketFor(status)
+    counts[bucket] = (counts[bucket] ?? 0) + 1
+  }
+
+  const errored = present.filter(
+    (a) => agentStates[a.id]?.status === 'error'
+  ).length
+
+  /* The cast is chosen by slot, so the selector can only ever offer this
+     world's characters — never someone from a theme the user is not in. */
+  const characterName = (agent: AgentConfig) => {
+    const cast = theme.characters
+    return cast[((agent.characterSlot % cast.length) + cast.length) % cast.length].name
+  }
 
   return (
     <header className="shrink-0 border-b-[3px] border-ink bg-cream px-3 py-2.5">
@@ -52,24 +56,35 @@ export function TeamHeader({ theme, agents, configs }: Props) {
           Your Team
         </h1>
         <span className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-ink-3">
-          <span className="text-ink">{agents.length}</span> agents
+          <span className="text-ink">{present.length}</span> agents
         </span>
       </div>
 
       <ul className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] font-medium uppercase tracking-[0.06em]">
-        {BUCKETS.map((k) => {
-          const n = counts[k] ?? 0
+        {BUCKETS.map((bucket) => {
+          const n = counts[bucket] ?? 0
           const on = n > 0
           return (
-            <li key={k} className="flex items-center gap-1">
+            <li key={bucket} className="flex items-center gap-1">
               <span aria-hidden className={on ? 'text-brand-deep' : 'text-rule'}>
-                {STATUS_GLYPH[k]}
+                {STATUS_GLYPH[bucket === 'idle' ? 'idle' : bucket]}
               </span>
               <span className={on ? 'text-ink' : 'text-ink-3'}>{n}</span>
-              <span className="text-ink-3">{k}</span>
+              <span className="text-ink-3">{bucket}</span>
             </li>
           )
         })}
+        {/* An agent whose provider failed is not idle, and must not be
+            counted as though it were. */}
+        {errored > 0 && (
+          <li className="flex items-center gap-1">
+            <span aria-hidden className="text-rust">
+              {STATUS_GLYPH.error}
+            </span>
+            <span className="text-rust">{errored}</span>
+            <span className="text-ink-3">error</span>
+          </li>
+        )}
       </ul>
 
       <div className="mt-2 flex items-center gap-2">
@@ -85,17 +100,14 @@ export function TeamHeader({ theme, agents, configs }: Props) {
           onChange={(e) => setTarget(e.target.value)}
           className="min-w-0 flex-1 border-2 border-ink bg-paper px-2 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink outline-none focus:border-brand-deep"
         >
-          {enabled.map((a) => {
-            const cast = theme.characters
-            const character =
-              cast[((a.characterSlot % cast.length) + cast.length) % cast.length]
-            return (
-              <option key={a.id} value={a.id}>
-                {character.name} — {a.role}
-              </option>
-            )
-          })}
-          <option value="all">All agents</option>
+          <option value={ALL_AGENTS}>
+            All agents{present.length > 0 ? ` (${present.length})` : ''}
+          </option>
+          {present.map((agent) => (
+            <option key={agent.id} value={agent.id}>
+              {characterName(agent)} — {agent.role}
+            </option>
+          ))}
         </select>
       </div>
     </header>

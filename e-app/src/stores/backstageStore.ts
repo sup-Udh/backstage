@@ -347,6 +347,29 @@ export const useBackstage = create<BackstageState>((set, get) => ({
         }
       }
 
+      /*
+       * A "notify me" automation has no target agent, so it is not
+       * collaboration — it is Backstage telling the user something. It lands
+       * in the originating agent's transcript, which is the session the user
+       * would be looking at to understand why it fired.
+       */
+      if (event.type === 'trigger.fired' && !event.targetAgentId && agentId) {
+        const current = next.agentMessages?.[agentId] ?? s.agentMessages[agentId] ?? []
+        next.agentMessages = {
+          ...(next.agentMessages ?? s.agentMessages),
+          [agentId]: [
+            ...current,
+            {
+              id: event.id,
+              kind: 'system',
+              agentId,
+              text: `${event.triggerName ?? 'Automation'}: ${event.message ?? 'fired.'}`,
+              at: event.at
+            }
+          ]
+        }
+      }
+
       // Agent-to-agent traffic is shared activity, kept out of both agents'
       // private transcripts and shown as collaboration instead.
       if (COLLABORATIVE.has(event.type) && agentId && event.targetAgentId) {
@@ -363,7 +386,9 @@ export const useBackstage = create<BackstageState>((set, get) => ({
             taskId: event.taskId ?? null,
             correlationId: event.correlationId ?? '',
             depth: event.depth ?? 0,
-            kind: event.type === 'trigger.fired' ? 'trigger' : 'delegation',
+            kind: (event.type === 'trigger.fired'
+              ? 'trigger'
+              : 'delegation') as CollaborationMessage['kind'],
             at: event.at
           }
         ].slice(-COLLAB_LIMIT)

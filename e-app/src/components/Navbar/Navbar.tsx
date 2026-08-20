@@ -81,7 +81,7 @@ export function Navbar() {
           U
         </span>
         <span className="font-pixel text-xs font-semibold uppercase tracking-[0.06em]">
-          Account
+          Connections
         </span>
       </button>
     </header>

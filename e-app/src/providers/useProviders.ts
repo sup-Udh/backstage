@@ -5,6 +5,8 @@ import type {
   ProviderStatus,
   WorkspaceInfo
 } from '../shared/providerApi'
+import { useBackstage } from '../stores/backstageStore'
+import { useTeam } from '../stores/teamStore'
 
 /**
  * The renderer's view of providers and the workspace.
@@ -33,6 +35,16 @@ export function useProviders() {
     setDescriptors(list)
     setStatuses(status)
     setWorkspace(ws)
+
+    /*
+     * Share the result rather than keeping it to this hook. Connecting a
+     * provider changes which agents can run, so the roster's "why can't this
+     * spawn?" answers and the chat header's model badges have to move with it
+     * — otherwise a key added here leaves the Agents page still saying the
+     * provider is missing until the app is restarted.
+     */
+    useBackstage.getState().setProviders(status)
+    void useTeam.getState().refresh()
   }, [])
 
   useEffect(() => {

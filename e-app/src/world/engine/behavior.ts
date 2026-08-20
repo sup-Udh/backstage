@@ -252,10 +252,17 @@ export class Director {
 }
 
 /**
- * The status label above each head already names the activity, so thought and
- * speech bubbles would just repeat it. Only the success burst remains: that is
- * a moment worth punctuating rather than a state worth labelling.
+ * The status label above each head already names the activity, so most bubbles
+ * would just repeat it. Two survive.
+ *
+ * The success burst punctuates a moment rather than labelling a state. The
+ * speech bubble marks agent-to-agent contact, which is the one thing the label
+ * cannot show on its own: a handover involves two characters, and a small
+ * indicator over both is enough to read it as one exchange without forcing
+ * them to walk across the room every time.
  */
 function bubbleFor(status: AgentStatus): Bubble {
-  return status === 'success' ? 'spark' : 'none'
+  if (status === 'success') return 'spark'
+  if (status === 'talking') return 'talk'
+  return 'none'
 }

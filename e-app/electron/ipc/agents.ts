@@ -199,14 +199,14 @@ export function registerAgentHandlers(): void {
     const correlationId = makeId('chain')
 
     for (const agent of targets) {
-      conversationStore.append(workspaceId(), agent.id, {
-        id: makeId('msg'),
-        kind: 'user',
-        agentId: agent.id,
-        text: prompt,
-        at: Date.now()
-      })
-
+      /*
+       * Submit first, then remember.
+       *
+       * Submitting captures the agent's history as it stands, and the executor
+       * appends the prompt itself as the current turn. Writing the line to
+       * memory first would put it in both places, and the model would see the
+       * request twice.
+       */
       const result = orchestrator.submit({
         agentId: agent.id,
         prompt,
@@ -222,6 +222,14 @@ export function registerAgentHandlers(): void {
       if (wasRejected(result)) {
         rejected.push({ agentId: agent.id, error: result.error })
       } else {
+        conversationStore.append(workspaceId(), agent.id, {
+          id: makeId('msg'),
+          kind: 'user',
+          agentId: agent.id,
+          text: prompt,
+          at: Date.now(),
+          taskId: result.id
+        })
         accepted.push(result.id)
         agentIds.push(agent.id)
       }

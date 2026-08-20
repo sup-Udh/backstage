@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { teamRuntime } from '../agents/team'
-import { useBackstage } from '../stores/backstageStore'
-import type { AgentSession, FileChange } from '../shared/providerApi'
+import { useBackstage, localId } from '../stores/backstageStore'
+import type { AgentSession } from '../shared/providerApi'
+import type { AgentStatus } from '../agents/agent.types'
 
 /**
- * Real workspace events into the world, the store and the session surfaces.
+ * Real workspace events into the world and the session surfaces.
  *
  * This is the piece that makes an external CLI agent a first-class inhabitant.
  * When `claude` runs in a Backstage terminal, the process is real, the PTY is
@@ -19,7 +20,8 @@ import type { AgentSession, FileChange } from '../shared/providerApi'
  * screen is still a running process, and the world must keep saying so.
  */
 
-let nextId = 5_000_000
+/** Where CLI sessions are cast from, past the configured team's slots. */
+const CLI_SLOT_BASE = 4
 
 export function useWorkspaceEvents(): void {
   const ingestEvent = useBackstage((s) => s.ingestEvent)
@@ -46,83 +48,99 @@ export function useWorkspaceEvents(): void {
     if (!window.backstage?.sessions) return
 
     return window.backstage.sessions.onChanged((sessions: AgentSession[]) => {
-      for (const s of sessions) {
-        const agentId = `cli-${s.terminalSessionId}`
-        const name = (s.provider ?? 'cli').replace(/^./, (c) => c.toUpperCase())
+      for (const session of sessions) {
+        const agentId = `cli-${session.terminalSessionId}`
+        const name = (session.provider ?? 'cli').replace(/^./, (c) => c.toUpperCase())
 
-        if (!known.current.has(s.id)) {
-          known.current.set(s.id, s.status)
-          // Register and bring in a character for the real session.
-          teamRuntime.register({
+        if (!known.current.has(session.id)) {
+          known.current.set(session.id, session.status)
+          teamRuntime.registerExternal({
             id: agentId,
             name,
-            role: 'CLI Session',
-            model: `${s.provider} cli`,
-            slot: 4 + known.current.size,
-            useOwnName: true
+            role: 'CLI session',
+            model: `${session.provider ?? 'cli'} cli`,
+            slot: CLI_SLOT_BASE + known.current.size
           })
-          teamRuntime.show(agentId)
           ingestEvent({
-            id: nextId++,
+            id: localId('cli'),
             type: 'agent.activated',
             at: Date.now(),
             agentId,
             agentName: name,
-            activity: `started a ${name} session in ${s.cwd.split(/[\\/]/).pop()}.`
+            activity: `started a ${name} session in ${session.cwd.split(/[\\/]/).pop()}.`
           })
         }
 
-        const previous = known.current.get(s.id)
-        if (previous !== s.status) {
-          known.current.set(s.id, s.status)
+        const previous = known.current.get(session.id)
+        if (previous === session.status) continue
+        known.current.set(session.id, session.status)
 
-          teamRuntime.applyRuntimeEvent({
-            type:
-              s.status === 'exited' || s.status === 'error'
-                ? 'agent.idle'
-                : 'agent.working',
+        /*
+         * The mapping is deliberately literal. A CLI session is working, or
+         * waiting for input, or over — there is no inference here that could
+         * leave a character animating for a process that has exited.
+         */
+        const status: AgentStatus =
+          session.status === 'working'
+            ? 'working'
+            : session.status === 'waiting'
+              ? 'waiting'
+              : session.status === 'error'
+                ? 'error'
+                : session.status === 'starting'
+                  ? 'thinking'
+                  : 'idle'
+
+        teamRuntime.setExternalStatus(
+          agentId,
+          status,
+          session.status === 'waiting'
+            ? 'Waiting for you'
+            : session.status === 'working'
+              ? (session.lastOutput ?? 'Working')
+              : session.status === 'exited'
+                ? null
+                : 'Session ended'
+        )
+
+        if (session.status === 'exited' || session.status === 'error') {
+          ingestEvent({
+            id: localId('cli'),
+            type: 'agent.completed',
+            at: Date.now(),
             agentId,
-            action:
-              s.status === 'waiting'
-                ? 'Waiting for you'
-                : s.status === 'working'
-                  ? (s.lastOutput ?? 'Working')
-                  : 'Session ended'
+            agentName: name,
+            activity:
+              session.status === 'error'
+                ? 'session ended with an error.'
+                : 'session ended.'
           })
-
-          if (s.status === 'exited' || s.status === 'error') {
-            ingestEvent({
-              id: nextId++,
-              type: 'agent.completed',
-              at: Date.now(),
-              agentId,
-              agentName: name,
-              activity:
-                s.status === 'error' ? 'session ended with an error.' : 'session ended.'
-            })
-          }
         }
       }
     })
   }, [ingestEvent])
 
-  /* File changes made outside the app — including by an external CLI. */
+  /*
+   * File changes made outside the app — including by an external CLI. These
+   * are workspace events with no agent behind them, so they land in the file
+   * surfaces and the bus, never in somebody's conversation.
+   */
   useEffect(() => {
     if (!window.backstage?.files) return
 
     return window.backstage.files.onChanges(({ changes, total }) => {
-      const shown: FileChange[] = changes.slice(0, 4)
-      for (const c of shown) {
+      const shown = changes.slice(0, 4)
+      for (const change of shown) {
         ingestEvent({
-          id: nextId++,
-          type: `file.${c.kind}` as never,
-          at: c.at,
-          activity: `${c.kind} ${c.path}`
+          id: localId('file'),
+          type: `file.${change.kind}` as const,
+          at: change.at,
+          activity: `${change.kind} ${change.path}`
         })
       }
       if (total > shown.length) {
         ingestEvent({
-          id: nextId++,
+          id: localId('file'),
           type: 'file.modified',
           at: Date.now(),
           activity: `and ${total - shown.length} more files changed`

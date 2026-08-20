@@ -1,15 +1,19 @@
 import { useProviders } from '../../providers/useProviders'
-import { useBackstage } from '../../stores/backstageStore'
+import { useTeam } from '../../stores/teamStore'
 import { PagePlaceholder } from '../shell/PagePlaceholder'
 import { ProviderPanel } from './ProviderPanel'
 
-const SECTIONS = [
-  { name: 'Profile', note: 'Who you are inside Backstage.' },
-  { name: 'Preferences', note: 'Defaults for new cases and agents.' },
-  { name: 'Appearance', note: 'World scale, motion and density.' },
-  { name: 'Data', note: 'Local history, export and reset.' }
-]
-
+/**
+ * Connections.
+ *
+ * The single source of truth for which providers are usable. An agent cannot
+ * be created against a provider that has no connection here, and the roster
+ * reads its "can this agent run?" answer from the same place — so a key added
+ * on this page immediately unblocks every agent waiting on it.
+ *
+ * No key ever comes back out. The renderer learns two things: whether one
+ * exists, and its last four characters.
+ */
 export function Account() {
   const {
     descriptors,
@@ -25,13 +29,16 @@ export function Account() {
     clearWorkspace
   } = useProviders()
 
-  const mode = useBackstage((s) => s.mode)
-  const setMode = useBackstage((s) => s.setMode)
+  const agents = useTeam((s) => s.agents)
+
+  /** How many agents each provider is currently answering for. */
+  const usedBy = (providerId: string) =>
+    agents.filter((a) => a.providerId === providerId).length
 
   return (
     <PagePlaceholder
-      title="Account"
-      lead="Your workspace, and the providers behind your team."
+      title="Connections"
+      lead="Your project folder, and the AI providers behind your team. Keys are encrypted by your operating system and never reach this interface."
     >
       {/* Workspace: the boundary every local tool operates inside. */}
       <h2 className="mb-4 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
@@ -89,17 +96,23 @@ export function Account() {
         </div>
       </article>
 
-      {/* Providers, rendered from the registry. */}
-      <h2 className="mb-4 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
+      {/* Providers, rendered from the registry rather than a hard-coded list. */}
+      <h2 className="mb-2 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
         AI Providers
       </h2>
+      <p className="mb-4 max-w-[640px] font-ui text-[13px] leading-snug text-ink-3">
+        Every agent picks its own provider and model, so connecting more than
+        one lets a team run on several at once.
+      </p>
+
       <div className="flex flex-col gap-6">
-        {descriptors.map((d) => (
+        {descriptors.map((descriptor) => (
           <ProviderPanel
-            key={d.id}
-            descriptor={d}
-            provider={statuses.find((s) => s.id === d.id)}
-            result={results[d.id]}
+            key={descriptor.id}
+            descriptor={descriptor}
+            provider={statuses.find((s) => s.id === descriptor.id)}
+            result={results[descriptor.id]}
+            agentCount={usedBy(descriptor.id)}
             busy={busy}
             onConnect={connect}
             onTest={test}
@@ -108,57 +121,6 @@ export function Account() {
           />
         ))}
       </div>
-
-      {/* Execution mode: one setting for the team, not per provider. */}
-      <h2 className="mb-4 mt-10 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
-        Agent execution
-      </h2>
-      <article className="max-w-[640px] border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-ink)]">
-        <div className="flex gap-2">
-          {(['real', 'fake'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              aria-pressed={mode === m}
-              className={`border-2 px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors ${
-                mode === m
-                  ? 'border-ink bg-brand text-ink'
-                  : 'border-rule text-ink-3 hover:border-ink hover:text-ink'
-              }`}
-            >
-              {m === 'real' ? 'Real' : 'Simulated'}
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 font-ui text-xs leading-snug text-ink-3">
-          {mode === 'real'
-            ? 'Tasks call a real provider, use tools against your workspace, and spend credit.'
-            : 'Tasks replay a scripted timeline. No API calls, no file access, no cost.'}
-        </p>
-      </article>
-
-      <h2 className="mb-4 mt-10 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
-        Everything else
-      </h2>
-      <ul className="max-w-[640px] border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-ink)]">
-        {SECTIONS.map((s, i) => (
-          <li
-            key={s.name}
-            className={`flex items-center justify-between gap-4 px-4 py-3 ${
-              i > 0 ? 'border-t-2 border-rule' : ''
-            }`}
-          >
-            <div>
-              <p className="font-ui text-sm font-semibold text-ink">{s.name}</p>
-              <p className="mt-0.5 font-ui text-xs text-ink-3">{s.note}</p>
-            </div>
-            <span className="shrink-0 border-2 border-rule px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-ink-3">
-              Soon
-            </span>
-          </li>
-        ))}
-      </ul>
     </PagePlaceholder>
   )
 }
