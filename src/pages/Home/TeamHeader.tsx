@@ -1,10 +1,12 @@
-import type { Theme } from '../../themes/types'
 import { bucketFor, STATUS_GLYPH } from '../../characters/character.states'
 import { ALL_AGENTS, useBackstage } from '../../stores/backstageStore'
 import { groupWorkers, type Worker } from '../../agents/workers'
 
 interface Props {
-  theme: Theme
+  /**
+   * Everything that can do work. Already named from the project's cast by
+   * `buildWorkers`, so this header needs no theme of its own.
+   */
   workers: Worker[]
   onSpawn: () => void
 }

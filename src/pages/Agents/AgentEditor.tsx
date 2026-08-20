@@ -405,49 +405,23 @@ export function AgentEditor({
           </p>
         </div>
 
-        {/* ------------------------------------------------ theme and cast -- */}
+        {/* ------------------------------------------------------- character -- */}
         <div className={section}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className={label} htmlFor="agent-theme">
-                Theme
-              </label>
-              <select
-                id="agent-theme"
-                className={`mt-1.5 ${field}`}
-                value={draft.themeId ?? activeThemeId}
-                onChange={(e) => {
-                  set('themeId', e.target.value)
-                  // Casts differ in length; a slot from one world can be out
-                  // of range in another.
-                  set('characterSlot', 0)
-                }}
-              >
-                {themeList.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={label} htmlFor="agent-character">
-                Character
-              </label>
-              <select
-                id="agent-character"
-                className={`mt-1.5 ${field}`}
-                value={slot}
-                onChange={(e) => set('characterSlot', Number(e.target.value))}
-              >
-                {cast.map((c, i) => (
-                  <option key={c.id} value={i}>
-                    {c.name} — {c.role}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <label className={label} htmlFor="agent-character">
+            Character
+          </label>
+          <select
+            id="agent-character"
+            className={`mt-1.5 ${field}`}
+            value={slot}
+            onChange={(e) => set('characterSlot', Number(e.target.value))}
+          >
+            {cast.map((c, i) => (
+              <option key={c.id} value={i}>
+                {c.name} — {c.role}
+              </option>
+            ))}
+          </select>
 
           <div className="mt-2.5 flex flex-wrap gap-2">
             {cast.map((c, i) => (
@@ -468,8 +442,9 @@ export function AgentEditor({
             ))}
           </div>
           <p className="mt-1.5 font-ui text-xs text-ink-3">
-            Only this theme&apos;s cast is offered, so a character can never
-            appear in a world it does not belong to.
+            Only this project&apos;s cast is offered. The world, and who is in
+            it, are project settings — so a character can never appear in a
+            project that did not choose them.
           </p>
         </div>
 

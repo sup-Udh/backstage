@@ -4,7 +4,7 @@ import type { WorldLink } from '../../world/engine/renderer'
 import { CharacterTooltip } from '../../components/CharacterCard/CharacterTooltip'
 import { AgentInspector } from './AgentInspector'
 import { WorldLabelLayer } from '../../world/labels/WorldLabelLayer'
-import type { Theme } from '../../themes/types'
+import type { CharacterDef } from '../../characters/character.types'
 import { useBackstage } from '../../stores/backstageStore'
 import { useTeam, type LinkOutcome } from '../../stores/teamStore'
 import { MAX_CONNECTIONS, findWorker, type Worker } from '../../agents/workers'
@@ -13,7 +13,8 @@ interface Props {
   engine: WorldEngine
   switching: boolean
   workers: Worker[]
-  theme: Theme
+  /** The project's cast, offered when re-casting a CLI session. */
+  cast: CharacterDef[]
 }
 
 interface Hover {
@@ -37,7 +38,7 @@ const DRAG_SLOP = 5
  * another connects them, and every connection drawn here is one the main
  * process has accepted and persisted.
  */
-export function WorldPanel({ engine, switching, workers, theme }: Props) {
+export function WorldPanel({ engine, switching, workers, cast }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const pointer = useRef<{ x: number; y: number } | null>(null)
@@ -583,7 +584,7 @@ export function WorldPanel({ engine, switching, workers, theme }: Props) {
           <AgentInspector
             worker={selectedWorker}
             character={selectedChar}
-            cast={theme.characters}
+            cast={cast}
             others={workers}
             connections={connections}
             onFocus={() => engine.focusOn(selectedChar.id)}

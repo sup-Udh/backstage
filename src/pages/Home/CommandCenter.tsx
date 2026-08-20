@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import type { Theme } from '../../themes/types'
+﻿import { useEffect, useRef, useState } from 'react'
+import type { CharacterDef } from '../../characters/character.types'
+import { castNameForSlot } from '../../project/cast'
 import type { AgentConfig } from '../../shared/providerApi'
 import {
   ALL_AGENTS,
@@ -24,7 +25,8 @@ import { useProviders } from '../../providers/useProviders'
 import { findWorker, type Worker } from '../../agents/workers'
 
 interface Props {
-  theme: Theme
+  /** The project's cast, which is the only set anyone here can be named from. */
+  cast: CharacterDef[]
   /** Everything that can do work, projected once for the whole workspace. */
   workers: Worker[]
   onSpawn: () => void
@@ -47,12 +49,12 @@ const TABS: { id: TabId; label: string }[] = [
  * world next door tells the story; this is where the work is done.
  *
  * Switching agents is the operation this panel exists to make cheap. It moves
- * `chatTarget`, reloads that agent's own transcript, and does nothing else —
+ * `chatTarget`, reloads that agent's own transcript, and does nothing else â€”
  * no runtime is touched, no execution is paused, nobody else's state changes.
  * That is what lets the user hand Michael a task while Jane is mid-investigation
  * and have both keep going.
  */
-export function CommandCenter({ theme, workers, onSpawn }: Props) {
+export function CommandCenter({ cast, workers, onSpawn }: Props) {
   const target = useBackstage((s) => s.chatTarget)
   const threadTarget = useBackstage((s) => s.threadTarget)
   const thread = useBackstage((s) => s.thread)
@@ -95,8 +97,8 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
    * Which of the three conversations is on screen.
    *
    * A group thread, a CLI session, or an agent's own transcript. They are
-   * genuinely different destinations — one posts to a shared thread, one
-   * writes to a PTY, one queues a task — so the send path is chosen here
+   * genuinely different destinations â€” one posts to a shared thread, one
+   * writes to a PTY, one queues a task â€” so the send path is chosen here
    * rather than every surface below working it out again.
    */
   const activeWorker = findWorker(workers, target)
@@ -110,7 +112,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
 
   /*
    * Load whichever conversations are on screen. Switching to an agent brings
-   * back exactly where that conversation was — including work they finished
+   * back exactly where that conversation was â€” including work they finished
    * while the user was talking to somebody else.
    */
   useEffect(() => {
@@ -173,8 +175,8 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
   }, [tab, activeTerminalId, agentSessions, selectAgent])
 
   /*
-   * And the other direction: choosing a session anywhere — in the world, in
-   * the selector — brings its terminal forward too.
+   * And the other direction: choosing a session anywhere â€” in the world, in
+   * the selector â€” brings its terminal forward too.
    *
    * The user should never have to work out which Claude they are talking to.
    * Selection is one fact, and the world, the chat header and the terminal
@@ -196,13 +198,11 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
     providers.find((p) => p.id === agent.providerId)?.selectedModel ??
     'no model'
 
-  const characterName = (agent: AgentConfig) => {
-    const cast = theme.characters
-    return cast[((agent.characterSlot % cast.length) + cast.length) % cast.length].name
-  }
+  const characterName = (agent: AgentConfig) =>
+    castNameForSlot(cast, agent.characterSlot)
 
   const targetName = inThread
-    ? thread!.names.join(' ↔ ')
+    ? thread!.names.join(' â†” ')
     : isBroadcast
       ? `all agents (${workers.length})`
       : (activeWorker?.name ??
@@ -220,7 +220,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
     /*
      * A group thread is a different conversation, not a different way of
      * addressing the same one. Posting here goes to every member as a real
-     * task and lands in the shared transcript — it never touches any
+     * task and lands in the shared transcript â€” it never touches any
      * member's private session with the user.
      */
     if (inThread && thread) {
@@ -228,8 +228,8 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
       const worker = findWorker(workers, groupTarget)
 
       /*
-       * A group of CLI sessions is not a stored conversation — it is two real
-       * processes — so the message goes to each of their stdin rather than
+       * A group of CLI sessions is not a stored conversation â€” it is two real
+       * processes â€” so the message goes to each of their stdin rather than
        * into a transcript the app owns.
        */
       const posting =
@@ -324,7 +324,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
   }
 
   /*
-   * Session input goes to the PTY the session surface is showing — the same
+   * Session input goes to the PTY the session surface is showing â€” the same
    * process, the same stdin as the keyboard. It must never become a second
    * request through Backstage's own runtime: if the user started Claude Code,
    * they are talking to Claude Code.
@@ -353,10 +353,10 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
     messages: {
       mode: 'send' as const,
       placeholder: inThread
-        ? `Message ${targetName}…`
+        ? `Message ${targetName}â€¦`
         : isSession
-          ? `Message ${targetName}…`
-          : `Ask ${targetName}…`,
+          ? `Message ${targetName}â€¦`
+          : `Ask ${targetName}â€¦`,
       // A session or a thread has its own recipients; only the agent path
       // depends on somebody being spawned.
       disabled: inThread
@@ -369,25 +369,25 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
     terminal: {
       mode: 'send' as const,
       placeholder: session
-        ? `Message ${sessionLabel}…`
-        : 'Open a session to send input…',
+        ? `Message ${sessionLabel}â€¦`
+        : 'Open a session to send inputâ€¦',
       disabled: !session || session.status === 'exited',
       onSend: sendToSession
     },
     tasks: {
       mode: 'send' as const,
-      placeholder: `Create a task for ${targetName}…`,
+      placeholder: `Create a task for ${targetName}â€¦`,
       disabled: recipients.length === 0,
       onSend: submit
     },
-    files: { mode: 'filter' as const, placeholder: 'Search files…' },
-    git: { mode: 'filter' as const, placeholder: 'Filter changes…' },
-    commands: { mode: 'filter' as const, placeholder: 'Search commands…' }
+    files: { mode: 'filter' as const, placeholder: 'Search filesâ€¦' },
+    git: { mode: 'filter' as const, placeholder: 'Filter changesâ€¦' },
+    commands: { mode: 'filter' as const, placeholder: 'Search commandsâ€¦' }
   }[tab]
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col border-l-[3px] border-ink bg-cream">
-      <TeamHeader theme={theme} workers={workers} onSpawn={onSpawn} />
+      <TeamHeader cast={cast} workers={workers} onSpawn={onSpawn} />
 
       {/* One surface at a time, chosen here. */}
       <nav className="flex shrink-0 border-b-[3px] border-ink bg-cream-2">
@@ -416,7 +416,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
       {/* Who is listening. Always visible on the conversation surface. */}
       {tab === 'messages' && (
         <ChatIdentity
-          theme={theme}
+          cast={cast}
           workers={workers}
           recipients={recipients}
           isBroadcast={isBroadcast}
@@ -443,7 +443,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
       {/* The active surface. Only this scrolls. */}
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === 'messages' && (
-          <MessagesPanel theme={theme} workers={workers} onSubmit={submit} />
+          <MessagesPanel cast={cast} workers={workers} onSubmit={submit} />
         )}
 
         {tab === 'files' &&
@@ -458,7 +458,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
         {tab === 'tasks' && (
           <div className="flex h-full min-h-0 flex-col">
             <TasksPanel
-              theme={theme}
+              cast={cast}
               onFocus={({ terminalSessionId, agentId }) => {
                 requestSession(terminalSessionId)
                 selectAgent(agentId)
@@ -524,7 +524,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
         ) : (
           <label className="flex items-center gap-2 border-[3px] border-ink bg-paper px-2 py-1.5 focus-within:border-brand-deep">
             <span aria-hidden className="font-pixel text-[11px] text-ink-3">
-              ⌕
+              âŒ•
             </span>
             <input
               value={query}
@@ -539,7 +539,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
                 aria-label="Clear"
                 className="shrink-0 font-mono text-[11px] text-ink-3 hover:text-ink"
               >
-                ✕
+                âœ•
               </button>
             )}
           </label>
