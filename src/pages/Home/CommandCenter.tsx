@@ -183,11 +183,12 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
     return cast[((agent.characterSlot % cast.length) + cast.length) % cast.length].name
   }
 
-  const targetName = isBroadcast
-    ? `all agents (${recipients.length})`
-    : recipients[0]
-      ? characterName(recipients[0])
-      : 'nobody'
+  const targetName = inThread
+    ? thread!.names.join(' ↔ ')
+    : isBroadcast
+      ? `all agents (${workers.length})`
+      : (activeWorker?.name ??
+        (recipients[0] ? characterName(recipients[0]) : 'nobody'))
 
   /**
    * Send.
@@ -198,6 +199,38 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
    * events, which is what lets the world animate while it works.
    */
   const submit = (text: string) => {
+    /*
+     * A group thread is a different conversation, not a different way of
+     * addressing the same one. Posting here goes to every member as a real
+     * task and lands in the shared transcript — it never touches any
+     * member's private session with the user.
+     */
+    if (inThread && thread) {
+      void window.backstage.threads.post(threadTarget!, text).then((result) => {
+        void refreshThread()
+        if (!result.accepted && result.error) {
+          pushMessage(threadTarget!, {
+            id: localId('sys'),
+            kind: 'system',
+            agentId: threadTarget!,
+            text: result.error,
+            at: Date.now()
+          })
+        }
+      })
+      return
+    }
+
+    /*
+     * A CLI session is a real process. The message goes to the same stdin the
+     * keyboard writes to, never through Backstage's own runtime: if the user
+     * started Claude Code, they are talking to Claude Code.
+     */
+    if (isSession && activeWorker?.sessionId) {
+      void window.backstage.sessions.send(activeWorker.sessionId, text)
+      return
+    }
+
     if (recipients.length === 0) {
       const anyone = present[0]?.id ?? target
       pushMessage(anyone, {
@@ -287,8 +320,18 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
   } = {
     messages: {
       mode: 'send' as const,
-      placeholder: `Ask ${targetName}…`,
-      disabled: recipients.length === 0,
+      placeholder: inThread
+        ? `Message ${targetName}…`
+        : isSession
+          ? `Message ${targetName}…`
+          : `Ask ${targetName}…`,
+      // A session or a thread has its own recipients; only the agent path
+      // depends on somebody being spawned.
+      disabled: inThread
+        ? false
+        : isSession
+          ? activeWorker?.status === 'offline'
+          : recipients.length === 0,
       onSend: submit
     },
     terminal: {
@@ -312,7 +355,7 @@ export function CommandCenter({ theme, workers, onSpawn }: Props) {
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col border-l-[3px] border-ink bg-cream">
-      <TeamHeader theme={theme} />
+      <TeamHeader theme={theme} workers={workers} onSpawn={onSpawn} />
 
       {/* One surface at a time, chosen here. */}
       <nav className="flex shrink-0 border-b-[3px] border-ink bg-cream-2">
