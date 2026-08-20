@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useBackstage } from '../../stores/backstageStore'
 import { useTeam } from '../../stores/teamStore'
-import { getTheme } from '../../themes'
+import { useProject, useProjectCast } from '../../stores/projectStore'
 import { PagePlaceholder } from '../shell/PagePlaceholder'
 import { AgentCard } from './AgentCard'
 import { AgentEditor } from './AgentEditor'
@@ -19,7 +19,8 @@ import type { AgentConfig, WorkspaceInfo } from '../../shared/providerApi'
  * the one typing in the office next door.
  */
 export function Agents() {
-  const themeId = useBackstage((s) => s.themeId)
+  const project = useProject((s) => s.project)
+  const cast = useProjectCast()
   const providers = useBackstage((s) => s.providers)
   const agentStates = useBackstage((s) => s.agentStates)
 
@@ -43,7 +44,6 @@ export function Agents() {
     void window.backstage?.workspace.get().then(setWorkspace)
   }, [])
 
-  const theme = getTheme(themeId)
   const anyConnected = providers.some((p) => p.connected)
 
   const spawned = agents.filter((a) => a.enabled && a.spawned)
@@ -104,7 +104,7 @@ export function Agents() {
         <AgentEditor
           agent={editing}
           agents={agents}
-          activeThemeId={themeId}
+          cast={cast}
           providers={providers}
           capabilities={capabilities}
           workspaceRoot={workspace?.root ?? null}
@@ -220,7 +220,8 @@ export function Agents() {
               state={agentStates[agent.id]}
               validation={validations[agent.id]}
               provider={providers.find((p) => p.id === agent.providerId)}
-              theme={theme}
+              cast={cast}
+              isLead={agent.id === project?.godAgentId}
               busy={busy}
               onEdit={() => {
                 setNotice(null)

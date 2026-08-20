@@ -4,6 +4,8 @@ import { registerWorkspaceHandlers } from './workspace'
 import { registerAgentHandlers, disposeAgentHandlers } from './agents'
 import { registerTerminalHandlers } from './terminal'
 import { registerProjectHandlers } from './project'
+import { registerProjectsHandlers } from './projects'
+import { bootstrapProjects } from '../projects/bootstrap'
 import { loadWorkspace } from '../workspace/WorkspaceManager'
 import { fileWatcher } from '../workspace/FileWatcher'
 import { terminals } from '../terminal/TerminalSessionManager'
@@ -12,11 +14,23 @@ import { agentSessions } from '../terminal/AgentSessionManager'
 /** Register every IPC surface. Called once, after the app is ready. */
 export function registerIpcHandlers(): void {
   loadWorkspace()
+  /*
+   * Resolve which project is open before any handler can be called.
+   *
+   * Every scoped read — the roster, the automations, the relationships —
+   * answers against whatever is active, so a window that rendered before this
+   * ran would ask for its team and be told, correctly, that there isn't one.
+   * It also re-points the workspace at the stored project, which is why it
+   * comes after `loadWorkspace` rather than instead of it.
+   */
+  bootstrapProjects()
+
   registerProviderHandlers()
   registerWorkspaceHandlers()
   registerAgentHandlers()
   registerTerminalHandlers()
   registerProjectHandlers()
+  registerProjectsHandlers()
 
   // Watch the open project so changes made by external CLI agents are seen.
   fileWatcher.sync()

@@ -4,6 +4,8 @@ import { useBackstage, localId } from '../stores/backstageStore'
 import type { AgentSession } from '../shared/providerApi'
 import { lifecycleForSession, sessionSlots, workerIdFor } from '../agents/workers'
 import { useTeam } from '../stores/teamStore'
+import { useProject } from '../stores/projectStore'
+import { projectCast } from '../project/cast'
 import { getTheme } from '../themes'
 
 /**
@@ -54,7 +56,11 @@ export function useWorkspaceEvents(): void {
        * Working it out separately here is exactly how the world and the
        * dropdown end up showing a session as two different characters.
        */
-      const cast = getTheme(useBackstage.getState().themeId).characters
+      const project = useProject.getState().project
+      const cast = projectCast(
+        getTheme(project?.themeId),
+        project?.characterRoster ?? []
+      )
       const slots = sessionSlots(
         useTeam.getState().agents,
         sessions,

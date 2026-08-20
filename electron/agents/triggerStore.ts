@@ -1,6 +1,7 @@
 import type { Trigger, TriggerActionType, TriggerEventType } from './agent.types'
 import { makeId, readJson, writeJson } from './persist'
 import { getSettings } from './settingsStore'
+import { getActiveProjectId } from '../projects/projectStore'
 
 /**
  * Automations, persisted.
@@ -71,6 +72,10 @@ function normalise(raw: unknown): Trigger | null {
 
   return {
     id,
+    // Never inferred from the open project, for the same reason an agent's is
+    // not: an unstamped record predates projects and must not be adopted by
+    // whichever one happens to be open.
+    projectId: typeof t.projectId === 'string' ? t.projectId : '',
     name: typeof t.name === 'string' && t.name.trim() ? t.name.trim() : 'Automation',
     enabled: t.enabled !== false,
     event,
@@ -110,22 +115,30 @@ function persist(): void {
   writeJson(FILE, triggers ?? [])
 }
 
+/** The open project's automations. Same scoping rule as the agent roster. */
+function scoped(): Trigger[] {
+  const projectId = getActiveProjectId()
+  if (!projectId) return []
+  return load().filter((t) => t.projectId === projectId)
+}
+
 export function listTriggers(): Trigger[] {
-  return load()
+  return scoped()
 }
 
 export function getTrigger(id: string): Trigger | undefined {
-  return load().find((t) => t.id === id)
+  return scoped().find((t) => t.id === id)
 }
 
 export function upsertTrigger(input: Partial<Trigger>): Trigger {
   const list = load()
-  const existing = input.id ? list.find((t) => t.id === input.id) : undefined
+  const existing = input.id ? scoped().find((t) => t.id === input.id) : undefined
 
   if (existing) {
     const merged = normalise({ ...existing, ...input, id: existing.id })
     if (merged) {
       merged.createdAt = existing.createdAt
+      merged.projectId = existing.projectId
       merged.updatedAt = Date.now()
       // Editing a trigger must not clear the cooldown it is currently serving.
       merged.lastFiredAt = existing.lastFiredAt
@@ -136,7 +149,15 @@ export function upsertTrigger(input: Partial<Trigger>): Trigger {
     return existing
   }
 
-  const created = normalise({ ...input, id: makeId('trg'), createdAt: Date.now() })
+  const projectId = getActiveProjectId()
+  if (!projectId) throw new Error('No project is open.')
+
+  const created = normalise({
+    ...input,
+    projectId,
+    id: makeId('trg'),
+    createdAt: Date.now()
+  })
   if (!created) throw new Error('A trigger needs a valid event and action.')
   list.push(created)
   persist()
@@ -144,15 +165,21 @@ export function upsertTrigger(input: Partial<Trigger>): Trigger {
 }
 
 export function deleteTrigger(id: string): void {
+  const target = scoped().find((t) => t.id === id)
+  if (!target) return
   const list = load()
-  const i = list.findIndex((t) => t.id === id)
-  if (i !== -1) {
-    list.splice(i, 1)
-    persist()
-  }
+  list.splice(list.indexOf(target), 1)
+  persist()
 }
 
-/** Remove triggers pointing at an agent that no longer exists. */
+/**
+ * Remove triggers pointing at an agent that no longer exists.
+ *
+ * Swept across every project rather than only the open one. Agent ids are
+ * unique app-wide and a deletion is permanent, so leaving a stale reference in
+ * a project that happens to be closed would only defer the same broken trigger
+ * to whenever that project is next opened.
+ */
 export function forgetAgent(agentId: string): void {
   const list = load()
   const kept = list.filter(

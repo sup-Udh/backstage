@@ -53,6 +53,23 @@ const api: BackstageApi = {
     clear: () => ipcRenderer.invoke('workspace:clear')
   },
 
+  /*
+   * Projects. `chooseFolder` deliberately only returns a path — the workspace
+   * is not opened until a project is, so abandoning setup leaves nothing
+   * pointed anywhere.
+   */
+  projects: {
+    bootstrap: () => ipcRenderer.invoke('projects:bootstrap'),
+    list: () => ipcRenderer.invoke('projects:list'),
+    active: () => ipcRenderer.invoke('projects:active'),
+    chooseFolder: () => ipcRenderer.invoke('projects:chooseFolder'),
+    create: (draft) => ipcRenderer.invoke('projects:create', draft),
+    open: (projectId) => ipcRenderer.invoke('projects:open', projectId),
+    update: (projectId, patch) =>
+      ipcRenderer.invoke('projects:update', projectId, patch),
+    adoptLegacy: (input) => ipcRenderer.invoke('projects:adoptLegacy', input)
+  },
+
   agents: {
     list: () => ipcRenderer.invoke('agents:list'),
     save: (agent) => ipcRenderer.invoke('agents:save', agent),

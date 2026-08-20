@@ -24,8 +24,17 @@ import type {
   RuntimeEvent,
   Trigger
 } from './agents'
+import type {
+  LegacyAdoption,
+  Project,
+  ProjectBootstrap,
+  ProjectDraft,
+  ProjectPatch,
+  ProjectSnapshot
+} from './projects'
 
 export type * from './agents'
+export type * from './projects'
 
 export interface ProviderModel {
   id: string
@@ -276,6 +285,33 @@ export interface BackstageApi {
     get(): Promise<WorkspaceInfo>
     choose(): Promise<WorkspaceInfo>
     clear(): Promise<WorkspaceInfo>
+  }
+
+  /**
+   * Projects: the container everything else is scoped to.
+   *
+   * Many are stored and exactly one is open. Opening one re-points the
+   * workspace, so every file and terminal tool follows without being told.
+   */
+  projects: {
+    /** What was found on disk, and whether pre-project state needs adopting. */
+    bootstrap(): Promise<ProjectBootstrap>
+    list(): Promise<Project[]>
+    active(): Promise<Project | null>
+    /**
+     * Pick a folder without opening it.
+     *
+     * Setup needs a path several steps before the project exists; adopting it
+     * then would point every tool at a folder the user has not finished
+     * choosing, and strand them there if they abandoned the wizard.
+     */
+    chooseFolder(): Promise<{ path: string; name: string } | null>
+    /** Create the project and one agent per character in its roster. */
+    create(draft: ProjectDraft): Promise<ProjectSnapshot | { error: string }>
+    open(projectId: string): Promise<ProjectSnapshot | null>
+    update(projectId: string, patch: ProjectPatch): Promise<Project | null>
+    /** Fold pre-project workspace, roster and theme into a real project. */
+    adoptLegacy(input: LegacyAdoption): Promise<ProjectSnapshot | null>
   }
 
   agents: {

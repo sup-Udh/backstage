@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useBackstage } from '../stores/backstageStore'
 import { useTeam } from '../stores/teamStore'
-import { getTheme } from '../themes'
+import { useProjectCast } from '../stores/projectStore'
 import { buildWorkers, type Worker } from './workers'
 
 /**
@@ -21,17 +21,10 @@ export function useWorkers(): Worker[] {
   const states = useBackstage((s) => s.agentStates)
   const sessions = useBackstage((s) => s.agentSessions)
   const providers = useBackstage((s) => s.providers)
-  const themeId = useBackstage((s) => s.themeId)
+  const cast = useProjectCast()
 
   return useMemo(
-    () =>
-      buildWorkers({
-        agents,
-        states,
-        sessions,
-        providers,
-        theme: getTheme(themeId)
-      }),
-    [agents, states, sessions, providers, themeId]
+    () => buildWorkers({ agents, states, sessions, providers, cast }),
+    [agents, states, sessions, providers, cast]
   )
 }

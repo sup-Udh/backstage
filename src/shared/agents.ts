@@ -56,6 +56,16 @@ export type ExecutionProfile = 'quick' | 'normal' | 'deep'
  */
 export interface AgentConfig {
   id: string
+  /**
+   * The project this agent belongs to.
+   *
+   * An agent exists inside exactly one project, and the roster is filtered on
+   * this before anything else sees it. That is what makes project isolation
+   * structural: the orchestrator, the team tools, the registry, the threads
+   * and the prompt builder all reach the roster through the same two
+   * functions, so scoping those scopes all of them at once.
+   */
+  projectId: string
   name: string
   /** Shown in place of `name` when set. Empty means "use the name". */
   displayName: string
@@ -357,6 +367,8 @@ export type TriggerActionType =
  */
 export interface Trigger {
   id: string
+  /** The project this automation belongs to. Scoped exactly like an agent. */
+  projectId: string
   name: string
   enabled: boolean
   event: TriggerEventType

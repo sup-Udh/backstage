@@ -4,7 +4,8 @@ import type {
   AgentValidation,
   ProviderStatus
 } from '../../shared/providerApi'
-import type { Theme } from '../../themes/types'
+import type { CharacterDef } from '../../characters/character.types'
+import { castForSlot } from '../../project/cast'
 import { CharacterSprite } from '../../world/CharacterSprite'
 import { StatusChip } from '../../components/AgentStatus/StatusChip'
 import { characterStateForAgent } from '../../characters/character.states'
@@ -15,7 +16,10 @@ interface Props {
   state: AgentRuntimeState | undefined
   validation: AgentValidation | undefined
   provider: ProviderStatus | undefined
-  theme: Theme
+  /** The project's cast, which is the only set this agent can be drawn from. */
+  cast: CharacterDef[]
+  /** Whether this agent coordinates the team in ALL AGENTS mode. */
+  isLead?: boolean
   busy: string | null
   onEdit: () => void
   onSpawn: () => void

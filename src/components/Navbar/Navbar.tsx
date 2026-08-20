@@ -1,12 +1,21 @@
 import { useBackstage, type PageId } from '../../stores/backstageStore'
+import { useProject, useProjectTheme } from '../../stores/projectStore'
 import { PixelMark } from '../Header/PixelMark'
 
+/**
+ * The pages inside a project.
+ *
+ * There is no Themes item. A theme is chosen when the project is created and
+ * belongs to it thereafter — a global switch in the navigation would let one
+ * project's world be changed from inside another's, which is the leak this
+ * whole model exists to close. Changing it later lives in Account, beside the
+ * rest of the project's settings.
+ */
 const PAGES: { id: PageId; label: string }[] = [
   { id: 'home', label: 'Home' },
   { id: 'cases', label: 'Cases' },
   { id: 'agents', label: 'Agents' },
-  { id: 'automations', label: 'Automations' },
-  { id: 'themes', label: 'Themes' }
+  { id: 'automations', label: 'Automations' }
 ]
 
 /**
@@ -18,6 +27,8 @@ export function Navbar() {
   const page = useBackstage((s) => s.page)
   const setPage = useBackstage((s) => s.setPage)
   const exitToLanding = useBackstage((s) => s.exitToLanding)
+  const project = useProject((s) => s.project)
+  const theme = useProjectTheme()
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b-[3px] border-ink bg-cream px-5">
@@ -33,6 +44,33 @@ export function Navbar() {
             Backstage
           </span>
         </button>
+
+        {/*
+          Which project, and which world it happens in.
+
+          Permanently on screen rather than tucked into settings: every page
+          below this bar shows only one project's agents, cases and
+          conversations, and the user has to be able to tell at a glance which
+          one that is. It doubles as the way into the project's own settings.
+        */}
+        {project && (
+          <button
+            type="button"
+            onClick={() => setPage('account')}
+            title="Project settings"
+            className="flex items-baseline gap-2 border-2 border-ink bg-paper px-2.5 py-1 transition-colors hover:bg-brand-pale"
+          >
+            <span className="font-pixel text-[11px] font-bold uppercase tracking-[0.08em] text-ink">
+              {project.name}
+            </span>
+            <span aria-hidden className="text-rule">
+              ·
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+              {theme.name}
+            </span>
+          </button>
+        )}
 
         <nav className="flex items-center gap-1">
           {PAGES.map((item) => {

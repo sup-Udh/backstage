@@ -6,6 +6,7 @@ import { WORLD_SPRITE_H, WORLD_SPRITE_W } from './spriteCache'
 import type { AgentView, CharacterRuntime } from '../world.types'
 import { Director } from './behavior'
 import type { CharacterDef } from '../../characters/character.types'
+import { castForSlot } from '../../project/cast'
 import {
   WorldRenderer,
   type Camera,
@@ -53,11 +54,16 @@ export class WorldEngine {
 
   constructor(
     private theme: Theme,
+    /**
+     * The project's cast. Only these characters exist in this world — the
+     * theme's other people are never cast, never baked and never drawn.
+     */
+    private cast: CharacterDef[],
     private runtime: AgentRuntime,
     seed = 991
   ) {
     const rng = makeRng(seed)
-    this.renderer = new WorldRenderer(theme)
+    this.renderer = new WorldRenderer(theme, cast)
     this.director = new Director(theme.scene, rng)
 
     this.rng = rng
@@ -68,7 +74,7 @@ export class WorldEngine {
       .map((a): CharacterRuntime => ({
         agentId: a.id,
         ownName: a.useOwnName ? a.name : undefined,
-        def: castFor(theme, a.slot),
+        def: castForSlot(cast, a.slot),
         model: a.model,
         x: theme.scene.desks[a.slot % theme.scene.desks.length].x,
         y: theme.scene.desks[a.slot % theme.scene.desks.length].y,
@@ -197,7 +203,7 @@ export class WorldEngine {
       const c: CharacterRuntime = {
         agentId: agent.id,
         ownName: agent.useOwnName ? agent.name : undefined,
-        def: castFor(this.theme, agent.slot),
+        def: castForSlot(this.cast, agent.slot),
         model: agent.model,
         // Just off the left edge, so the walk in is visible, and behind
         // anyone still on their way in.
@@ -495,9 +501,9 @@ export class WorldEngine {
        * the change was accepted, stored and reflected everywhere except the
        * one place it was supposed to show.
        */
-      const cast = castFor(this.theme, agent.slot)
-      if (cast.id !== c.def.id) {
-        c.def = cast
+      const wearing = castForSlot(this.cast, agent.slot)
+      if (wearing.id !== c.def.id) {
+        c.def = wearing
         this.rebuildViews()
       }
 
@@ -746,9 +752,3 @@ const LINK_HIT_PAD = 4
  * not overlap either.
  */
 const ENTRY_SPACING = 22
-
-/** Which of a theme's characters portrays the agent in this slot. */
-function castFor(theme: Theme, slot: number): CharacterDef {
-  const cast = theme.characters
-  return cast[((slot % cast.length) + cast.length) % cast.length]
-}

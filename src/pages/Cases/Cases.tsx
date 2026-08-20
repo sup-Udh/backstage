@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useBackstage } from '../../stores/backstageStore'
 import { useTeam } from '../../stores/teamStore'
-import { getTheme } from '../../themes'
+import { useProjectCast } from '../../stores/projectStore'
+import { castNameForSlot } from '../../project/cast'
 import { PagePlaceholder } from '../shell/PagePlaceholder'
 import type { AgentTask, TaskStatus } from '../../shared/providerApi'
 
@@ -31,7 +32,7 @@ const STATUS_GLYPH: Record<TaskStatus, string> = {
  */
 export function Cases() {
   const setPage = useBackstage((s) => s.setPage)
-  const themeId = useBackstage((s) => s.themeId)
+  const cast = useProjectCast()
   const agents = useTeam((s) => s.agents)
   const tasks = useTeam((s) => s.tasks)
   const refreshTasks = useTeam((s) => s.refreshTasks)
@@ -41,13 +42,10 @@ export function Cases() {
     void refreshTasks()
   }, [refreshTasks])
 
-  const theme = getTheme(themeId)
-
   const nameFor = (agentId: string) => {
     const config = agents.find((a) => a.id === agentId)
     if (!config) return agentId
-    const cast = theme.characters
-    return cast[((config.characterSlot % cast.length) + cast.length) % cast.length].name
+    return castNameForSlot(cast, config.characterSlot)
   }
 
   const originOf = (task: AgentTask) => {

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useBackstage } from '../../stores/backstageStore'
+import { useProject } from '../../stores/projectStore'
 import { useWorldEngine } from '../../world/useWorldEngine'
 import { WorldPanel } from './WorldPanel'
 import { CommandCenter } from './CommandCenter'
@@ -7,6 +8,9 @@ import { WorkspaceStatus } from './WorkspaceStatus'
 import { useWorkspaceEvents } from '../../workspace/useWorkspaceEvents'
 import { useWorkers } from '../../agents/useWorkers'
 import { SpawnAgentDialog } from './SpawnAgentDialog'
+
+/** Stable empty roster, so the world engine's memo is not defeated. */
+const EMPTY_ROSTER: string[] = []
 
 /**
  * The workspace.
@@ -21,9 +25,17 @@ import { SpawnAgentDialog } from './SpawnAgentDialog'
  * thing you look at. Collapsing the panel hands the entire screen to the world.
  */
 export function Home() {
-  const themeId = useBackstage((s) => s.themeId)
-  const switching = useBackstage((s) => s.switching)
-  const { theme, engine } = useWorldEngine(themeId)
+  const project = useProject((s) => s.project)
+  const switching = useProject((s) => s.switching)
+  /*
+   * The world is built from the project, not from a global theme. Only the
+   * characters this project chose are cast, baked or drawn — there is no path
+   * by which another theme's people could appear in this office.
+   */
+  const { theme, cast, engine } = useWorldEngine(
+    project?.themeId,
+    project?.characterRoster ?? EMPTY_ROSTER
+  )
   const [open, setOpen] = useState(true)
   const [spawning, setSpawning] = useState(false)
   const setChatTarget = useBackstage((s) => s.setChatTarget)
@@ -51,7 +63,7 @@ export function Home() {
             engine={engine}
             switching={switching}
             workers={workers}
-            theme={theme}
+            cast={cast}
           />
         </div>
 
@@ -63,7 +75,7 @@ export function Home() {
           <div className="relative w-[38%] min-w-[380px] max-w-[620px] shrink-0">
             <DockToggle open onClick={() => setOpen(false)} />
             <CommandCenter
-              theme={theme}
+              cast={cast}
               workers={workers}
               onSpawn={() => setSpawning(true)}
             />
@@ -74,7 +86,7 @@ export function Home() {
 
         {spawning && (
           <SpawnAgentDialog
-            theme={theme}
+            cast={cast}
             onClose={() => setSpawning(false)}
             /*
              * Talk to whoever was just hired. Spawning someone and then having

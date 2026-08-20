@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { defaultThemeId, isKnownTheme } from '../themes'
 import { groupForTool, type ToolRun } from '../agents/toolActivity'
 import type {
   AgentRuntimeState,
@@ -28,7 +27,19 @@ import type {
  * conversation is on screen and touches nothing else.
  */
 
-export type AppView = 'landing' | 'app'
+/**
+ * Which surface is on screen.
+ *
+ * `loading` and `setup` are the way into a project, and they are view states
+ * rather than routes because there is nothing to route to yet: until a project
+ * exists there is no workspace, no roster and no theme for a page to render.
+ *
+ *   landing   the shop window
+ *   loading   entering: real initialisation, shown as a walk to the office
+ *   setup     choosing a folder, a world, a cast and a team lead
+ *   app       inside a project
+ */
+export type AppView = 'landing' | 'loading' | 'setup' | 'app'
 
 /**
  * Which surface the command centre is showing.
@@ -38,7 +49,17 @@ export type AppView = 'landing' | 'app'
  */
 export type TabId = 'messages' | 'files' | 'git' | 'terminal' | 'tasks' | 'commands'
 
-export type PageId = 'home' | 'cases' | 'agents' | 'automations' | 'themes' | 'account'
+/**
+ * The pages inside a project.
+ *
+ * There is deliberately no `themes` page any more. A theme is project
+ * configuration chosen during setup, not a global switch — a persistent Themes
+ * item in the navigation is an invitation to change one project's world from
+ * inside another's, which is exactly the leak this whole model exists to stop.
+ * Changing it afterwards lives in Account, beside the rest of the project's
+ * settings.
+ */
+export type PageId = 'home' | 'cases' | 'agents' | 'automations' | 'account'
 
 /** The target that means "everyone who is in the office". */
 export const ALL_AGENTS = 'all'
@@ -49,18 +70,6 @@ export interface ActivityEntry {
   agentName?: string
   text: string
   at: number
-}
-
-const THEME_KEY = 'backstage.theme'
-
-function loadThemeId(): string {
-  try {
-    const saved = window.localStorage.getItem(THEME_KEY)
-    if (isKnownTheme(saved)) return saved as string
-  } catch {
-    // Storage can be unavailable; the default is always valid.
-  }
-  return defaultThemeId
 }
 
 /** How many activity lines to keep per agent. */
@@ -81,9 +90,6 @@ const SESSION_LINE_LIMIT = 400
 interface BackstageState {
   view: AppView
   page: PageId
-  themeId: string
-  /** True while the world is veiled mid-theme-swap. */
-  switching: boolean
 
   /** Private per-agent transcripts. Keyed by agentId. */
   agentMessages: Record<string, ChatMessage[]>
@@ -185,10 +191,14 @@ interface BackstageState {
    */
   terminalEverOpened: boolean
 
+  /** Get Started: begin entering, which is a real initialisation. */
   enterApp: () => void
+  /** Initialisation finished and there is no project yet. */
+  showSetup: () => void
+  /** A project is open; show it. */
+  openProject: () => void
   exitToLanding: () => void
   setPage: (page: PageId) => void
-  switchTheme: (id: string) => void
 
   setProviders: (statuses: ProviderStatus[]) => void
   setChatTarget: (target: string) => void
@@ -237,8 +247,6 @@ export function localId(prefix = 'local'): string {
 export const useBackstage = create<BackstageState>((set, get) => ({
   view: 'landing',
   page: 'home',
-  themeId: loadThemeId(),
-  switching: false,
 
   agentMessages: {},
   agentActivity: {},
@@ -265,27 +273,11 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   pendingCommand: null,
   terminalEverOpened: false,
 
-  enterApp: () => set({ view: 'app', page: 'home' }),
+  enterApp: () => set({ view: 'loading' }),
+  showSetup: () => set({ view: 'setup' }),
+  openProject: () => set({ view: 'app', page: 'home' }),
   exitToLanding: () => set({ view: 'landing' }),
   setPage: (page) => set({ page }),
-
-  /*
-   * The swap is staged rather than instant: veil, commit behind it, lift. That
-   * reads as walking onto another set instead of as a React re-render.
-   */
-  switchTheme: (id) => {
-    if (!isKnownTheme(id) || id === get().themeId) return
-    set({ switching: true })
-    window.setTimeout(() => {
-      set({ themeId: id })
-      try {
-        window.localStorage.setItem(THEME_KEY, id)
-      } catch {
-        // Persisting is a convenience, never a requirement.
-      }
-      window.setTimeout(() => set({ switching: false }), 60)
-    }, 220)
-  },
 
   setProviders: (providers) => set({ providers }),
 

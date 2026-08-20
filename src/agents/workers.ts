@@ -6,7 +6,8 @@ import type {
   AgentSessionStatus,
   ProviderStatus
 } from '../shared/providerApi'
-import type { Theme } from '../themes/types'
+import type { CharacterDef } from '../characters/character.types'
+import { castNameForSlot } from '../project/cast'
 import { BUSY_STATUSES } from '../shared/agents'
 
 /**
@@ -170,7 +171,14 @@ export interface WorkerInputs {
   states: Record<string, AgentRuntimeState>
   sessions: AgentSession[]
   providers: ProviderStatus[]
-  theme: Theme
+  /**
+   * The project's cast, not the theme's.
+   *
+   * Names come from here, so a worker can only ever be shown as somebody the
+   * project actually chose. Passing the whole theme was how the selector ended
+   * up able to name a character nobody had picked.
+   */
+  cast: CharacterDef[]
 }
 
 /**
@@ -186,11 +194,9 @@ export function buildWorkers({
   states,
   sessions,
   providers,
-  theme
+  cast
 }: WorkerInputs): Worker[] {
-  const cast = theme.characters
-  const characterName = (slot: number) =>
-    cast[((slot % cast.length) + cast.length) % cast.length].name
+  const characterName = (slot: number) => castNameForSlot(cast, slot)
 
   const workers: Worker[] = []
   const slots = sessionSlots(agents, sessions, cast.length)

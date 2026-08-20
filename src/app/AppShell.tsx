@@ -6,7 +6,6 @@ import { Home } from '../pages/Home/Home'
 import { Cases } from '../pages/Cases/Cases'
 import { Agents } from '../pages/Agents/Agents'
 import { Automations } from '../pages/Automations/Automations'
-import { Themes } from '../pages/Themes/Themes'
 import { Account } from '../pages/Account/Account'
 
 const PAGES = {
@@ -14,7 +13,6 @@ const PAGES = {
   cases: Cases,
   agents: Agents,
   automations: Automations,
-  themes: Themes,
   account: Account
 } as const
 

@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentConfig, ExecutionProfile } from './agent.types'
+import type { AgentConfig, CapabilityId, ExecutionProfile } from './agent.types'
 import {
   DEFAULT_CAPABILITIES,
   normaliseCapabilities
@@ -12,6 +12,8 @@ import {
   groupOf as graphGroupOf,
   type LinkResult
 } from './relationships'
+import { getActiveProjectId } from '../projects/projectStore'
+import type { RosterEntry } from '../../src/shared/projects'
 
 /**
  * The team roster, persisted.
@@ -20,6 +22,13 @@ import {
  * from runtime state, which is what an agent is doing right now. Nothing here
  * ever holds a task, a status or an API key: configuration survives restarts,
  * runtime state does not.
+ *
+ * One file holds every project's agents, and every read above `loadAgents` is
+ * filtered to the open project. That filter is the whole of project isolation:
+ * the orchestrator, the team tools, the registry, the threads, the awareness
+ * block and the prompt builder all reach the roster through `listAgents` and
+ * `getAgent`, so scoping those two scopes all of them. Anything that needs to
+ * see across projects has to say so, by name, through `listAllAgents`.
  */
 
 const FILE = 'agents.json'
@@ -31,80 +40,72 @@ function path(): string {
 const PROFILES: ExecutionProfile[] = ['quick', 'normal', 'deep']
 
 /**
- * The starting team.
+ * What a character's stated role implies about how they should work.
  *
- * Deliberately opinionated rather than empty: an app that opens with no agents
- * gives the user nothing to try. Permissions differ per agent, because that is
- * the point — a researcher has no business running shell commands.
+ * A project's roster is picked as *characters* — Jane, Lisbon, Cho — and each
+ * one arrives with a role written by their theme. Turning that role into
+ * instructions and permissions here is what lets a project be created from a
+ * cast list without asking the user to write eight system prompts first.
  *
- * Nobody starts spawned. Bringing an agent into the office is the user's
- * decision, and it is the moment the product is supposed to feel like hiring
- * someone.
+ * Permissions differ per role because that is the point: a researcher has no
+ * business running shell commands. Matching is on keywords rather than exact
+ * strings, because every theme names its own roles — "Technical Investigator",
+ * "Sales Lead" and "Lab Technician" all have to land somewhere sensible.
  */
-function defaults(): AgentConfig[] {
-  const now = Date.now()
-  const base = {
-    displayName: '',
-    modelId: null,
-    themeId: null,
-    enabled: true,
-    spawned: false,
-    workspace: null,
-    canTalkTo: [] as string[],
-    createdAt: now,
-    updatedAt: now
-  }
+interface RoleProfile {
+  instructions: string
+  capabilities: CapabilityId[]
+  profile: ExecutionProfile
+}
 
-  return [
-    {
-      ...base,
-      id: 'jane',
-      name: 'Jane',
-      role: 'Investigator',
-      characterSlot: 0,
-      providerId: 'openai',
+const ROLE_PROFILES: { match: RegExp; profile: RoleProfile }[] = [
+  {
+    match: /lead|manager|director|supervisor|chief|head/i,
+    profile: {
       instructions:
-        'You are the investigator of the team. Inspect evidence before drawing conclusions. Prefer evidence from actual files over inference. Never invent project details.',
-      capabilities: ['files.read', 'git.read', 'web.search'],
-      profile: 'normal'
-    },
-    {
-      ...base,
-      id: 'lisbon',
-      name: 'Lisbon',
-      role: 'Team Lead',
-      characterSlot: 1,
-      providerId: 'openai',
-      instructions:
-        'You are the team lead. Assess scope and risk, and say what should be done first and why. Keep answers short and decisive.',
+        'You lead this team. Assess scope and risk, and say what should be done first and why. Keep answers short and decisive.',
       capabilities: ['files.read', 'git.read', 'agents.talk'],
       profile: 'quick'
-    },
-    {
-      ...base,
-      id: 'cho',
-      name: 'Cho',
-      role: 'Developer',
-      characterSlot: 2,
-      providerId: 'openai',
+    }
+  },
+  {
+    match: /engineer|developer|programmer|technician|builder/i,
+    profile: {
       instructions:
         'You are a software engineer. Inspect the existing implementation before modifying it. Prefer minimal, safe changes. Run the relevant build or tests after a modification and report what actually happened.',
       capabilities: ['files.read', 'files.write', 'terminal.execute', 'git.read'],
       profile: 'deep'
-    },
-    {
-      ...base,
-      id: 'vanpelt',
-      name: 'Van Pelt',
-      role: 'Researcher',
-      characterSlot: 3,
-      providerId: 'openai',
+    }
+  },
+  {
+    match: /research|analyst|scientist|specialist/i,
+    profile: {
       instructions:
         'You are a research specialist. Use the web tools when current external information is required. Clearly separate sourced facts from your own inference, and cite the URL you took something from.',
       capabilities: ['files.read', 'web.search'],
       profile: 'normal'
     }
-  ]
+  },
+  {
+    match: /review|qa|test|audit/i,
+    profile: {
+      instructions:
+        'You review work. Read what actually changed before judging it, and say plainly what is wrong and what is fine. Do not rewrite; report.',
+      capabilities: ['files.read', 'git.read'],
+      profile: 'normal'
+    }
+  }
+]
+
+const GENERAL_PROFILE: RoleProfile = {
+  instructions:
+    'You investigate before you conclude. Prefer evidence from actual files over inference, and never invent project details.',
+  capabilities: ['files.read', 'git.read', 'web.search'],
+  profile: 'normal'
+}
+
+function roleProfile(role: string): RoleProfile {
+  return ROLE_PROFILES.find((r) => r.match.test(role))?.profile ?? GENERAL_PROFILE
 }
 
 let agents: AgentConfig[] | null = null
@@ -143,6 +144,16 @@ function normalise(raw: unknown): AgentConfig | null {
 
   return {
     id,
+    /*
+     * Never inferred from the open project.
+     *
+     * An agent written before projects existed genuinely has no project, and
+     * guessing the active one would silently adopt another project's agents
+     * into whichever one happened to be open at the time. The migration
+     * stamps them deliberately, once; everything else leaves an unstamped
+     * agent invisible, which is the safe reading.
+     */
+    projectId: typeof a.projectId === 'string' ? a.projectId : '',
     name,
     displayName: typeof a.displayName === 'string' ? a.displayName.trim() : '',
     role: typeof a.role === 'string' && a.role.trim() ? a.role.trim() : 'Agent',
@@ -169,26 +180,64 @@ function normalise(raw: unknown): AgentConfig | null {
   }
 }
 
+/**
+ * Every agent on disk, across every project.
+ *
+ * Internal, and exported only as `listAllAgents` for the two callers that
+ * genuinely need to see across projects: the migration, and id allocation.
+ * Everything else goes through `roster()`.
+ *
+ * There is no starting team any more. An agent belongs to a project, projects
+ * are created by the setup wizard, and the wizard seeds the roster from the
+ * cast the user picked — so inventing four agents here would put people in an
+ * office that does not exist yet, in a theme nobody has chosen.
+ */
 export function loadAgents(): AgentConfig[] {
   if (agents) return agents
   try {
     if (existsSync(path())) {
       const parsed = JSON.parse(readFileSync(path(), 'utf8'))
       const list = Array.isArray(parsed) ? parsed : []
-      const clean = list
-        .map(normalise)
-        .filter((a): a is AgentConfig => a !== null)
-      if (clean.length > 0) {
-        agents = clean
-        return agents
-      }
+      agents = list.map(normalise).filter((a): a is AgentConfig => a !== null)
+      return agents
     }
   } catch {
-    // A corrupt file should not stop the app; fall back to the defaults.
+    /*
+     * A corrupt file should not stop the app. It is deliberately *not*
+     * persisted over: an empty in-memory roster is recoverable by hand, and
+     * writing `[]` back would destroy the file that still holds the user's
+     * agents.
+     */
   }
-  agents = defaults()
-  persist()
+  agents = []
   return agents
+}
+
+/** Every agent in every project. Say so by name; the default is scoped. */
+export function listAllAgents(): AgentConfig[] {
+  return loadAgents()
+}
+
+/**
+ * Write the roster out.
+ *
+ * Every mutator here persists on its own, so this exists for exactly one
+ * caller: the migration, which stamps a project id onto records it holds
+ * directly. Giving it a named function beats adding a migration-shaped mutator
+ * to the store, and beats the migration reaching back in through a require.
+ */
+export function persistAgents(): void {
+  // Load first. Persisting before the file has been read would write the empty
+  // in-memory list over the roster it was about to be filled from.
+  loadAgents()
+  persist()
+}
+
+/** The open project's agents. The default view everything else gets. */
+function roster(): AgentConfig[] {
+  const projectId = getActiveProjectId()
+  if (!projectId) return []
+  return loadAgents().filter((a) => a.projectId === projectId)
 }
 
 function persist(): void {
@@ -200,11 +249,20 @@ function persist(): void {
 }
 
 export function listAgents(): AgentConfig[] {
-  return loadAgents()
+  return roster()
 }
 
+/**
+ * One agent, if it belongs to the open project.
+ *
+ * An agent from another project is reported as not existing rather than as
+ * refused. That is the honest answer from inside a project: the runtime, the
+ * tools and the UI have no concept of an agent they cannot address, and a
+ * distinct "exists but is elsewhere" result would only invite callers to
+ * handle a case that must never be reachable.
+ */
 export function getAgent(id: string): AgentConfig | undefined {
-  return loadAgents().find((a) => a.id === id)
+  return roster().find((a) => a.id === id)
 }
 
 /** Turn a name into a stable, readable, unique id. */
@@ -220,14 +278,25 @@ function idFor(name: string, taken: Set<string>): string {
   return `${base}-${n}`
 }
 
+/**
+ * Create or update an agent in the open project.
+ *
+ * Editing is scoped — an id belonging to another project is not found, so it
+ * falls through to creation rather than letting one project reach into
+ * another's roster through a guessed id. Ids themselves are allocated against
+ * *every* project, because they key conversation files and task records, and
+ * two agents called `jane` in different projects would share both.
+ */
 export function upsertAgent(input: Partial<AgentConfig> & { id?: string }): AgentConfig {
-  const list = loadAgents()
-  const existing = input.id ? list.find((a) => a.id === input.id) : undefined
+  const all = loadAgents()
+  const mine = roster()
+  const existing = input.id ? mine.find((a) => a.id === input.id) : undefined
 
   if (existing) {
     const merged = normalise({ ...existing, ...input, id: existing.id })
     if (merged) {
       merged.createdAt = existing.createdAt
+      merged.projectId = existing.projectId
       merged.updatedAt = Date.now()
       Object.assign(existing, merged)
       persist()
@@ -235,38 +304,100 @@ export function upsertAgent(input: Partial<AgentConfig> & { id?: string }): Agen
     return existing
   }
 
-  const taken = new Set(list.map((a) => a.id))
+  const projectId = getActiveProjectId()
+  if (!projectId) throw new Error('No project is open.')
+
+  const taken = new Set(all.map((a) => a.id))
   const created = normalise({
-    characterSlot: list.length,
+    // Counted within the project, because the slot indexes that project's cast.
+    characterSlot: mine.length,
     capabilities: [...DEFAULT_CAPABILITIES],
     // Stated rather than left absent, so a newly created agent is never
     // mistaken for one migrated from a roster that predates spawning.
     spawned: false,
     ...input,
+    projectId,
     id: input.id?.trim() || idFor(String(input.name ?? 'agent'), taken),
     createdAt: Date.now(),
     updatedAt: Date.now()
   })
   if (!created) throw new Error('An agent needs a name.')
 
-  list.push(created)
+  all.push(created)
   persist()
   return created
 }
 
 export function deleteAgent(id: string): void {
-  const list = loadAgents()
-  const i = list.findIndex((a) => a.id === id)
-  if (i === -1) return
-  list.splice(i, 1)
-  // A relationship pointing at a deleted agent would be a permission nobody
-  // can see and nobody granted. Clean them up with the agent itself.
-  for (const other of list) {
+  const all = loadAgents()
+  const target = roster().find((a) => a.id === id)
+  if (!target) return
+
+  all.splice(all.indexOf(target), 1)
+  /*
+   * A relationship pointing at a deleted agent would be a permission nobody
+   * can see and nobody granted. Only this project's agents can be holding one
+   * — a link never crosses projects — so only they are swept.
+   */
+  for (const other of roster()) {
     const before = other.canTalkTo.length
     other.canTalkTo = other.canTalkTo.filter((x) => x !== id)
     if (other.canTalkTo.length !== before) other.updatedAt = Date.now()
   }
   persist()
+}
+
+/**
+ * Create one agent per character the setup wizard picked.
+ *
+ * The roster arrives as characters because that is how the user chose it, and
+ * their stated roles decide the instructions and permissions each one starts
+ * with. `characterSlot` is the index into the project's roster, so the world,
+ * the selector and the roster page all resolve the same face for the same
+ * agent without any of them consulting the theme's full cast.
+ *
+ * Takes the entries rather than reading a theme: characters live beside canvas
+ * code the main process cannot import, and keeping the lookup on the renderer
+ * side is what preserves the rule that nothing behind the IPC boundary knows a
+ * theme id from any other string.
+ */
+export function seedRoster(
+  projectId: string,
+  entries: RosterEntry[],
+  providerId: string
+): AgentConfig[] {
+  const all = loadAgents()
+  const taken = new Set(all.map((a) => a.id))
+  const created: AgentConfig[] = []
+  const now = Date.now()
+
+  entries.forEach((entry, slot) => {
+    const profile = roleProfile(entry.role)
+    const agent = normalise({
+      id: idFor(entry.name, taken),
+      projectId,
+      name: entry.name,
+      role: entry.role,
+      providerId,
+      instructions: profile.instructions,
+      capabilities: profile.capabilities,
+      profile: profile.profile,
+      characterSlot: slot,
+      enabled: true,
+      // Nobody starts spawned. Bringing an agent into the office is the user's
+      // decision, and it is the moment the product feels like hiring someone.
+      spawned: false,
+      createdAt: now,
+      updatedAt: now
+    })
+    if (!agent) return
+    taken.add(agent.id)
+    all.push(agent)
+    created.push(agent)
+  })
+
+  persist()
+  return created
 }
 
 /**
@@ -308,8 +439,9 @@ export type { LinkResult } from './relationships'
  * one an unrelated code path can walk straight past.
  */
 export function connectAgents(aId: string, bId: string): LinkResult {
-  const roster = loadAgents()
-  const verdict = canConnect(roster, aId, bId)
+  // Scoped: a link never crosses projects, so the graph the rules are applied
+  // to is this project's graph and the caps are counted within it.
+  const verdict = canConnect(roster(), aId, bId)
   if (!verdict.ok) return verdict
 
   const a = getAgent(aId)
@@ -372,7 +504,7 @@ export function disconnectAgents(aId: string, bId: string): LinkResult {
  * can travel along, so it counts against the cap and it is shown to the user.
  */
 export function connectionsOf(agent: AgentConfig): string[] {
-  return graphConnectionsOf(loadAgents(), agent.id)
+  return graphConnectionsOf(roster(), agent.id)
 }
 
 /**
@@ -382,5 +514,5 @@ export function connectionsOf(agent: AgentConfig): string[] {
  * measured against.
  */
 export function groupOf(agentId: string): string[] {
-  return graphGroupOf(loadAgents(), agentId)
+  return graphGroupOf(roster(), agentId)
 }

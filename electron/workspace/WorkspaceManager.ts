@@ -72,6 +72,26 @@ export async function pickWorkspace(): Promise<WorkspaceInfo> {
   return setWorkspace(result.filePaths[0])
 }
 
+/**
+ * Ask for a folder without adopting it.
+ *
+ * Project setup needs a path several steps before the project exists, and
+ * opening the workspace at that point would point every file tool at a folder
+ * the user has not finished choosing — and would strand them there if they
+ * abandoned the wizard. The workspace is set when the project is opened, and
+ * only then.
+ */
+export async function pickFolder(): Promise<{ path: string; name: string } | null> {
+  const result = await dialog.showOpenDialog({
+    title: 'Choose a project folder',
+    properties: ['openDirectory', 'createDirectory']
+  })
+  if (result.canceled || result.filePaths.length === 0) return null
+
+  const path = resolve(result.filePaths[0])
+  return { path, name: path.split(/[\\/]/).filter(Boolean).pop() ?? path }
+}
+
 /* ------------------------------------------------------- path validation -- */
 
 export class WorkspaceError extends Error {}

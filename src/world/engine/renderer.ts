@@ -1,4 +1,5 @@
 import type { Theme, ThemePalette } from '../../themes/types'
+import type { CharacterDef } from '../../characters/character.types'
 import type { CharacterRuntime } from '../world.types'
 import {
   bakeOps,
@@ -73,7 +74,15 @@ export class WorldRenderer {
   private sheets = new Map<string, CharacterSheet>()
   private motes: Mote[] = []
 
-  constructor(private theme: Theme) {
+  /**
+   * @param cast The project's characters. Sheets are baked for these and only
+   *   these — an unchosen character has no art in this renderer at all, which
+   *   is a cheaper world as well as an isolated one.
+   */
+  constructor(
+    private theme: Theme,
+    cast: CharacterDef[]
+  ) {
     this.pal = theme.palette
     const scene = theme.scene
 
@@ -82,7 +91,7 @@ export class WorldRenderer {
       .map((p) => bakeOps(p.ops, this.pal, p.baseY))
       .filter((p): p is BakedProp => p !== null)
 
-    for (const c of theme.characters) {
+    for (const c of cast) {
       this.sheets.set(c.id, buildWorldSheet(c.appearance, this.pal.brand))
     }
 
