@@ -24,6 +24,9 @@ import { useProviders } from '../../providers/useProviders'
 
 interface Props {
   theme: Theme
+  /** Everything that can do work, projected once for the whole workspace. */
+  workers: Worker[]
+  onSpawn: () => void
 }
 
 const TABS: { id: TabId; label: string }[] = [

@@ -10,7 +10,8 @@ import type {
   ProviderStatus,
   RuntimeEvent,
   SessionLine,
-  TerminalSession
+  TerminalSession,
+  ThreadInfo
 } from '../shared/providerApi'
 
 /**
@@ -191,6 +192,10 @@ interface BackstageState {
 
   setProviders: (statuses: ProviderStatus[]) => void
   setChatTarget: (target: string) => void
+  /** Show a worker's group conversation, or null to go back to its own. */
+  setThreadTarget: (agentId: string | null) => Promise<void>
+  /** Reload the open thread, after it or its membership changed. */
+  refreshThread: () => Promise<void>
   selectAgent: (agentId: string | null) => void
   setTab: (tab: TabId) => void
   setOpenFile: (path: string | null) => void
@@ -247,6 +252,9 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   providers: [],
   chatTarget: ALL_AGENTS,
   selectedAgentId: null,
+  threadTarget: null,
+  thread: null,
+  threadMessages: {},
 
   tab: 'messages',
   openFile: null,
@@ -289,8 +297,39 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   setChatTarget: (chatTarget) =>
     set({
       chatTarget,
-      selectedAgentId: chatTarget === ALL_AGENTS ? null : chatTarget
+      selectedAgentId: chatTarget === ALL_AGENTS ? null : chatTarget,
+      /*
+       * Choosing a worker always shows their own conversation. Leaving a
+       * thread open across a switch would put the user in Jane's group
+       * conversation while the header said they were talking to Michael.
+       */
+      threadTarget: null,
+      thread: null
     }),
+
+  setThreadTarget: async (agentId) => {
+    if (!agentId) {
+      set({ threadTarget: null, thread: null })
+      return
+    }
+    const thread = await window.backstage?.threads.for(agentId)
+    if (!thread) {
+      set({ threadTarget: null, thread: null })
+      return
+    }
+    const messages = await window.backstage.threads.load(thread.id)
+    set((s) => ({
+      threadTarget: agentId,
+      thread,
+      threadMessages: { ...s.threadMessages, [thread.id]: messages }
+    }))
+  },
+
+  refreshThread: async () => {
+    const { threadTarget } = get()
+    if (!threadTarget) return
+    await get().setThreadTarget(threadTarget)
+  },
 
   selectAgent: (selectedAgentId) => set({ selectedAgentId }),
   setTab: (tab) => set({ tab }),

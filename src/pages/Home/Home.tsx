@@ -5,6 +5,8 @@ import { WorldPanel } from './WorldPanel'
 import { CommandCenter } from './CommandCenter'
 import { WorkspaceStatus } from './WorkspaceStatus'
 import { useWorkspaceEvents } from '../../workspace/useWorkspaceEvents'
+import { useWorkers } from '../../agents/useWorkers'
+import { SpawnAgentDialog } from './SpawnAgentDialog'
 
 /**
  * The workspace.
@@ -23,9 +25,18 @@ export function Home() {
   const switching = useBackstage((s) => s.switching)
   const { theme, engine } = useWorldEngine(themeId)
   const [open, setOpen] = useState(true)
+  const [spawning, setSpawning] = useState(false)
+  const setChatTarget = useBackstage((s) => s.setChatTarget)
 
   // Real file, PTY and CLI-session events feed the world and every surface.
   useWorkspaceEvents()
+
+  /*
+   * One worker list for the whole workspace. The world, the selector, the
+   * chat and the inspector are all views of it, which is the only reason they
+   * can be relied on to agree about who is present and what they are doing.
+   */
+  const workers = useWorkers()
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -36,7 +47,7 @@ export function Home() {
           needs in order to fit the room correctly.
         */}
         <div className="min-w-0 flex-1">
-          <WorldPanel engine={engine} switching={switching} />
+          <WorldPanel engine={engine} switching={switching} workers={workers} />
         </div>
 
         {open ? (
@@ -46,10 +57,27 @@ export function Home() {
           */
           <div className="relative w-[38%] min-w-[380px] max-w-[620px] shrink-0">
             <DockToggle open onClick={() => setOpen(false)} />
-            <CommandCenter theme={theme} />
+            <CommandCenter
+              theme={theme}
+              workers={workers}
+              onSpawn={() => setSpawning(true)}
+            />
           </div>
         ) : (
           <DockToggle open={false} onClick={() => setOpen(true)} />
+        )}
+
+        {spawning && (
+          <SpawnAgentDialog
+            theme={theme}
+            onClose={() => setSpawning(false)}
+            /*
+             * Talk to whoever was just hired. Spawning someone and then having
+             * to find them in a dropdown is the wrong end of the interaction —
+             * the reason to add an agent is to give it something to do.
+             */
+            onSpawned={(agent) => setChatTarget(agent.id)}
+          />
         )}
       </div>
 
