@@ -1,0 +1,9 @@
+{
+  "type": "agent.delegated",
+  "at": 1703020000000,
+  "taskId": "delegate-1703020000000",
+  "agentId": "jane",
+  "agentName": "Jane",
+  "targetAgentId": "lisbon",
+  "message": "Write a short 4-line poem about the project's dependencies. Mention or allude to these runtime dependencies: @fontsource/inter, @fontsource/jetbrains-mono, @fontsource/pixelify-sans, @google/genai, @lydell/node-pty, @xterm/addon-fit, @xterm/xterm, chokidar, openai, react, react-dom, zustand. Keep it concise and evocative."
+}
