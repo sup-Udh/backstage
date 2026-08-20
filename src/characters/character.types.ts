@@ -35,6 +35,47 @@ export type HairStyle =
   | 'bob'
   | 'ponytail'
   | 'buzz'
+  /** A hard side parting with a defined hairline. */
+  | 'parted'
+  /** Shoulder-length with volume at the sides rather than length. */
+  | 'waves'
+  /** Round and tall; the widest silhouette in any cast. */
+  | 'afro'
+  /** Gathered high, so the outline has a spike only they have. */
+  | 'topknot'
+  /** No hair at all. The skull *is* the silhouette. */
+  | 'bald'
+
+/* ------------------------------------------------------------------ face -- */
+
+/**
+ * The face.
+ *
+ * These exist because hair and clothing were carrying the whole identity: two
+ * characters with different hair still had the same face underneath, so at
+ * sprite size a cast read as one person in eight wigs. Each of these moves a
+ * handful of pixels, and together they are what makes a face belong to
+ * somebody rather than to the skeleton.
+ *
+ * Every one is optional and every default reproduces the original face, so a
+ * character is still one line until somebody decides to draw them properly.
+ */
+
+/** Head width. Changes the silhouette above the shoulders. */
+export type FaceWidth = 'narrow' | 'regular' | 'wide'
+
+/** How far apart the eyes sit. One pixel either way reads as a different person. */
+export type EyeSpacing = 'close' | 'regular' | 'wide'
+
+/** Brow shape. Carries most of the expression, and most of the character. */
+export type BrowShape = 'flat' | 'angled' | 'arched' | 'heavy'
+
+export type NoseShape = 'small' | 'straight' | 'broad'
+
+/** The bottom of the head, which decides whether a face reads as soft or hard. */
+export type JawShape = 'soft' | 'square' | 'narrow'
+
+export type FacialHair = 'none' | 'stubble' | 'moustache' | 'beard' | 'goatee'
 
 /** Shoulder width and torso mass. Changes the silhouette, not the height. */
 export type Build = 'slim' | 'regular' | 'broad'
@@ -122,6 +163,20 @@ export interface CharacterAppearance {
   /** Accent colour for the accessory, so it can carry the brand yellow. */
   accessoryColor?: string
   expression?: Expression
+
+  /* --- the face. Every default reproduces the original head. --- */
+  faceWidth?: FaceWidth
+  eyeSpacing?: EyeSpacing
+  browShape?: BrowShape
+  noseShape?: NoseShape
+  jaw?: JawShape
+  facialHair?: FacialHair
+  /**
+   * Facial hair colour. Defaults to the hair, which is right for most people
+   * and wrong for exactly the ones worth drawing — a grey beard under dark
+   * hair is a whole character on its own.
+   */
+  facialHairColor?: string
 }
 
 export interface CharacterDef {

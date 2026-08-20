@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CharacterDef } from '../../characters/character.types'
 import { CharacterSprite } from '../../world/CharacterSprite'
 import { STATUS_GLYPH, STATUS_LABEL } from '../../characters/character.states'
@@ -13,7 +13,6 @@ interface Props {
   others: Worker[]
   /** Resolved names for this worker's existing connections. */
   connections: Worker[]
-  onFocus: () => void
   onClose: () => void
   onOpenChat: () => void
   onOpenThread: () => void
@@ -35,7 +34,7 @@ const ACTIVE = ['working', 'thinking', 'talking', 'success']
  * Unlike the hover card this sticks around, so it carries the things the user
  * actually wants to do to an agent: see what it is working on, talk to it,
  * connect it to a teammate, and stop it. Every control acts on the real
- * runtime — Stop cancels the execution or interrupts the session, and Connect
+ * runtime â€” Stop cancels the execution or interrupts the session, and Connect
  * writes a relationship the main process has to accept.
  */
 export function AgentInspector({
@@ -44,7 +43,6 @@ export function AgentInspector({
   cast,
   others,
   connections,
-  onFocus,
   onClose,
   onOpenChat,
   onOpenThread,
@@ -75,7 +73,7 @@ export function AgentInspector({
    *
    * Like connects to like. An agent's relationships are persisted
    * configuration and a session's are a property of two running processes, so
-   * there is no store that could hold a link between one of each — offering
+   * there is no store that could hold a link between one of each â€” offering
    * it would be offering something that could not be honoured.
    */
   const candidates = useMemo(
@@ -141,7 +139,7 @@ export function AgentInspector({
                   title="Rename this session"
                   className="font-mono text-[10px] text-dim transition-colors hover:text-brand"
                 >
-                  ✎
+                  âœŽ
                 </button>
               )}
             </p>
@@ -151,7 +149,7 @@ export function AgentInspector({
             {worker.role}
           </p>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-dim">
-            {worker.provider} · {worker.model}
+            {worker.provider} Â· {worker.model}
           </p>
         </div>
 
@@ -161,7 +159,7 @@ export function AgentInspector({
           aria-label="Close"
           className="shrink-0 font-mono text-xs text-dim transition-colors hover:text-cream"
         >
-          ✕
+          âœ•
         </button>
       </header>
 
@@ -189,7 +187,7 @@ export function AgentInspector({
               onClick={onViewTask}
               className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-brand underline-offset-2 transition-colors hover:text-brand-lite hover:underline"
             >
-              View task →
+              View task â†’
             </button>
           )}
         </div>
@@ -239,7 +237,7 @@ export function AgentInspector({
                     className="flex items-center gap-1.5 border-2 border-ink-3 bg-ink-2 px-1.5 py-0.5"
                   >
                     <span aria-hidden className="font-mono text-[10px] text-brand">
-                      ↔
+                      â†”
                     </span>
                     <span className="min-w-0 flex-1 truncate font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-cream">
                       {other.name}
@@ -250,7 +248,7 @@ export function AgentInspector({
                       title={`Remove the connection to ${other.name}`}
                       className="shrink-0 font-mono text-[10px] text-dim transition-colors hover:text-rust-lite"
                     >
-                      ✕
+                      âœ•
                     </button>
                   </li>
                 ))}
@@ -272,7 +270,7 @@ export function AgentInspector({
                 onBlur={() => setConnecting(false)}
                 className="mt-1 w-full border-2 border-brand bg-ink-2 px-1.5 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-cream outline-none"
               >
-                <option value="">Connect to…</option>
+                <option value="">Connect toâ€¦</option>
                 {candidates.map((o) => (
                   <option key={o.id} value={o.id}>
                     {o.name}
@@ -327,14 +325,14 @@ export function AgentInspector({
               }
               className="flex-1 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-rust hover:text-rust-lite disabled:text-dim disabled:hover:border-ink-3 disabled:hover:text-dim"
             >
-              {worker.status === 'stopping' ? 'Stopping…' : 'Stop'}
+              {worker.status === 'stopping' ? 'Stoppingâ€¦' : 'Stop'}
             </button>
             <button
               type="button"
               onClick={() => (onSettings ? onSettings() : setRecasting((v) => !v))}
               title={
                 onSettings
-                  ? 'Open this agent’s full configuration'
+                  ? 'Open this agentâ€™s full configuration'
                   : 'Choose which character stands in for this session'
               }
               className="flex-1 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand"

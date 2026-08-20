@@ -163,7 +163,15 @@ export interface OfficeGrid {
 
 const SIDE_MARGIN = 40
 const WALL_SLOT_W = 88
-/** The narrowest gap two wall panels may sit at before they read as one. */
+/**
+ * The spacing wall panels are counted at.
+ *
+ * Exactly the gap the fixed five-panel wall used at 640 wide, so the default
+ * room still resolves to five panels in the same places. Deriving the count
+ * from a smaller "minimum" gap looked reasonable and quietly produced six.
+ */
+const WALL_GAP = 30
+/** The narrowest gap two panels may sit at before they read as one. */
 const WALL_GAP_MIN = 16
 
 /** Where the desk columns start, and how wide a work surface is. */
@@ -244,7 +252,7 @@ export function officeGrid(
    */
   const usable = width - SIDE_MARGIN * 2
   const slots = clamp(
-    Math.round((usable + WALL_GAP_MIN) / (WALL_SLOT_W + WALL_GAP_MIN)),
+    Math.round((usable + WALL_GAP) / (WALL_SLOT_W + WALL_GAP)),
     3,
     9
   )

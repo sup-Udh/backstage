@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import type { WorldEngine } from '../engine/WorldEngine'
 import { STATUS_GLYPH, STATUS_LABEL } from '../../characters/character.states'
 import type { AgentStatus } from '../../agents/agent.types'
-import { WorldLabel, type LabelTone } from './WorldLabel'
+import { WorldLabel } from './WorldLabel'
 import { labelFontSize } from './labelSpec'
 
 interface Props {
@@ -13,17 +13,15 @@ interface Props {
   selectedId?: string | null
 }
 
-/** Statuses that read as "this agent is doing something". */
-const ACTIVE: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
-
 /**
- * Clearance between a label and the character it belongs to, in CSS pixels.
+ * Statuses that read as "this agent is doing something".
  *
- * Small, because the pair has to read as one unit — name, character, status
- * stacked tightly enough that a crowded room still shows which label belongs
- * to whom.
+ * Only these get a status chip. An idle agent shows a name and nothing else,
+ * which is what makes a room full of people readable: in a team of six with
+ * one working, there is exactly one status on screen and it is the one worth
+ * reading. Labelling everybody's idleness was most of the clutter.
  */
-const GAP = 3
+const ACTIVE: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
 
 /**
  * How many rows a label may be pushed away from its character to clear one
@@ -69,12 +67,6 @@ function overlaps(a: Rect, b: Rect): boolean {
 export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
   const views = useSyncExternalStore(engine.subscribeViews, engine.getViews)
 
-  /*
-   * Zoom is React state because it changes the rendered font size, which is a
-   * real re-render. It only moves when the user zooms, so this is cheap.
-   */
-  const [zoom, setZoom] = useState(() => engine.getCamera().scale)
-
   const nodes = useRef(new Map<string, HTMLDivElement>())
   const sizes = useRef(new Map<string, Rect>())
 
@@ -98,7 +90,7 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
     }
   }
 
-  useLayoutEffect(measure, [views, zoom, hoveredId, selectedId])
+  useLayoutEffect(measure, [views, hoveredId, selectedId])
 
   // Web fonts settle after first paint, and a label measured in the fallback
   // face would be laid out at the wrong width.
@@ -115,9 +107,6 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
 
   useEffect(() => {
     return engine.subscribeFrame((anchors) => {
-      const cam = engine.getCamera()
-      if (cam.scale !== zoom) setZoom(cam.scale)
-
       const placed: Rect[] = []
 
       /*
@@ -174,22 +163,16 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
         }
       }
     })
-  }, [engine, hoveredId, zoom])
+  }, [engine, hoveredId])
 
-  const nameSize = labelFontSize('character-name', zoom)
-  const statusSize = labelFontSize('character-status', zoom)
+  const nameSize = labelFontSize('character-name')
+  const statusSize = labelFontSize('character-status')
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
       {views.map((v) => {
         const active = ACTIVE.includes(v.status)
         const chosen = v.characterId === selectedId
-        const nameTone: LabelTone = chosen ? 'selected' : 'default'
-        const statusTone: LabelTone = chosen
-          ? 'selected'
-          : active
-            ? 'active'
-            : 'muted'
 
         return (
           <div key={v.characterId}>
@@ -198,16 +181,23 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
               kind="character-name"
               text={v.name}
               fontSize={nameSize}
-              tone={nameTone}
+              tone={chosen ? 'selected' : 'default'}
             />
-            <WorldLabel
-              ref={register(`${v.characterId}:status`)}
-              kind="character-status"
-              text={STATUS_LABEL[v.status]}
-              glyph={STATUS_GLYPH[v.status]}
-              fontSize={statusSize}
-              tone={statusTone}
-            />
+            {/*
+              A status only when there is one worth reading. Six idle agents
+              used to carry six IDLE plates, which is six pieces of text
+              saying nothing is happening — the room says that already.
+            */}
+            {(active || chosen) && (
+              <WorldLabel
+                ref={register(`${v.characterId}:status`)}
+                kind="character-status"
+                text={STATUS_LABEL[v.status]}
+                glyph={STATUS_GLYPH[v.status]}
+                fontSize={statusSize}
+                tone={chosen ? 'selected' : 'active'}
+              />
+            )}
           </div>
         )
       })}

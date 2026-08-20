@@ -19,14 +19,12 @@ interface Hover {
 }
 
 /**
- * The viewport the landing world is shown through, in CSS pixels.
+ * The frame the landing world is shown through, in CSS pixels.
  *
- * A window into the office rather than the whole floor plan. The room is now
- * far larger than a page section can show at a zoom where anything is
- * legible, so fitting all of it would mean drawing at 1x — every character
- * ten pixels tall and the furniture unreadable. Framing a portion of a large
- * room is also simply the better shot: it implies the space continues past
- * the frame, which is exactly what the landing page is trying to say.
+ * The room is built to fit this rather than being cropped by it: the engine is
+ * handed these dimensions and lays out an office of exactly that size. The
+ * bounds keep the shot cinematic — wide, not tall, and never so large that the
+ * hero copy is pushed off the page.
  */
 const VIEW = { minW: 420, maxW: 1120, minH: 280, maxH: 560 }
 /** How far below the fold the world may run before it gives up height. */
@@ -57,17 +55,16 @@ export function World({ theme, engine, switching = false }: Props) {
 
 
   /*
-   * Size the viewport to the space actually available.
+   * Size the frame to the space actually available.
    *
    * Width comes from the container and height from what is left of the
    * viewport below the hero copy, so a short window gets a shorter world
    * rather than one that runs off the bottom.
    *
-   * The canvas is deliberately *not* sized to the room. It is a fixed window
-   * that the engine's camera looks through, which is what lets the same
-   * office appear here and in the workspace at the same zoom, with the same
-   * character-to-furniture proportions, however differently the two are
-   * laid out on the page.
+   * The engine then builds a room of exactly this size. That is what lets the
+   * same office appear here and in the workspace at the same proportions,
+   * however differently the two are laid out on the page — a shorter frame
+   * gets a shorter room, not a cropped one.
    */
   const measure = useCallback(() => {
     const el = wrapRef.current
@@ -90,11 +87,7 @@ export function World({ theme, engine, switching = false }: Props) {
       const ctx = canvas.getContext('2d')
       if (ctx) ctx.imageSmoothingEnabled = false
     }
-    /*
-     * The engine aims itself the first time it learns its viewport, centring
-     * on the desks at the shared opening zoom. Calling `fit` here would
-     * override that and pull straight back out to the whole floor plan.
-     */
+    // The engine lays the room out to fill exactly this frame.
     engine.setViewport(w, h)
   }, [engine])
 
@@ -122,11 +115,9 @@ export function World({ theme, engine, switching = false }: Props) {
       engine.setHovered(hit?.id ?? null)
       setHover((prev) => {
         if (!hit) return prev === null ? prev : null
-        const cam = engine.getCamera()
-        const offX = Math.round(cam.x * cam.scale)
-        const offY = Math.round(cam.y * cam.scale)
-        const left = Math.round(hit.x) * cam.scale - offX
-        const top = Math.round(hit.y) * cam.scale - offY
+        const { scale } = engine.getCamera()
+        const left = Math.round(hit.x) * scale
+        const top = Math.round(hit.y) * scale
         if (prev && prev.id === hit.id && prev.left === left && prev.top === top) {
           return prev
         }

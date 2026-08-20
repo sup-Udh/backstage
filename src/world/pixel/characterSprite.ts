@@ -107,11 +107,58 @@ export function appearancePalette(a: CharacterAppearance): Palette {
 
 /* ---------------------------------------------------------------- head --- */
 
-/** Head geometry. Narrow, so the shoulders always win the silhouette. */
-const HEAD_X = 6
-const HEAD_W = 8
+/**
+ * Head geometry.
+ *
+ * Narrow, so the shoulders always win the silhouette — but no longer identical
+ * for everybody. Width, jaw and the placement of every feature are derived per
+ * character, because hair and clothing were carrying the whole identity: two
+ * characters with different hair still had the same face underneath, and at
+ * sprite size a cast read as one person in eight wigs.
+ *
+ * The centre line stays at x=10 whatever the width, so the nose, mouth and
+ * neck line up with the torso for everyone.
+ */
 const HEAD_Y = 2
 const HEAD_H = 9
+const CENTRE = 10
+
+interface Head {
+  /** Left edge and width of the skull. */
+  x: number
+  w: number
+  /** Top of the skull, already offset by the frame's bob. */
+  y: number
+  h: number
+  /** Vertical centre line. Always 10. */
+  cx: number
+}
+
+function headGeom(a: CharacterAppearance, dy: number): Head {
+  // 7 / 8 / 9 wide. One pixel either side of the head is clearly visible at
+  // this size, which is why the steps are single pixels where the shoulders'
+  // are not.
+  const w = a.faceWidth === 'narrow' ? 7 : a.faceWidth === 'wide' ? 9 : 8
+  return { x: CENTRE - (w >> 1), w, y: HEAD_Y + dy, h: HEAD_H, cx: CENTRE }
+}
+
+/**
+ * Where each eye's left edge sits.
+ *
+ * Measured out from the centre line rather than in from the head's edge, so
+ * spacing is independent of face width — a wide face with close-set eyes is a
+ * different person from a narrow face with the same spacing, and deriving one
+ * from the other would have collapsed them into the same drawing.
+ */
+function eyeColumns(a: CharacterAppearance, head: Head): { l: number; r: number } {
+  const gap = a.eyeSpacing === 'close' ? 1 : a.eyeSpacing === 'wide' ? 3 : 2
+  return {
+    l: head.cx - Math.ceil(gap / 2) - EYE_W,
+    r: head.cx + Math.floor(gap / 2)
+  }
+}
+
+const EYE_W = 2
 
 /**
  * Hair, drawn in two passes: `back` sits behind the head (length, volume) and

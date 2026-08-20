@@ -318,9 +318,13 @@ export class WorldEngine {
    * Characters are carried across proportionally rather than left where they
    * were: their coordinates are in scene pixels, so a room that has changed
    * shape would otherwise leave somebody standing inside a filing cabinet, or
-   * outside the room altogether. Their reserved spots are released first,
-   * because the desks they were holding no longer exist — the director hands
-   * out new ones from the new grid on the next status change.
+   * outside the room altogether.
+   *
+   * Their claims are dropped rather than translated. A new Director starts
+   * with an empty reservation table — the desks they were holding do not exist
+   * in the new grid — so clearing the fields on each character is what keeps
+   * the two in step. Blanking `lastStatus` makes the next tick re-place
+   * everybody properly instead of leaving them wherever the scaling put them.
    */
   private rebuildScene(width: number, height: number): void {
     const previous = this.scene
@@ -334,14 +338,11 @@ export class WorldEngine {
     const sy = scene.height / previous.height
 
     for (const c of this.chars) {
-      this.director.release(c)
       c.x = Math.round(c.x * sx)
       c.y = Math.round(c.y * sy)
       c.path = []
       c.desk = null
       c.spotKey = null
-      // Force the director to re-place them against the new grid on the next
-      // tick, rather than leaving them standing wherever the scaling put them.
       c.lastStatus = null
     }
   }
