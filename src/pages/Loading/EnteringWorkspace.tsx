@@ -41,18 +41,22 @@ interface Step {
 }
 
 export function EnteringWorkspace() {
+  const showProjects = useBackstage((s) => s.showProjects)
   const showSetup = useBackstage((s) => s.showSetup)
-  const openProject = useBackstage((s) => s.openProject)
   const exitToLanding = useBackstage((s) => s.exitToLanding)
 
   const bootstrap = useProject((s) => s.bootstrap)
   const adoptLegacy = useProject((s) => s.adoptLegacy)
-  const refreshTeam = useTeam((s) => s.refresh)
 
+  /*
+   * Two steps, because two things happen. There used to be a third, "Assembling
+   * team", from when this screen also opened a project and loaded its roster —
+   * it now hands over to the picker instead, and a step that reports work
+   * nobody is doing is exactly the invented progress the note above rejects.
+   */
   const [steps, setSteps] = useState<Step[]>([
     { label: 'Initialising workspace', done: false },
-    { label: 'Loading theme', done: false },
-    { label: 'Assembling team', done: false }
+    { label: 'Finding your projects', done: false }
   ])
   const [failed, setFailed] = useState<string | null>(null)
 
@@ -106,37 +110,41 @@ export function EnteringWorkspace() {
        * the main process, which is what points the workspace at it — so the
        * roster load below has something to be scoped to.
        */
-      const { project, legacy } = await bootstrap()
+      const { projects, legacy } = await bootstrap()
       if (!live) return
       mark(0)
 
       /*
-       * Step two: the world.
+       * Step two: pre-project state, if there is any.
        *
-       * An install from before projects existed is adopted here rather than
-       * being shown the wizard. The user already has a workspace, a team and a
-       * theme; asking them to choose all three again would be asking them to
-       * re-enter what the app is looking straight at.
+       * An install from before projects existed is folded into one here rather
+       * than being shown the wizard. The user already has a workspace, a team
+       * and a theme; asking them to choose all three again would be asking
+       * them to re-enter what the app is looking straight at. It becomes an
+       * ordinary project in the list, and they still choose it.
        *
        * Only when there is a team to keep, though. A folder with no agents
        * behind it is not a project anybody built — adopting it would open an
        * empty office and leave the user to hire everyone by hand, when the
-       * wizard exists to do exactly that. It goes to setup instead, with the
-       * folder already filled in.
+       * wizard exists to do exactly that.
        */
-      let opened = project
-      if (!opened && legacy?.workspacePath && legacy.agentCount > 0) {
-        opened = await adoptLegacy(folderName(legacy.workspacePath))
+      let known = projects
+      if (known.length === 0 && legacy?.workspacePath && legacy.agentCount > 0) {
+        const adopted = await adoptLegacy(folderName(legacy.workspacePath))
+        if (adopted) known = [adopted]
       }
       if (!live) return
       mark(1)
 
-      // Step three: the roster, which only exists once a project is open.
-      if (opened) await refreshTeam()
-      if (!live) return
-      mark(2)
-
-      handOver(opened ? openProject : showSetup)
+      /*
+       * And then the user chooses.
+       *
+       * Note what is *not* here any more: opening whatever was last active.
+       * Initialisation finds out what exists; it does not decide which folder
+       * a team is about to be given write access to. With nothing to choose
+       * between, the wizard is the only honest destination.
+       */
+      handOver(known.length > 0 ? showProjects : showSetup)
     }
 
     void run().catch((err: unknown) => {
@@ -164,8 +172,8 @@ export function EnteringWorkspace() {
         return
       }
       void api
-        .active()
-        .then((p) => (p ? openProject() : showSetup()))
+        .list()
+        .then((found) => (found.length > 0 ? showProjects() : showSetup()))
         .catch(() => showSetup())
     }, MAX_MS)
 
@@ -173,7 +181,7 @@ export function EnteringWorkspace() {
       live = false
       window.clearTimeout(cap)
     }
-  }, [bootstrap, adoptLegacy, refreshTeam, openProject, showSetup])
+  }, [bootstrap, adoptLegacy, showProjects, showSetup])
 
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center bg-cream px-6">
