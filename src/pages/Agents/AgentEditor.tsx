@@ -7,15 +7,23 @@ import type {
 } from '../../shared/providerApi'
 import { DEFAULT_CAPABILITIES } from '../../shared/capabilities'
 import type { CapabilityId } from '../../shared/agents'
-import { getTheme, themeList } from '../../themes'
+import type { CharacterDef } from '../../characters/character.types'
+import { castForSlot } from '../../project/cast'
 import { CharacterSprite } from '../../world/CharacterSprite'
 import { StatusChip } from '../../components/AgentStatus/StatusChip'
 
 interface Props {
   agent: Partial<AgentConfig> | null
   agents: AgentConfig[]
-  /** The world the user is currently in, used when the agent has no theme. */
-  activeThemeId: string
+  /**
+   * The project's cast.
+   *
+   * There is no theme picker here any more. A theme belongs to the project, so
+   * offering one per agent would let a single project hold people from four
+   * different worlds — the exact leak the project model exists to close.
+   * Changing the world is a project setting, and it re-casts everybody at once.
+   */
+  cast: CharacterDef[]
   providers: ProviderStatus[]
   capabilities: CapabilityInfo[]
   workspaceRoot: string | null
@@ -63,7 +71,7 @@ const section = 'mt-6 border-t-2 border-rule pt-5 first:mt-0 first:border-0 firs
 export function AgentEditor({
   agent,
   agents,
-  activeThemeId,
+  cast,
   providers,
   capabilities,
   workspaceRoot,
@@ -80,7 +88,6 @@ export function AgentEditor({
     displayName: '',
     role: '',
     characterSlot: 0,
-    themeId: activeThemeId,
     providerId: connected[0]?.id ?? providers[0]?.id ?? 'openai',
     modelId: null,
     instructions: '',
@@ -100,10 +107,8 @@ export function AgentEditor({
 
   const provider = providers.find((p) => p.id === draft.providerId)
   const providerConnected = provider?.connected ?? false
-  const theme = getTheme(draft.themeId ?? activeThemeId)
-  const cast = theme.characters
-  const slot = (((draft.characterSlot ?? 0) % cast.length) + cast.length) % cast.length
-  const character = cast[slot]
+  const character = castForSlot(cast, draft.characterSlot ?? 0)
+  const slot = cast.indexOf(character)
 
   const selectedModel = draft.modelId ?? provider?.selectedModel ?? null
   const modelInfo = provider?.models.find((m) => m.id === selectedModel)

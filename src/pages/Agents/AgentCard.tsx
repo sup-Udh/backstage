@@ -44,7 +44,8 @@ export function AgentCard({
   state,
   validation,
   provider,
-  theme,
+  cast,
+  isLead = false,
   busy,
   onEdit,
   onSpawn,
@@ -52,8 +53,7 @@ export function AgentCard({
   onToggleEnabled,
   onStop
 }: Props) {
-  const cast = theme.characters
-  const character = cast[((agent.characterSlot % cast.length) + cast.length) % cast.length]
+  const character = castForSlot(cast, agent.characterSlot)
 
   const status: AgentStatus = state?.status ?? 'offline'
   const model = agent.modelId ?? provider?.selectedModel ?? 'no model'
@@ -66,7 +66,20 @@ export function AgentCard({
         agent.enabled ? 'bg-paper' : 'bg-paper/50'
       }`}
     >
-      <div className="flex items-end justify-center border-b-[3px] border-ink bg-brand-pale pt-3">
+      <div className="relative flex items-end justify-center border-b-[3px] border-ink bg-brand-pale pt-3">
+        {/*
+          The team lead is marked here rather than only in settings. It changes
+          what happens when the user talks to ALL AGENTS, so it has to be
+          visible on the roster where they are looking at who does what.
+        */}
+        {isLead && (
+          <span
+            title="Receives ALL AGENTS requests and delegates them"
+            className="absolute left-1.5 top-1.5 flex items-center gap-1 border-2 border-ink bg-brand px-1.5 py-0.5 font-pixel text-[9px] font-bold uppercase tracking-[0.08em] text-ink"
+          >
+            <span aria-hidden>★</span> Lead
+          </span>
+        )}
         <CharacterSprite
           appearance={character.appearance}
           state={characterStateForAgent(status)}
