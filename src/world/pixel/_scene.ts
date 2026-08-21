@@ -87,7 +87,7 @@ scene.workstations.forEach((ws, i) => {
   const ops = buildCharacterOps(c.appearance, 'walking', 2, 'side')
   items.push({
     baseY: scene.laneY,
-    draw: () => put(ops, appearancePalette(c.appearance), 140, scene.laneY - 30)
+    draw: () => put(ops, appearancePalette(c.appearance), 500, scene.laneY - 30)
   })
 }
 if (scene.boardSpots[0]) {
@@ -147,14 +147,19 @@ function chunk(type: string, data: Buffer): Buffer {
 
 // Upscale so the pixels are legible in an image viewer.
 const S = Number(process.env.SCALE ?? 2)
-const OW = scene.width * S
-const OH = scene.height * S
+const crop = (process.env.CROP ?? '').split(',').map(Number)
+const CX = crop.length === 4 ? crop[0] : 0
+const CY = crop.length === 4 ? crop[1] : 0
+const CW = crop.length === 4 ? crop[2] : scene.width
+const CH = crop.length === 4 ? crop[3] : scene.height
+const OW = CW * S
+const OH = CH * S
 const raw = Buffer.alloc(OH * (OW * 4 + 1))
 for (let y = 0; y < OH; y++) {
   const rowStart = y * (OW * 4 + 1)
   raw[rowStart] = 0
   for (let x = 0; x < OW; x++) {
-    const o = (Math.floor(y / S) * scene.width + Math.floor(x / S)) * 4
+    const o = ((CY + Math.floor(y / S)) * scene.width + CX + Math.floor(x / S)) * 4
     const d = rowStart + 1 + x * 4
     raw[d] = px[o]
     raw[d + 1] = px[o + 1]

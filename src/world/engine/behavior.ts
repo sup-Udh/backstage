@@ -398,14 +398,26 @@ export class Director {
 
     if (c.path.length > 0) {
       this.walk(c, dt)
-      return
+      // Still travelling. If the last waypoint was consumed this tick the
+      // path is now empty and we fall through to the arrival below, in the
+      // same frame.
+      if (c.path.length > 0) return
     }
 
     /* ------------------------------------------------------- arrived -- */
 
     if (c.place === 'walking') {
-      // The trip is over. Take up the destination's facing and, if the trip
-      // ended in a chair, sit down in it.
+      /*
+       * The trip is over. Take up the destination's facing and, if the trip
+       * ended in a chair, sit down in it.
+       *
+       * Handled in the same tick the path empties, not the next one. The
+       * one-frame gap is invisible on screen but it is not harmless: a status
+       * change arriving inside it found a character with `place: 'walking'`
+       * sitting motionless at a desk, and the director would then route them
+       * out of a chair it did not know they were in — straight through the
+       * desk instead of round the front of it.
+       */
       c.place = c.destSeated ? 'seated' : 'standing'
       c.facing = c.destFacing
       c.turnTo = c.destFacing

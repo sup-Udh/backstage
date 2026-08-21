@@ -162,6 +162,24 @@ export function frameRect(
 /* ------------------------------------------------------- world-scale art -- */
 
 /**
+ * Sheets already baked this session, keyed by the appearance they came from.
+ *
+ * A WeakMap rather than a string key: a cast's appearances are module
+ * constants in the theme files, so their identity is stable for the life of
+ * the app and no key has to be derived from — or kept in step with — their
+ * contents.
+ *
+ * This exists because the renderer is rebuilt every time the room is re-laid
+ * out, which happens whenever the panel changes shape. A sheet is now sixty
+ * rows of eight frames rather than thirty-two rows of four, so re-baking the
+ * whole cast is roughly four hundred thousand rectangle fills — perfectly
+ * affordable once, and a visible stall in the middle of dragging a window
+ * edge. Nothing about a sheet depends on the room, so nothing about the room
+ * should cost one.
+ */
+const sheets = new WeakMap<CharacterAppearance, CharacterSheet>()
+
+/**
  * A character sheet as it stands in the office.
  *
  * The same sheet, at the same size. This used to resample the art down and no
@@ -170,7 +188,11 @@ export function frameRect(
  * rather than being spread across the renderer, the engine and the preview.
  */
 export function buildWorldSheet(appearance: CharacterAppearance): CharacterSheet {
-  return buildCharacterSheet(appearance)
+  const hit = sheets.get(appearance)
+  if (hit) return hit
+  const made = buildCharacterSheet(appearance)
+  sheets.set(appearance, made)
+  return made
 }
 
 /** Source rectangle for one frame within a world-scale sheet. */

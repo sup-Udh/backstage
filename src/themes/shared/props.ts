@@ -317,16 +317,38 @@ export function deskUnit(
  * base rather than reading as a dark slab.
  */
 export function chairBack(x: number, y: number): Op[] {
+  /*
+   * Wider than the person in it, which it previously was not.
+   *
+   * The chair was eighteen pixels across and the occupant twelve, which was
+   * right while the cast was being resampled down — and became wrong the
+   * moment characters were drawn at their authored twenty. A chair narrower
+   * than its occupant is completely hidden behind them, so every seated
+   * character appeared to be floating at a desk with no furniture under them,
+   * and the empty desks in the room had a chair while the occupied ones did
+   * not.
+   */
   return [
-    [x - 9, y - 21, 18, 14, 'ink'],
-    [x - 8, y - 20, 16, 12, 'ink3'],
-    [x - 7, y - 19, 14, 4, 'steelDark'],
-    [x - 7, y - 14, 14, 3, 'steelDark'],
-    [x - 8, y - 20, 16, 1, 'steel'],
+    [x - 13, y - 24, 26, 17, 'ink'],
+    /*
+     * A light cushion, not a dark one. The seat back sits directly behind the
+     * occupant, so a chair in the same dark family as the monitor beside it
+     * swallowed every character wearing a dark suit. Lighter, it frames them.
+     */
+    [x - 12, y - 23, 24, 15, 'steelDark'],
+    [x - 11, y - 22, 22, 5, 'steel'],
+    [x - 11, y - 16, 22, 4, 'steel'],
+    [x - 12, y - 23, 24, 1, 'white'],
+    // Armrests, which is most of what makes the chair visible either side of
+    // the person sitting in it.
+    [x - 15, y - 14, 4, 3, 'ink'],
+    [x + 11, y - 14, 4, 3, 'ink'],
+    [x - 14, y - 13, 2, 1, 'steel'],
+    [x + 12, y - 13, 2, 1, 'steelDark'],
     // Stem and star base.
     [x - 2, y - 8, 4, 6, 'ink'],
-    [x - 10, y - 3, 6, 2, 'ink'],
-    [x + 4, y - 3, 6, 2, 'ink'],
+    [x - 11, y - 3, 7, 2, 'ink'],
+    [x + 4, y - 3, 7, 2, 'ink'],
     [x - 2, y - 2, 4, 2, 'ink']
   ]
 }
@@ -462,13 +484,16 @@ export function boxStack(x: number, y: number): Op[] {
 export function zoneFloor(x: number, y: number, w: number, h: number): Op[] {
   return [
     [x, y, w, h, 'floorAlt'],
-    [x, y, w, 1, 'floorLine'],
-    [x, y + h - 1, w, 1, 'floorLine'],
-    [x, y, 1, h, 'floorLine'],
-    [x + w - 1, y, 1, h, 'floorLine'],
+    // A shadowed edge on every side. `floorLine` alone was too close to the
+    // floor's own grain to hold an edge across a room this wide.
+    [x, y, w, 1, 'floorShadow'],
+    [x, y + h - 1, w, 1, 'floorShadow'],
+    [x, y, 1, h, 'floorShadow'],
+    [x + w - 1, y, 1, h, 'floorShadow'],
+    [x + 1, y + 1, w - 2, 1, 'floorLine'],
     // Two inset corner marks, so the mat reads as laid rather than painted.
-    [x + 2, y + 2, 3, 1, 'floorShadow'],
-    [x + w - 5, y + h - 3, 3, 1, 'floorShadow']
+    [x + 3, y + 3, 4, 1, 'floorLine'],
+    [x + w - 7, y + h - 4, 4, 1, 'floorLine']
   ]
 }
 
@@ -482,14 +507,21 @@ export function zoneFloor(x: number, y: number, w: number, h: number): Op[] {
  */
 export function laneRunner(x: number, y: number, w: number): Op[] {
   const ops: Op[] = [
-    [x, y - 9, w, 18, 'floorAlt'],
-    [x, y - 9, w, 1, 'floorLine'],
-    [x, y + 8, w, 1, 'floorLine']
+    [x, y - 10, w, 20, 'floorLit'],
+    [x, y - 10, w, 1, 'floorShadow'],
+    [x, y + 9, w, 1, 'floorShadow'],
+    [x, y - 9, w, 1, 'floorAlt'],
+    [x, y + 8, w, 1, 'floorAlt']
   ]
-  // Dashes down the middle, spaced so they read as a runner and not as road
-  // markings.
-  for (let dx = 10; dx < w - 10; dx += 22) {
-    ops.push([x + dx, y, 10, 1, 'floorLine'])
+  /*
+   * A woven border rather than a centre line. Dashes down the middle read as
+   * road markings and put a stripe exactly where the characters walk; the
+   * pattern belongs at the edges, where it says "this strip is a runner" and
+   * leaves the middle clear for the people using it.
+   */
+  for (let dx = 6; dx < w - 6; dx += 14) {
+    ops.push([x + dx, y - 7, 6, 1, 'floorAlt'])
+    ops.push([x + dx + 7, y + 6, 6, 1, 'floorAlt'])
   }
   return ops
 }

@@ -8,7 +8,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild electron/terminal/lineExtractor.test.ts electron/agents/relationships.test.ts electron/projects/projectRules.test.ts --bundle --platform=node --format=cjs --outbase=electron --outdir=out/test --log-level=error && esbuild src/themes/shared/office.test.ts src/world/pixel/characterSprite.test.ts --bundle --platform=node --format=cjs --outbase=src --outdir=out/test --log-level=error && node out/test/terminal/lineExtractor.test.js && node out/test/agents/relationships.test.js && node out/test/projects/projectRules.test.js && node out/test/themes/shared/office.test.js && node out/test/world/pixel/characterSprite.test.js"
+    "test": "esbuild electron/terminal/lineExtractor.test.ts electron/agents/relationships.test.ts electron/projects/projectRules.test.ts --bundle --platform=node --format=cjs --outbase=electron --outdir=out/test --log-level=error && esbuild src/themes/shared/office.test.ts src/world/pixel/characterSprite.test.ts src/world/engine/behavior.test.ts --bundle --platform=node --format=cjs --outbase=src --outdir=out/test --log-level=error && node out/test/terminal/lineExtractor.test.js && node out/test/agents/relationships.test.js && node out/test/projects/projectRules.test.js && node out/test/themes/shared/office.test.js && node out/test/world/pixel/characterSprite.test.js && node out/test/world/engine/behavior.test.js"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

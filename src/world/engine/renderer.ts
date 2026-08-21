@@ -1,4 +1,5 @@
 import type { SceneDef, Theme, ThemePalette } from '../../themes/types'
+import type { ToolGroup } from '../../agents/toolActivity'
 import type { CharacterDef } from '../../characters/character.types'
 import type { CharacterRuntime } from '../world.types'
 import {
@@ -11,6 +12,9 @@ import {
   type BakedProp,
   type CharacterSheet
 } from './spriteCache'
+
+/** What an unoccupied screen shows. */
+const IDLE_SCREEN: ScreenState = { mode: 'quiet', tool: null }
 
 /** The four neighbours a 1px outline is stamped into. */
 const AROUND = [
@@ -78,6 +82,13 @@ export type ScreenMode =
   | 'thinking'
   | 'waiting'
   | 'error'
+
+/** One screen: how it is behaving, and what kind of work is on it. */
+export interface ScreenState {
+  mode: ScreenMode
+  /** The tool family the occupant is running, for the corner mark. */
+  tool: ToolGroup | null
+}
 
 /** A connection being dragged out from a character but not yet dropped. */
 export interface PendingLink {
@@ -192,8 +203,9 @@ export class WorldRenderer {
     m: { x: number; y: number },
     t: number,
     idx: number,
-    mode: ScreenMode
+    state: ScreenState
   ): void {
+    const mode = state.mode
     /*
      * The scroll rate. `quiet` is not zero but very nearly: an unattended
      * machine still has a clock on it and a cursor somewhere, and freezing it
@@ -249,6 +261,67 @@ export class WorldRenderer {
       ctx.fillStyle = accent
       ctx.fillRect(m.x - 1, m.y + 15, 19, 1)
       ctx.restore()
+    }
+
+    if (state.tool) this.drawToolMark(ctx, m.x + 13, m.y + 8, state.tool)
+  }
+
+  /**
+   * What kind of work is on the screen, as three pixels in its corner.
+   *
+   * Three by three, in the bottom right of the panel, and never anywhere else.
+   * The temptation with a cue like this is to float it over the character's
+   * head where it is easy to see — which is exactly what turns a room into a
+   * dashboard. On the screen it belongs to the workstation, reads as part of
+   * the machine, and is available to anyone who looks closely without
+   * demanding to be read by anyone who does not.
+   *
+   * Deliberately abstract. Nobody is going to identify a git branch icon at
+   * three pixels; what is legible is that the mark *changed*, which is the
+   * same information and all that is on offer at this size.
+   */
+  private drawToolMark(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    tool: ToolGroup
+  ): void {
+    ctx.fillStyle = this.pal.brandLite
+    switch (tool) {
+      case 'files':
+        // A page: a filled block with one corner off.
+        ctx.fillRect(x, y, 3, 3)
+        ctx.fillStyle = this.pal.screen
+        ctx.fillRect(x + 2, y, 1, 1)
+        break
+      case 'terminal':
+        // A prompt: a chevron and a bar.
+        ctx.fillRect(x, y, 1, 1)
+        ctx.fillRect(x + 1, y + 1, 1, 1)
+        ctx.fillRect(x, y + 2, 1, 1)
+        ctx.fillRect(x + 2, y + 2, 1, 1)
+        break
+      case 'git':
+        // Two branches meeting.
+        ctx.fillRect(x, y, 1, 3)
+        ctx.fillRect(x + 2, y, 1, 1)
+        ctx.fillRect(x + 1, y + 1, 1, 1)
+        break
+      case 'web':
+        // A ring.
+        ctx.fillRect(x, y, 3, 1)
+        ctx.fillRect(x, y + 2, 3, 1)
+        ctx.fillRect(x, y + 1, 1, 1)
+        ctx.fillRect(x + 2, y + 1, 1, 1)
+        break
+      case 'team':
+        // Two facing marks.
+        ctx.fillRect(x, y, 1, 2)
+        ctx.fillRect(x + 2, y + 1, 1, 2)
+        break
+      default:
+        ctx.fillRect(x + 1, y + 1, 1, 1)
+        break
     }
   }
 
@@ -599,7 +672,7 @@ export class WorldRenderer {
     /** Characters a pending link could legally be dropped on. */
     droppable: Set<string> = new Set(),
     /** What each of the room's screens is showing, by monitor index. */
-    screens: ScreenMode[] = []
+    screens: ScreenState[] = []
   ): void {
     const scene = this.scene
 
@@ -634,7 +707,7 @@ export class WorldRenderer {
       // from the viewer — wrong exactly when somebody walked between the rows.
       items.push({
         baseY: m.baseY + 0.1,
-        draw: () => this.drawMonitor(ctx, m, t, i, screens[i] ?? 'quiet')
+        draw: () => this.drawMonitor(ctx, m, t, i, screens[i] ?? IDLE_SCREEN)
       })
     })
     scene.leds.forEach((l, i) => {

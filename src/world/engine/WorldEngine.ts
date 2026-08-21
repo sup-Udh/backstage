@@ -12,6 +12,7 @@ import {
   type Camera,
   type PendingLink,
   type ScreenMode,
+  type ScreenState,
   type WorldLink
 } from './renderer'
 
@@ -74,7 +75,7 @@ export class WorldEngine {
   /** Who a pending link could legally be dropped on. */
   private droppable = new Set<string>()
   /** What each of the room's screens is showing, rebuilt every frame. */
-  private screens: ScreenMode[] = []
+  private screens: ScreenState[] = []
   private views: AgentView[] = []
   private viewListeners = new Set<(v: AgentView[]) => void>()
   private frameListeners = new Set<(anchors: LabelAnchor[]) => void>()
@@ -569,15 +570,28 @@ export class WorldEngine {
    */
   private updateScreens(): void {
     const n = this.scene.monitors.length
-    if (this.screens.length !== n) this.screens = new Array(n).fill('quiet')
-    else this.screens.fill('quiet')
+    if (this.screens.length !== n) {
+      this.screens = Array.from({ length: n }, () => ({
+        mode: 'quiet' as ScreenMode,
+        tool: null
+      }))
+    } else {
+      for (const s of this.screens) {
+        s.mode = 'quiet'
+        s.tool = null
+      }
+    }
 
     for (const c of this.chars) {
       if (c.place !== 'seated' || c.station === null) continue
       const station = this.scene.workstations[c.station]
       if (!station || station.monitor < 0 || station.monitor >= n) continue
 
-      this.screens[station.monitor] = screenFor(c.state)
+      const screen = this.screens[station.monitor]
+      screen.mode = screenFor(c.state)
+      // The mark only belongs on a screen somebody is actually working at.
+      screen.tool =
+        screen.mode === 'typing' || screen.mode === 'reading' ? c.activity : null
     }
   }
 

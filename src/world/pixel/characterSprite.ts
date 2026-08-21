@@ -630,13 +630,58 @@ interface Look {
   mouth: Mouth
 }
 
+/**
+ * Hair volume, turned to face the way the body is.
+ *
+ * Two corrections in one pass, and both were visible for the whole time a
+ * character spent crossing the room, which is most of the time anyone is
+ * watching one.
+ *
+ * Mirroring: `hairBack` is authored front-on, where a ponytail hangs to the
+ * right. Side art is drawn facing right, so used unchanged the ponytail hung
+ * off the front of the face — and because left-facing frames are the mirror of
+ * right-facing ones, it was wrong in exactly one of the two directions.
+ *
+ * Clipping: front-on, long hair is drawn as a fall on each side of the head.
+ * In profile there is only one side, so both falls put a slab of hair across
+ * the character's chest and face. Everything forward of the head's centre line
+ * is trimmed, so what is left is the hair that would actually be visible from
+ * this angle. Trimming rather than discarding matters for the wide styles: an
+ * afro is a single op spanning the whole head, and dropping it would leave the
+ * character bald in profile.
+ */
+function profileHair(back: readonly Op[], h: Head): Op[] {
+  /** How far past the centre line hair may still show from the side. */
+  const limit = h.cx + 2
+  const ops: Op[] = []
+  for (const [ox, oy, ow, oh, key] of back) {
+    const mx = 2 * h.cx - ox - ow
+    const width = Math.min(mx + ow, limit) - mx
+    if (width > 0) ops.push([mx, oy, width, oh, key])
+  }
+  return ops
+}
+
 function head(a: CharacterAppearance, facing: SpriteFacing, look: Look): Op[] {
   const exp = expressionOf(a)
   const h = headGeom(a, look.dy, look.dx)
   const { x, w, y } = h
   const ops: Op[] = []
 
-  ops.push(...hairBack(a, h))
+  /*
+   * Hair volume sits behind the skull — and in profile, "behind" swaps sides.
+   *
+   * `hairBack` is authored front-on, where a ponytail hangs to the right of
+   * the head. Side art is drawn facing right and mirrored for left, so used
+   * unchanged the ponytail hung off the *front* of the face: every character
+   * with gathered hair walked across the office with their hair in front of
+   * their nose, and the mirroring meant it was wrong in exactly one of the two
+   * directions, which is the hardest kind of wrong to notice.
+   *
+   * Mirroring the group about the head's own centre line puts it back where
+   * hair goes. Symmetrical styles are unaffected by construction.
+   */
+  ops.push(...(facing === 'side' ? profileHair(hairBack(a, h), h) : hairBack(a, h)))
 
   if (facing === 'up') {
     ops.push([x - 1, y - 1, w + 2, h.h + 2, 'ink'])
@@ -1027,9 +1072,14 @@ function arms(
        */
       ops.push([lx, shoulder, 2, 3, 'outfitShade'])
       ops.push([rx, shoulder, 2, 3, 'outfitDeep'])
+      /*
+       * One band, not three. An outline, a fill and a highlight stacked into
+       * five rows of alternating tone read as a ladder across the chest rather
+       * than as an arm — especially over a cardigan, which already has a strip
+       * of shirt down the middle. Two tones is all a forearm gets at this size.
+       */
       ops.push([lx - 1, y + 3, w + 2, 5, 'ink'])
       ops.push([lx, y + 4, w, 3, 'outfitShade'])
-      ops.push([lx, y + 4, w, 1, 'outfitLit'])
       // Each hand tucked under the opposite elbow.
       ops.push([lx + 1, y + 4, 2, 2, 'skin'])
       ops.push([rx - 1, y + 5, 2, 2, 'skinShade'])
