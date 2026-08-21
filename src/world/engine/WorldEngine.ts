@@ -1,16 +1,17 @@
-import type { AgentRuntime } from '../../agents/agent.types'
-import { ANIMATIONS, characterStateForAgent } from '../../characters/character.states'
+import type { Agent, AgentRuntime } from '../../agents/agent.types'
+import { ANIMATIONS, frameAt } from '../../characters/character.states'
 import type { SceneDef, Theme } from '../../themes/types'
 import { makeRng } from '../pixel/ops'
 import { WORLD_SPRITE_H, WORLD_SPRITE_W } from './spriteCache'
 import type { AgentView, CharacterRuntime } from '../world.types'
-import { Director } from './behavior'
+import { Director, Workstations } from './behavior'
 import type { CharacterDef } from '../../characters/character.types'
 import { castForSlot } from '../../project/cast'
 import {
   WorldRenderer,
   type Camera,
   type PendingLink,
+  type ScreenMode,
   type WorldLink
 } from './renderer'
 
@@ -24,6 +25,16 @@ import {
 export class WorldEngine {
   private renderer: WorldRenderer
   private director: Director
+  /**
+   * Who sits where, for the life of the session.
+   *
+   * Owned here rather than by the director, because a director belongs to one
+   * laid-out room and is replaced whenever the panel changes shape. It used to
+   * take the seating plan with it, so resizing the window reshuffled the whole
+   * office and no agent had a desk that stayed theirs — which is most of why
+   * workstations did not read as persistent locations.
+   */
+  private homes = new Workstations()
   private chars: CharacterRuntime[]
   private ctx: CanvasRenderingContext2D | null = null
   private raf = 0
@@ -62,6 +73,8 @@ export class WorldEngine {
   private pending: PendingLink | null = null
   /** Who a pending link could legally be dropped on. */
   private droppable = new Set<string>()
+  /** What each of the room's screens is showing, rebuilt every frame. */
+  private screens: ScreenMode[] = []
   private views: AgentView[] = []
   private viewListeners = new Set<(v: AgentView[]) => void>()
   private frameListeners = new Set<(anchors: LabelAnchor[]) => void>()
@@ -87,39 +100,79 @@ export class WorldEngine {
      */
     this.scene = theme.scene
     this.renderer = new WorldRenderer(theme, cast, this.scene)
-    this.director = new Director(this.scene, rng)
+    this.director = new Director(this.scene, rng, this.homes)
 
     this.rng = rng
     // A character exists only while its agent is present in the world.
     this.chars = runtime
       .getAgents()
       .filter((a) => a.visible)
-      .map((a): CharacterRuntime => ({
-        agentId: a.id,
-        ownName: a.useOwnName ? a.name : undefined,
-        def: castForSlot(cast, a.slot),
-        model: a.model,
-        x: this.scene.desks[a.slot % this.scene.desks.length].x,
-        y: this.scene.desks[a.slot % this.scene.desks.length].y,
-        facing: 'down',
-        state: 'idle',
-        path: [],
-        destFacing: 'down',
-        desk: null,
-        spotKey: null,
-        animTime: rng() * 2,
-        frame: 0,
-        lastStatus: null,
-        bubble: 'none',
-        settled: 3,
-        // A little variance so the cast never moves in lockstep.
-        speed: 19 + rng() * 5
-      }))
+      .map((a) => this.makeBody(a, this.seatFor(a)))
     for (const c of this.chars) this.placed.add(c.agentId)
 
     this.placeOpeningCast()
     this.rebuildViews()
     this.unsubscribe = this.runtime.subscribe(() => this.rebuildViews())
+  }
+
+  /** A plausible starting point before the director has said anything. */
+  private seatFor(a: Agent): { x: number; y: number } {
+    const desks = this.scene.desks
+    if (desks.length === 0) return { x: this.scene.width >> 1, y: this.scene.laneY }
+    return desks[a.slot % desks.length]
+  }
+
+  /**
+   * A fresh body for an agent.
+   *
+   * One place, so a character that arrives mid-session is initialised exactly
+   * like one that was there at construction. The two used to be written out
+   * separately and had already drifted.
+   */
+  private makeBody(a: Agent, at: { x: number; y: number }): CharacterRuntime {
+    return {
+      agentId: a.id,
+      ownName: a.useOwnName ? a.name : undefined,
+      def: castForSlot(this.cast, a.slot),
+      model: a.model,
+      x: at.x,
+      y: at.y,
+      facing: 'down',
+      turnTo: 'down',
+      turnHold: 0,
+      state: 'idle',
+      place: 'standing',
+      path: [],
+      destFacing: 'down',
+      destSeated: false,
+      station: null,
+      spotKey: null,
+      animTime: 0,
+      frame: 0,
+      lastStatus: null,
+      lastState: null,
+      bubble: 'none',
+      settled: 3,
+      // A little variance so the cast never walks in lockstep.
+      speed: 21 + this.rng() * 6,
+      vel: 0,
+      /*
+       * The character's own place in every loop it will ever play.
+       *
+       * Applied as an offset into the clip rather than as a reset, which is
+       * the difference between a room where everybody breathes on their own
+       * rhythm and one where three agents given work in the same second type
+       * in perfect unison for the rest of the session.
+       */
+      phase: this.rng() * 7,
+      partnerId: null,
+      activity: null
+    }
+  }
+
+  /** Every agent that currently has a body, for desk contention. */
+  private presentIds(): Set<string> {
+    return new Set(this.chars.map((c) => c.agentId))
   }
 
   /**
@@ -130,6 +183,7 @@ export class WorldEngine {
    */
   private placeOpeningCast(): void {
     const walker = Math.min(2, this.chars.length - 1)
+    const present = this.presentIds()
 
     this.chars.forEach((c, i) => {
       const agent = this.runtime.get(c.agentId)
@@ -141,7 +195,7 @@ export class WorldEngine {
         c.y = this.scene.laneY + 14
       }
 
-      this.director.onStatusChange(c, agent.status, this.chars)
+      this.director.onStatusChange(c, agent, present)
       c.lastStatus = agent.status
 
       if (i !== walker) {
@@ -153,12 +207,13 @@ export class WorldEngine {
         }
         c.path = []
         c.facing = c.destFacing
-        c.state = characterStateForAgent(agent.status)
+        c.turnTo = c.destFacing
+        c.place = c.destSeated ? 'seated' : 'standing'
         c.settled = 3
+        this.director.update(c, agent, 0, this.chars)
       }
     })
   }
-
 
   /* ------------------------------------------------------------- arrivals -- */
 
@@ -185,7 +240,7 @@ export class WorldEngine {
 
       // Give the desk and any reserved spot back, or the next arrival will
       // find the room full of furniture nobody is using.
-      this.director.release(c)
+      this.director.forget(c)
       this.chars.splice(i, 1)
       this.placed.delete(c.agentId)
       if (this.selected === c.agentId) this.selected = null
@@ -223,31 +278,21 @@ export class WorldEngine {
     for (const agent of this.runtime.getAgents()) {
       if (!agent.visible || this.placed.has(agent.id)) continue
 
-      const c: CharacterRuntime = {
-        agentId: agent.id,
-        ownName: agent.useOwnName ? agent.name : undefined,
-        def: castForSlot(this.cast, agent.slot),
-        model: agent.model,
+      const c = this.makeBody(agent, {
         // Just off the left edge, so the walk in is visible, and behind
         // anyone still on their way in.
         x: -10 - queued++ * ENTRY_SPACING,
-        y: this.scene.laneY,
-        facing: 'right',
-        state: 'walking',
-        path: [],
-        destFacing: 'down',
-        desk: null,
-        spotKey: null,
-        animTime: 0,
-        frame: 0,
-        lastStatus: null,
-        bubble: 'none',
-        settled: 0,
-        speed: 19 + this.rng() * 5
-      }
+        y: this.scene.laneY
+      })
+      c.facing = 'right'
+      c.turnTo = 'right'
+      c.state = 'walking'
+      c.place = 'walking'
+      c.settled = 0
+
       this.chars.push(c)
       this.placed.add(agent.id)
-      this.director.onStatusChange(c, agent.status, this.chars)
+      this.director.onStatusChange(c, agent, this.presentIds())
       c.lastStatus = agent.status
       this.rebuildViews()
     }
@@ -261,8 +306,7 @@ export class WorldEngine {
    * Whole numbers only — a fractional scale puts sprite edges between device
    * pixels, which is the one thing this whole rendering approach exists to
    * avoid. Chosen from the viewport's width so the room lands at a logical
-   * size the art was drawn for: around 600 scene pixels across, which is what
-   * every theme's furniture was proportioned against.
+   * size the art was drawn for.
    */
   private scaleFor(w: number): number {
     if (w === 0) return DEFAULT_ZOOM
@@ -320,11 +364,12 @@ export class WorldEngine {
    * shape would otherwise leave somebody standing inside a filing cabinet, or
    * outside the room altogether.
    *
-   * Their claims are dropped rather than translated. A new Director starts
-   * with an empty reservation table — the desks they were holding do not exist
-   * in the new grid — so clearing the fields on each character is what keeps
-   * the two in step. Blanking `lastStatus` makes the next tick re-place
-   * everybody properly instead of leaving them wherever the scaling put them.
+   * Their *spot reservations* are dropped, because those name positions in a
+   * grid that no longer exists. Their *desks* are not: who sits where is a
+   * fact about the team and survives in `homes`, so a window resize
+   * re-seats everybody at the same desk they had rather than reshuffling the
+   * office. Blanking `lastStatus` makes the next tick re-place everybody
+   * properly instead of leaving them wherever the scaling put them.
    */
   private rebuildScene(width: number, height: number): void {
     const previous = this.scene
@@ -332,7 +377,7 @@ export class WorldEngine {
     this.scene = scene
 
     this.renderer = new WorldRenderer(this.theme, this.cast, scene)
-    this.director = new Director(scene, this.rng)
+    this.director = new Director(scene, this.rng, this.homes)
 
     const sx = scene.width / previous.width
     const sy = scene.height / previous.height
@@ -341,8 +386,10 @@ export class WorldEngine {
       c.x = Math.round(c.x * sx)
       c.y = Math.round(c.y * sy)
       c.path = []
-      c.desk = null
       c.spotKey = null
+      c.station = null
+      c.place = 'standing'
+      c.vel = 0
       c.lastStatus = null
     }
   }
@@ -380,7 +427,15 @@ export class WorldEngine {
      * belongs to rather than a fraction off it.
      */
     return this.chars.map((c) => {
-      const head = c.y - WORLD_SPRITE_H - LABEL_GAP
+      /*
+       * A seated character's head is where their head is, not where it would
+       * be if they were standing: the sprite's own legs are folded and its
+       * lower half is behind the desk. Anchoring to the sprite's top edge
+       * regardless is what kept name plates floating a body's height above
+       * everybody who was sitting down.
+       */
+      const top = c.place === 'seated' ? SEATED_HEAD : WORLD_SPRITE_H
+      const head = c.y - top - LABEL_GAP
       const feet = c.y + LABEL_GAP
 
       const screenX = Math.round(c.x * scale)
@@ -449,6 +504,8 @@ export class WorldEngine {
     this.removeDepartures()
     this.spawnArrivals()
 
+    const present = this.presentIds()
+
     for (const c of this.chars) {
       const agent = this.runtime.get(c.agentId)
       if (!agent) continue
@@ -468,29 +525,65 @@ export class WorldEngine {
       }
 
       if (agent.status !== c.lastStatus) {
-        this.director.onStatusChange(c, agent.status, this.chars)
+        this.director.onStatusChange(c, agent, present)
         c.lastStatus = agent.status
-        c.animTime = 0
       }
 
-      this.director.update(c, agent.status, dt)
+      this.director.update(c, agent, dt, this.chars)
 
-      const clip = ANIMATIONS[c.state]
+      /*
+       * The clock advances for everyone, always, offset by the character's own
+       * phase — so a status change does not restart a loop and six people
+       * never fall into step.
+       *
+       * The exception is a clip that is meant to have a beginning. A
+       * celebration that starts three frames in has already half happened by
+       * the time it is noticed, and an error whose slump is mid-way through is
+       * a character who was already slumping before anything went wrong.
+       */
+      if (c.state !== c.lastState) {
+        if (ANIMATIONS[c.state].anchored) c.animTime = 0
+        c.lastState = c.state
+      }
       c.animTime += dt
-      c.frame = Math.floor(c.animTime * clip.fps) % clip.frames
+      c.frame = frameAt(c.state, c.animTime + c.phase)
     }
 
     this.paint()
-    
+
     // Notify frame listeners synchronously after paint
     const anchors = this.getLabelAnchors()
     for (const fn of this.frameListeners) fn(anchors)
-    
+
     this.raf = requestAnimationFrame(this.tick)
+  }
+
+  /**
+   * What every screen in the room is showing.
+   *
+   * Derived from who is sitting at which workstation, which is the whole
+   * point: monitors used to animate from their own index and the wall clock,
+   * so an empty desk scrolled code as busily as an occupied one and a
+   * character's screen went on churning while they sat thinking. A screen is
+   * an output of the person at it, so it is computed from them.
+   */
+  private updateScreens(): void {
+    const n = this.scene.monitors.length
+    if (this.screens.length !== n) this.screens = new Array(n).fill('quiet')
+    else this.screens.fill('quiet')
+
+    for (const c of this.chars) {
+      if (c.place !== 'seated' || c.station === null) continue
+      const station = this.scene.workstations[c.station]
+      if (!station || station.monitor < 0 || station.monitor >= n) continue
+
+      this.screens[station.monitor] = screenFor(c.state)
+    }
   }
 
   private paint(): void {
     if (!this.ctx) return
+    this.updateScreens()
     this.renderer.draw(
       this.ctx,
       this.chars,
@@ -502,7 +595,8 @@ export class WorldEngine {
       this.viewH,
       this.links,
       this.pending,
-      this.droppable
+      this.droppable,
+      this.screens
     )
   }
 
@@ -632,23 +726,44 @@ export class WorldEngine {
    * Hit-test in scene pixels. Front-most character wins, so an overlapping
    * pair resolves the way the user expects.
    *
-   * The target is deliberately larger than the sprite. Characters stand at
-   * world scale — small, and smaller still when the camera is zoomed out — and
-   * a target that shrank with them would make clicking an agent a test of aim.
-   * The padding keeps the reachable area at roughly the size it was before the
-   * cast was scaled down, which is comfortable at every zoom.
+   * The target is a little larger than the sprite, so the shadow and the floor
+   * ring are part of it rather than a dead zone. The padding used to be much
+   * larger, to compensate for a cast that had been shrunk to twelve pixels
+   * across; the art is full size again and a hit box that stayed inflated
+   * would start stealing clicks from the character standing beside its owner.
    */
   hitTest(sx: number, sy: number): { id: string; x: number; y: number } | null {
     const ordered = [...this.chars].sort((a, b) => b.y - a.y)
     for (const c of ordered) {
+      const top = c.place === 'seated' ? SEATED_HEAD : WORLD_SPRITE_H
       const left = Math.round(c.x) - (HIT_W >> 1)
-      const top = Math.round(c.y) - WORLD_SPRITE_H - HIT_PAD
-      if (sx >= left && sx < left + HIT_W && sy >= top && sy < top + HIT_H) {
+      const y0 = Math.round(c.y) - top - HIT_PAD
+      const h = top + HIT_PAD * 2
+      if (sx >= left && sx < left + HIT_W && sy >= y0 && sy < y0 + h) {
         // The tooltip and the card anchor to the sprite, not to the padding.
-        return { id: c.agentId, x: c.x, y: Math.round(c.y) - WORLD_SPRITE_H }
+        return { id: c.agentId, x: c.x, y: Math.round(c.y) - top }
       }
     }
     return null
+  }
+}
+
+/** How each seated pose reads on the screen in front of it. */
+function screenFor(state: string): ScreenMode {
+  switch (state) {
+    case 'sitWorking':
+      return 'typing'
+    case 'sitReading':
+      return 'reading'
+    case 'sitThinking':
+      return 'thinking'
+    case 'sitError':
+      return 'error'
+    case 'sitTalking':
+    case 'sitWaiting':
+      return 'waiting'
+    default:
+      return 'quiet'
   }
 }
 
@@ -678,6 +793,15 @@ const MARGIN = 12
 const LABEL_GAP = 2
 
 /**
+ * How far above the feet a seated character's head is, in scene pixels.
+ *
+ * A seated sprite folds its legs, so its head sits several rows lower in the
+ * cell than a standing one's. Measuring from the cell's top edge for everybody
+ * is what left name plates hovering above the people sitting down.
+ */
+const SEATED_HEAD = WORLD_SPRITE_H - 4
+
+/**
  * The scale used before the panel has reported its size.
  *
  * Whole-number, like every scale in this engine: a fractional one puts sprite
@@ -686,17 +810,20 @@ const LABEL_GAP = 2
  */
 const DEFAULT_ZOOM = 2
 const MIN_ZOOM = 2
-const MAX_ZOOM = 4
+const MAX_ZOOM = 3
 
 /**
  * The logical width the room aims for, in scene pixels.
  *
- * Every theme's furniture was proportioned against a room about this wide, so
- * the scale is chosen to land near it: the office reads the same on a laptop
- * and on a large display, and what changes is how much office there is rather
- * than how big everything in it looks.
+ * Raised from 600 when the cast stopped being resampled down. Scale is a whole
+ * number, so this is really a threshold: below about two and a half times it
+ * the room is drawn at 2x, above it at 3x. Pushing the threshold out means a
+ * large display gets a *wider office in scene pixels* rather than the same
+ * office magnified — more wall panels, more workstations, more floor between
+ * the rows — which is how the environment is made to dominate now that the
+ * people in it are drawn at the size they were designed at.
  */
-const TARGET_ROOM_W = 600
+const TARGET_ROOM_W = 900
 
 /**
  * How coarsely the room's logical size is rounded, in scene pixels.
@@ -709,18 +836,10 @@ const ROOM_STEP = 16
 
 /**
  * Slack around the sprite that still counts as clicking the character, in
- * scene pixels. Applied on every side, and below the feet as well, so the
- * shadow and the floor ring are part of the target rather than a dead zone.
- *
- * Grew when the cast shrank. The target is deliberately decoupled from the
- * sprite: a hit box that scaled with the art would have made clicking an
- * agent progressively harder every time the characters were made smaller,
- * and picking someone out of a crowded office is already the fiddliest thing
- * the panel asks of anyone.
+ * scene pixels.
  */
-const HIT_PAD = 7
+const HIT_PAD = 3
 const HIT_W = WORLD_SPRITE_W + HIT_PAD * 2
-const HIT_H = WORLD_SPRITE_H + HIT_PAD * 2
 
 /**
  * How far from a connection line still counts as clicking it, in scene
@@ -735,4 +854,4 @@ const LINK_HIT_PAD = 4
  * Wider than a sprite, so the labels above two people arriving together do
  * not overlap either.
  */
-const ENTRY_SPACING = 22
+const ENTRY_SPACING = 30

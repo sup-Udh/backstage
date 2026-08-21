@@ -699,7 +699,12 @@ export function composeOffice(
     const furnishing = spec.zone(zone, grid)
     props.push(...furnishing.props)
     if (furnishing.steam) steamVents.push(...furnishing.steam)
-    if (furnishing.leds) leds.push(...furnishing.leds)
+    // A zone's indicators sort with the zone's own furniture, not with the
+    // back desk row, so a character crossing in front of the coffee machine
+    // occludes its lights the way they occlude everything else on it.
+    if (furnishing.leds) {
+      for (const l of furnishing.leds) leds.push({ ...l, baseY: zone.baseY })
+    }
   }
 
   props.push(...(spec.accents?.(grid) ?? []))

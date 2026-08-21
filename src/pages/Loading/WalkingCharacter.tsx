@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { CharacterAppearance } from '../../characters/character.types'
-import { ANIMATIONS } from '../../characters/character.states'
+import { frameAt } from '../../characters/character.states'
 import { SPRITE_H, SPRITE_W } from '../../world/pixel/characterSprite'
 import { buildCharacterSheet, frameRect } from '../../world/engine/spriteCache'
 
@@ -27,7 +27,7 @@ interface Props {
  */
 export function WalkingCharacter({ appearance, scale = 3, duration = 4.5 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
-  const art = useMemo(() => buildCharacterSheet(appearance, '#FFC94F'), [appearance])
+  const art = useMemo(() => buildCharacterSheet(appearance), [appearance])
 
   useEffect(() => {
     const canvas = ref.current
@@ -36,7 +36,6 @@ export function WalkingCharacter({ appearance, scale = 3, duration = 4.5 }: Prop
     if (!ctx) return
     ctx.imageSmoothingEnabled = false
 
-    const clip = ANIMATIONS.walking
     const started = performance.now()
     let raf = 0
 
@@ -54,7 +53,7 @@ export function WalkingCharacter({ appearance, scale = 3, duration = 4.5 }: Prop
       const span = width + SPRITE_W
       const x = Math.round(((t / duration) % 1) * span) - SPRITE_W
 
-      const frame = Math.floor(t * clip.fps) % clip.frames
+      const frame = frameAt('walking', t)
       const { sx, sy } = frameRect('walking', 'right', frame)
 
       ctx.clearRect(0, 0, width, height)

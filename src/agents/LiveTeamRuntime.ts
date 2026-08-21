@@ -1,4 +1,5 @@
 import type { Agent, AgentListener, AgentRuntime, AgentStatus } from './agent.types'
+import { groupForTool } from './toolActivity'
 import type { AgentConfig, AgentRuntimeState, RuntimeEvent } from '../shared/providerApi'
 
 /**
@@ -21,9 +22,21 @@ import type { AgentConfig, AgentRuntimeState, RuntimeEvent } from '../shared/pro
 /** How long the celebration pose holds after a task lands, in seconds. */
 const SUCCESS_HOLD = 2.4
 
+/**
+ * How long a character keeps facing whoever it last spoke to, in seconds.
+ *
+ * A handover is a single event, so without this the pairing would exist for
+ * one frame and the two characters would never visibly acknowledge each
+ * other. It is short on purpose: a character still turned towards somebody
+ * they finished talking to a minute ago is as wrong as one who never turned.
+ */
+const PARTNER_HOLD = 5
+
 interface Body extends Agent {
   /** Seconds left on the success flourish, if any. */
   celebrating: number
+  /** Seconds left before the character stops facing its last correspondent. */
+  facing: number
 }
 
 export interface ExternalSpec {
@@ -130,7 +143,8 @@ export class LiveTeamRuntime implements AgentRuntime {
         active: config.enabled,
         spawned: config.spawned,
         visible: config.spawned,
-        celebrating: 0
+        celebrating: 0,
+        facing: 0
       })
       changed = true
     }
@@ -195,11 +209,41 @@ export class LiveTeamRuntime implements AgentRuntime {
     const body = event.agentId ? this.find(event.agentId) : undefined
 
     switch (event.type) {
+      /*
+       * What the agent is actually doing, at tool granularity.
+       *
+       * The event already carries the tool's registry name and always has;
+       * the world simply never looked at it, which is why an agent grepping
+       * the codebase and an agent running the test suite were drawn as the
+       * same person making the same two-frame typing motion. Nothing is
+       * invented here — the group is a lookup on a name main supplied.
+       */
+      case 'agent.tool.started':
+        if (body && event.tool) {
+          const group = groupForTool(event.tool)
+          if (body.activity !== group) {
+            body.activity = group
+            this.emit()
+          }
+        }
+        break
+
+      case 'agent.idle':
+      case 'agent.cancelled':
+      case 'agent.failed':
+        if (body && (body.activity !== null || body.partnerId)) {
+          body.activity = null
+          body.partnerId = null
+          this.emit()
+        }
+        break
+
       case 'agent.completed':
         if (body) {
           body.status = 'success'
           body.task = 'Done'
           body.celebrating = SUCCESS_HOLD
+          body.activity = null
           this.emit()
         }
         break
@@ -216,10 +260,16 @@ export class LiveTeamRuntime implements AgentRuntime {
         if (body) {
           body.status = 'talking'
           body.task = `Talking to ${event.targetAgentName ?? event.targetAgentId ?? 'a teammate'}`
+          // Both ends learn who the other is, so both turn towards each other
+          // rather than one addressing the back of the other's head.
+          body.partnerId = event.targetAgentId ?? null
+          body.facing = PARTNER_HOLD
         }
         if (target && target.executionId === null) {
           target.status = 'waiting'
           target.task = `Hearing from ${event.agentName ?? event.agentId ?? 'a teammate'}`
+          target.partnerId = event.agentId ?? null
+          target.facing = PARTNER_HOLD
         }
         if (body || target) this.emit()
         break
@@ -258,7 +308,8 @@ export class LiveTeamRuntime implements AgentRuntime {
       active: true,
       spawned: true,
       visible: true,
-      celebrating: 0
+      celebrating: 0,
+      facing: 0
     })
     this.emit()
   }
@@ -316,6 +367,15 @@ export class LiveTeamRuntime implements AgentRuntime {
   tick(dt: number): void {
     let changed = false
     for (const body of this.agents) {
+      if (body.facing > 0) {
+        body.facing -= dt
+        if (body.facing <= 0) {
+          body.facing = 0
+          body.partnerId = null
+          changed = true
+        }
+      }
+
       if (body.celebrating <= 0) continue
       body.celebrating -= dt
       if (body.celebrating <= 0) {

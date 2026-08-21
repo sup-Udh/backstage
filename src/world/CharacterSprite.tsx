@@ -4,7 +4,7 @@ import type {
   CharacterState,
   Facing
 } from '../characters/character.types'
-import { ANIMATIONS } from '../characters/character.states'
+import { frameAt } from '../characters/character.states'
 import { SPRITE_H, SPRITE_W } from './pixel/characterSprite'
 import { buildCharacterSheet, frameRect } from './engine/spriteCache'
 
@@ -32,7 +32,7 @@ export function CharacterSprite({
 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const art = useMemo(
-    () => buildCharacterSheet(appearance, '#FFC94F'),
+    () => buildCharacterSheet(appearance),
     [appearance]
   )
 
@@ -43,13 +43,12 @@ export function CharacterSprite({
     if (!ctx) return
     ctx.imageSmoothingEnabled = false
 
-    const clip = ANIMATIONS[state]
     let raf = 0
     const started = performance.now()
 
     const draw = (now: number) => {
       const t = (now - started) / 1000
-      const frame = Math.floor(t * clip.fps) % clip.frames
+      const frame = frameAt(state, t)
       const { sx, sy } = frameRect(state, facing, frame)
       ctx.clearRect(0, 0, SPRITE_W, SPRITE_H)
       ctx.drawImage(

@@ -51,7 +51,7 @@ function bakePreview(theme: Theme): HTMLCanvasElement {
    * to correct.
    */
   theme.characters.slice(0, 2).forEach((c, i) => {
-    const art = buildWorldSheet(c.appearance, palette.brand)
+    const art = buildWorldSheet(c.appearance)
     const { sx, sy } = worldFrameRect('idle', 'down', 0)
     full.ctx.drawImage(
       art.sheet,

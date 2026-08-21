@@ -1,4 +1,5 @@
 import type { AgentLifecycle } from '../shared/agents'
+import type { ToolGroup } from './toolActivity'
 
 /**
  * The renderer's view of an agent.
@@ -63,6 +64,29 @@ export interface Agent {
    * directly, because they have no configuration to spawn from.
    */
   visible: boolean
+
+  /**
+   * Who this agent is currently exchanging something with.
+   *
+   * Set on both ends of a delegation or a message, and cleared when the
+   * exchange is over. The world needs it for one thing that a status alone
+   * cannot supply: which way to turn. "Talking" is not a direction, and two
+   * characters who are talking to each other while facing their own monitors
+   * is the difference between a conversation and a coincidence.
+   */
+  partnerId?: string | null
+
+  /**
+   * The family of the tool that most recently started running.
+   *
+   * The runtime already reports every tool call — this is not new information
+   * and it is not a second state machine, it is the existing `tool` field on
+   * `agent.tool.started` filed under a heading. What it buys is that reading a
+   * file and running a command stop looking identical: one is a person with
+   * their hands off the keyboard reading a screen, the other is a person
+   * typing, and both of those are already what the tool names say.
+   */
+  activity?: ToolGroup | null
 }
 
 export type AgentListener = (agents: Agent[]) => void

@@ -1,4 +1,5 @@
 import { buildCharacterOps, SPRITE_H, SPRITE_W } from './characterSprite'
+import { ANIMATIONS, frameCount } from '../../characters/character.states'
 import type { CharacterDef, CharacterState, Facing } from '../../characters/character.types'
 import { detectiveCharacters } from '../../themes/detective/characters'
 import { officeCharacters } from '../../themes/office/characters'
@@ -31,16 +32,14 @@ import { labCharacters } from '../../themes/lab/characters'
 
 let failures = 0
 
-const STATES: CharacterState[] = [
-  'idle',
-  'walking',
-  'working',
-  'thinking',
-  'talking',
-  'waiting',
-  'success',
-  'error'
-]
+/**
+ * Every pose, read from the clip table rather than written out again.
+ *
+ * Two lists of states that had to agree was exactly the kind of duplication
+ * that lets a new pose be added and never checked — and the seated family
+ * doubled the count, so the odds of that shifted from unlikely to certain.
+ */
+const STATES = Object.keys(ANIMATIONS) as CharacterState[]
 const FACINGS: Facing[] = ['down', 'up', 'left', 'right']
 
 /** How many rows count as the head, for the "distinct faces" check. */
@@ -91,6 +90,9 @@ function raster(ops: ReturnType<typeof buildCharacterOps>): Raster {
 }
 
 console.log('Character sprites')
+console.log(
+  `  info  ${STATES.length} poses, ${STATES.reduce((n, s) => n + frameCount(s), 0)} frames each way`
+)
 
 for (const [theme, cast] of CASTS) {
   let escaped = 0
@@ -98,7 +100,11 @@ for (const [theme, cast] of CASTS) {
   for (const c of cast) {
     for (const state of STATES) {
       for (const facing of FACINGS) {
-        for (let frame = 0; frame < 4; frame++) {
+        // Every frame the clip actually has. It used to check the first four,
+        // which was every frame there was when the sheet was capped at four
+        // columns — and would silently have stopped covering the second half
+        // of an eight-frame walk cycle.
+        for (let frame = 0; frame < frameCount(state); frame++) {
           const spriteFacing =
             facing === 'down' ? 'down' : facing === 'up' ? 'up' : 'side'
           const { outside } = raster(

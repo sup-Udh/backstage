@@ -1,9 +1,10 @@
-﻿import type { SceneDef, Theme, ThemePalette } from '../../themes/types'
+import type { SceneDef, Theme, ThemePalette } from '../../themes/types'
 import type { CharacterDef } from '../../characters/character.types'
 import type { CharacterRuntime } from '../world.types'
 import {
   bakeOps,
   buildWorldSheet,
+  makeSilhouette,
   worldFrameRect,
   WORLD_SPRITE_H,
   WORLD_SPRITE_W,
@@ -59,6 +60,25 @@ export interface WorldLink {
   directed: boolean
 }
 
+/**
+ * What a screen in the room is showing.
+ *
+ * Supplied by the engine from whoever is sitting at it, never decided here.
+ * A monitor is an output of a person, and the previous version animated every
+ * screen from its own index and the wall clock — so an empty desk churned out
+ * code as busily as an occupied one, and a character who had stopped to think
+ * sat in front of a screen that carried on without them. That is precisely the
+ * kind of detail that makes a world look like a screensaver instead of a
+ * workplace.
+ */
+export type ScreenMode =
+  | 'quiet'
+  | 'typing'
+  | 'reading'
+  | 'thinking'
+  | 'waiting'
+  | 'error'
+
 /** A connection being dragged out from a character but not yet dropped. */
 export interface PendingLink {
   from: string
@@ -82,6 +102,15 @@ export class WorldRenderer {
   private props: BakedProp[]
   private sheets = new Map<string, CharacterSheet>()
   private motes: Mote[] = []
+  /**
+   * A single scratch buffer for the hover outline.
+   *
+   * One, for the whole office. Silhouettes used to be baked as a second full
+   * sheet per character — exactly as large as the art it flattened — which
+   * doubled the world's texture memory in order to serve the one character
+   * the pointer happens to be over.
+   */
+  private silhouette = makeSilhouette()
 
   /**
    * @param cast The project's characters. Sheets are baked for these and only
@@ -104,7 +133,7 @@ export class WorldRenderer {
       .filter((p): p is BakedProp => p !== null)
 
     for (const c of cast) {
-      this.sheets.set(c.id, buildWorldSheet(c.appearance, this.pal.brand))
+      this.sheets.set(c.id, buildWorldSheet(c.appearance))
     }
 
     /*
@@ -146,23 +175,80 @@ export class WorldRenderer {
 
   /* ---------------------------------------------------------- overlays -- */
 
-  /** Scrolling code and a blinking cursor on an agent's monitor. */
+  /**
+   * What is on one screen, and how fast it is moving.
+   *
+   * Every mode draws the same four lines of pseudo-code and a cursor; what
+   * changes is the rate they scroll at, whether the cursor blinks, and the
+   * colour of the accent line. That restraint is deliberate — this is a
+   * fourteen-by-eleven pixel rectangle seen from across a room, and anything
+   * more elaborate than "is it moving, and how" is detail nobody can resolve.
+   * What a viewer *can* resolve is that the screen next to a typing character
+   * is alive and the one next to a thinking character has stopped, which is
+   * the entire job.
+   */
   private drawMonitor(
     ctx: CanvasRenderingContext2D,
     m: { x: number; y: number },
     t: number,
-    idx: number
+    idx: number,
+    mode: ScreenMode
   ): void {
-    const off = Math.floor(t / 0.9) + idx * 3
+    /*
+     * The scroll rate. `quiet` is not zero but very nearly: an unattended
+     * machine still has a clock on it and a cursor somewhere, and freezing it
+     * outright makes an empty desk read as a switched-off one.
+     */
+    const rate =
+      mode === 'typing'
+        ? 0.16
+        : mode === 'reading'
+          ? 0.55
+          : mode === 'waiting'
+            ? 0.9
+            : mode === 'error'
+              ? 1.4
+              : mode === 'thinking'
+                ? 3.2
+                : 6
+
+    const off = Math.floor(t / rate) + idx * 3
+    const accent =
+      mode === 'error' ? this.pal.rust : mode === 'quiet' ? this.pal.steelDark : this.pal.brand
+
     for (let r = 0; r < 4; r++) {
       const w = 3 + ((r * 5 + off * 3 + idx * 7) % 12)
       const indent = (r + off) % 3
-      ctx.fillStyle = (r + off) % 4 === 0 ? this.pal.brand : this.pal.steel
+      ctx.fillStyle = (r + off) % 4 === 0 ? accent : this.pal.steel
       ctx.fillRect(m.x + 1 + indent, m.y + 2 + r * 2, w, 1)
     }
-    if (Math.floor(t * 2) % 2 === 0) {
-      ctx.fillStyle = this.pal.brand
+
+    /*
+     * The cursor. It blinks while somebody is at the keyboard and sits solid
+     * while they are reading — which is what a cursor actually does, and is
+     * one more way the two work poses are told apart without a label.
+     */
+    if (mode === 'reading') {
+      ctx.fillStyle = this.pal.steelDark
       ctx.fillRect(m.x + 1, m.y + 10, 2, 1)
+    } else if (mode !== 'quiet' && Math.floor(t * (mode === 'typing' ? 2.6 : 1.5)) % 2 === 0) {
+      ctx.fillStyle = accent
+      ctx.fillRect(m.x + 1, m.y + 10, 2, 1)
+    }
+
+    /*
+     * Screen light on the desk in front of the monitor.
+     *
+     * Only while the machine is being used, and only ever two pixels — but it
+     * is the one cue that reaches past the bezel, so a busy workstation reads
+     * as lit rather than as a rectangle with lines in it.
+     */
+    if (mode === 'typing' || mode === 'error') {
+      ctx.save()
+      ctx.globalAlpha = 0.35
+      ctx.fillStyle = accent
+      ctx.fillRect(m.x - 1, m.y + 15, 19, 1)
+      ctx.restore()
     }
   }
 
@@ -218,7 +304,16 @@ export class WorldRenderer {
     this.pixel(ctx, cx, cy, this.pal.ink)
   }
 
-  /** Thought / speech decoration above the head. */
+  /**
+   * Thought / speech decoration above the head.
+   *
+   * Secondary to the body, always. Everything here marks something a pose
+   * cannot say on its own — that an exchange has two ends, that a moment has
+   * just been punctuated, that the hold-up is outside the room — and none of
+   * it is what tells the viewer whether somebody is working. If these were all
+   * removed the office would still read correctly, which is the test they had
+   * to pass to be drawn at all.
+   */
   private drawBubble(
     ctx: CanvasRenderingContext2D,
     c: CharacterRuntime,
@@ -226,7 +321,8 @@ export class WorldRenderer {
   ): void {
     if (c.bubble === 'none' || c.settled < 0.45) return
     const cx = Math.round(c.x)
-    const top = Math.round(c.y) - WORLD_SPRITE_H
+    const top =
+      Math.round(c.y) - (c.place === 'seated' ? WORLD_SPRITE_H - 4 : WORLD_SPRITE_H)
 
     if (c.bubble === 'spark') {
       // A short burst of pixel sparkles.
@@ -257,7 +353,7 @@ export class WorldRenderer {
 
     // Tail: a stepped point for speech, two small puffs for thought.
     ctx.fillStyle = this.pal.ink
-    if (c.bubble === 'talk') {
+    if (c.bubble === 'talk' || c.bubble === 'alert') {
       ctx.fillRect(cx - 2, by + bh, 2, 1)
       ctx.fillRect(cx - 1, by + bh + 1, 1, 1)
     } else {
@@ -265,10 +361,30 @@ export class WorldRenderer {
       ctx.fillRect(cx - 3, by + bh + 2, 1, 1)
     }
 
-    const rate = c.bubble === 'talk' ? 3.2 : 1.5
-    const active = Math.floor(t * rate) % 3
+    if (c.bubble === 'alert') {
+      // An exclamation, not a cloud of dots. An error is one fact, and the
+      // body beneath it is already slumped.
+      ctx.fillStyle = this.pal.rust
+      ctx.fillRect(cx - 1, by + 1, 2, 3)
+      ctx.fillRect(cx - 1, by + 5, 2, 1)
+      return
+    }
+
+    /*
+     * Three dots, cycling. The rate is what separates the three states that
+     * share this shape: speech runs at conversational pace, thought at a
+     * considering one, and waiting slowest of all — a hold that is not the
+     * agent's own to end.
+     */
+    const rate = c.bubble === 'talk' ? 3.2 : c.bubble === 'think' ? 1.5 : 0.8
+    const active = Math.floor(t * rate + c.phase) % 3
     for (let i = 0; i < 3; i++) {
-      ctx.fillStyle = i === active ? this.pal.brandDeep : this.pal.steelDark
+      const lit = i === active
+      ctx.fillStyle = lit
+        ? c.bubble === 'wait'
+          ? this.pal.steel
+          : this.pal.brandDeep
+        : this.pal.steelDark
       ctx.fillRect(bx + 2 + i * 2, by + 2, 2, 2)
     }
   }
@@ -418,14 +534,19 @@ export class WorldRenderer {
     const feet = Math.round(c.y)
     const W = WORLD_SPRITE_W
 
-    // Contact shadow, so nobody floats. Sized off the sprite rather than
-    // hard-coded, so it stays under the feet at any character scale.
-    ctx.save()
-    ctx.globalAlpha = 0.18
-    ctx.fillStyle = this.pal.ink
-    ctx.fillRect(dx + 2, feet - 1, W - 4, 1)
-    ctx.fillRect(dx + 3, feet, W - 6, 1)
-    ctx.restore()
+    /*
+     * Contact shadow, so nobody floats — but not for somebody in a chair.
+     * A seated character's feet are under a desk that is drawn over them, and
+     * a shadow there is a smudge on the desk's front panel.
+     */
+    if (c.place !== 'seated') {
+      ctx.save()
+      ctx.globalAlpha = 0.18
+      ctx.fillStyle = this.pal.ink
+      ctx.fillRect(dx + 3, feet - 1, W - 6, 1)
+      ctx.fillRect(dx + 5, feet, W - 10, 1)
+      ctx.restore()
+    }
 
     if (selected) {
       // A ring on the floor, so a selected agent stays findable in a crowd
@@ -440,19 +561,10 @@ export class WorldRenderer {
 
     if (hovered) {
       // 1px brand outline, drawn by stamping the silhouette around the sprite.
-      for (const [ox, oy] of AROUND) {
-        ctx.drawImage(
-          art.silhouette,
-          sx,
-          sy,
-          WORLD_SPRITE_W,
-          WORLD_SPRITE_H,
-          dx + ox,
-          dy + oy,
-          WORLD_SPRITE_W,
-          WORLD_SPRITE_H
-        )
-      }
+      // Flattened on demand into one shared buffer rather than read from a
+      // second baked sheet per character.
+      const stamp = this.silhouette.stamp(art.sheet, sx, sy, this.pal.brand)
+      for (const [ox, oy] of AROUND) ctx.drawImage(stamp, dx + ox, dy + oy)
     }
 
     // 1:1 blit from a sheet already baked at world scale, so the loop never
@@ -485,7 +597,9 @@ export class WorldRenderer {
     links: WorldLink[] = [],
     pending: PendingLink | null = null,
     /** Characters a pending link could legally be dropped on. */
-    droppable: Set<string> = new Set()
+    droppable: Set<string> = new Set(),
+    /** What each of the room's screens is showing, by monitor index. */
+    screens: ScreenMode[] = []
   ): void {
     const scene = this.scene
 
@@ -515,10 +629,16 @@ export class WorldRenderer {
     // Overlays are pinned just behind their prop so a character walking in
     // front of a desk still occludes that desk's monitor.
     scene.monitors.forEach((m, i) => {
-      items.push({ baseY: scene.deskBaseY + 0.1, draw: () => this.drawMonitor(ctx, m, t, i) })
+      // Each screen sorts with its own desk. They used to share the back
+      // row's depth, which put every front-row monitor at the wrong distance
+      // from the viewer — wrong exactly when somebody walked between the rows.
+      items.push({
+        baseY: m.baseY + 0.1,
+        draw: () => this.drawMonitor(ctx, m, t, i, screens[i] ?? 'quiet')
+      })
     })
     scene.leds.forEach((l, i) => {
-      items.push({ baseY: scene.deskBaseY + 0.2, draw: () => this.drawLed(ctx, l, t, i) })
+      items.push({ baseY: l.baseY + 0.2, draw: () => this.drawLed(ctx, l, t, i) })
     })
     scene.steamVents.forEach((v, i) => {
       items.push({ baseY: v.baseY + 0.3, draw: () => this.drawSteam(ctx, v, t, i) })

@@ -388,13 +388,29 @@ function brows(
   mood: BrowMood
 ): Op[] {
   const { l, r } = eyeColumns(a, h)
-  const y = h.y + 4
+  const base = h.y + 4
   const shape = a.browShape ?? 'flat'
 
-  // Mood raises or lowers the whole brow line, and tilts it.
-  const lift = (exp === 'friendly' ? -1 : 0) + (mood === 'raised' ? -1 : 0)
-  const inner =
-    (exp === 'serious' || exp === 'focused' ? 1 : 0) + (mood === 'knit' ? 1 : 0)
+  /*
+   * The brow has exactly one row to live on.
+   *
+   * The head is nine rows tall and every one is spoken for: two of cap, a
+   * fringe, a forehead, the brow, two of eye, the nose, the mouth. So a mood
+   * may raise the line onto the forehead and may never lower it — the row
+   * below is the eye, and the eye is drawn afterwards, so a brow pushed down
+   * onto it is simply erased. That was not a theoretical risk: every
+   * character whose expression is `serious` or `focused` was rendered with no
+   * eyebrows at all, which is a third of one cast and the most identifying
+   * feature any of them had.
+   *
+   * A knitted brow is drawn instead as a furrow between the eyes, in the gap
+   * the eyes themselves never occupy. That is both correct anatomy and the
+   * only place on the face that is free.
+   */
+  const raised = exp === 'friendly' || mood === 'raised'
+  const knit = exp === 'serious' || exp === 'focused' || mood === 'knit'
+  const y = raised ? base - 1 : base
+  const lift = 0
   // One brow a pixel higher. The whole read of "sceptical" is that offset.
   const cocked = exp === 'skeptical' ? -1 : 0
 
@@ -426,14 +442,25 @@ function brows(
     ops.push([r, y - 1 + lift, EYE_W - 1, 1, colour])
     ops.push([r + EYE_W - 1, y + lift, 1, 1, colour])
   } else {
-    ops.push([l, y + lift + inner + cocked, EYE_W, 1, colour])
-    ops.push([r, y + lift + inner, EYE_W, 1, colour])
+    ops.push([l, y + lift + cocked, EYE_W, 1, colour])
+    ops.push([r, y + lift, EYE_W, 1, colour])
+  }
+
+  /*
+   * The furrow. One or two pixels in the gap between the eyes, a row below the
+   * brow line — the only place on a face this size where a frown can go
+   * without being painted over by something drawn later.
+   */
+  if (knit) {
+    const from = l + EYE_W
+    const to = r - 1
+    if (to >= from) ops.push([from, y + 1, to - from + 1, 1, colour])
   }
 
   // Tired eyes carry a shadow under them as well as a flat brow.
   if (exp === 'tired') {
-    ops.push([l, y + 3, EYE_W, 1, 'skinShade'])
-    ops.push([r, y + 3, EYE_W, 1, 'skinShade'])
+    ops.push([l, base + 3, EYE_W, 1, 'skinShade'])
+    ops.push([r, base + 3, EYE_W, 1, 'skinShade'])
   }
   return ops
 }
@@ -625,10 +652,36 @@ function head(a: CharacterAppearance, facing: SpriteFacing, look: Look): Op[] {
   if (facing === 'side') {
     ops.push([x - 1, y - 1, w + 2, h.h + 2, 'ink'])
     ops.push([x, y, w, h.h, 'skin'])
+    /*
+     * The profile used to draw one generic head of hair for everybody: three
+     * rows of cap and a block down the back, whatever the character actually
+     * had. So a buzz cut and a bob were the same drawing from the side, and
+     * characters became indistinguishable for the whole time they spent
+     * walking — which is most of the time anyone is looking at them.
+     */
     if (a.hairStyle !== 'bald') {
-      ops.push([x, y, w, 3, 'hair'])
+      const cropped = a.hairStyle === 'buzz'
+      const swept = a.hairStyle === 'slick' || a.hairStyle === 'swept'
+      const full =
+        a.hairStyle === 'long' ||
+        a.hairStyle === 'waves' ||
+        a.hairStyle === 'bob' ||
+        a.hairStyle === 'curly' ||
+        a.hairStyle === 'afro'
+
+      ops.push([x, y, w, cropped ? 2 : 3, 'hair'])
       ops.push([x, y, 5, 1, 'hairLit'])
-      ops.push([x, y + 3, 3, 6, 'hair'])
+      if (!cropped) {
+        // The column down the back of the skull: how far it reaches is the
+        // difference between short hair and long hair seen from the side.
+        ops.push([x, y + 3, full ? 4 : 3, full ? 8 : 5, 'hair'])
+        ops.push([x, y + 3, 1, full ? 8 : 5, 'hairShade'])
+      }
+      if (swept) {
+        // A fringe carried forward over the brow, which is the one thing a
+        // side parting shows in profile.
+        ops.push([x + w - 3, y + 2, 3, 1, 'hairShade'])
+      }
     }
     ops.push([x + w - 1, y + 2, 1, 7, 'skinShade'])
     // The nose in profile is the one place it breaks the silhouette.
@@ -673,6 +726,17 @@ function head(a: CharacterAppearance, facing: SpriteFacing, look: Look): Op[] {
   return ops
 }
 
+/**
+ * The mouth.
+ *
+ * Drawn a full step darker than the jaw, which is not a style choice but a
+ * correction. The head is nine rows tall and the mouth lands on the same row
+ * as the chin shading; both were `skinShade`, so on every character with a
+ * square or narrow jaw the mouth was painted in exactly the colour already
+ * underneath it and simply did not exist. Nobody caught it while the sprite
+ * was being resampled to twelve pixels wide, because at that size the row was
+ * being discarded half the time anyway.
+ */
 function mouth(exp: Expression, h: Head, m: Mouth): Op[] {
   const y = h.y + 8
   const x = h.cx - 1
@@ -683,19 +747,19 @@ function mouth(exp: Expression, h: Head, m: Mouth): Op[] {
     case 'smirk':
       // Level on one side, lifted on the other. Half a smile, deliberately.
       return [
-        [x - 1, y, 3, 1, 'skinShade'],
-        [x + 2, y - 1, 1, 1, 'skinShade']
+        [x - 1, y, 3, 1, 'skinDeep'],
+        [x + 2, y - 1, 1, 1, 'skinDeep']
       ]
     case 'friendly':
       return [
-        [x - 1, y, 4, 1, 'skinShade'],
+        [x - 1, y, 4, 1, 'skinDeep'],
         [x - 2, y - 1, 1, 1, 'skinShade'],
         [x + 3, y - 1, 1, 1, 'skinShade']
       ]
     case 'serious':
-      return [[x - 1, y, 4, 1, 'skinDeep']]
+      return [[x - 1, y, 4, 1, 'ink2']]
     default:
-      return [[x - 1, y, 3, 1, 'skinShade']]
+      return [[x - 1, y, 3, 1, 'skinDeep']]
   }
 }
 
@@ -782,8 +846,22 @@ function frameFor(a: CharacterAppearance): Frame {
  * outer column at x=15..16, and a full swing outwards lands on 17 — one clear
  * of the edge.
  */
+/**
+ * Arm ops, split by whether they belong under the head or over it.
+ *
+ * A hand at the chin and a hand at the temple are both *in front of the face*,
+ * and the sprite draws the torso before the head — so drawn in one pass they
+ * ended up behind the skull and the two poses that depend on them, thinking
+ * and error, showed no hand at all. The thinking pose in particular was then
+ * a character sitting perfectly still, which is exactly the failure this whole
+ * pass exists to correct.
+ */
+interface ArmArt {
+  under: Op[]
+  over: Op[]
+}
+
 function arms(
-  a: CharacterAppearance,
   facing: SpriteFacing,
   pose: ArmPose,
   swing: number,
@@ -791,8 +869,9 @@ function arms(
   left: number,
   w: number,
   bodyH: number
-): Op[] {
+): ArmArt {
   const ops: Op[] = []
+  const over: Op[] = []
   const lx = left
   const rx = left + w - 2
   const shoulder = y + 1
@@ -833,8 +912,16 @@ function arms(
 
     case 'typing': {
       /*
-       * Forearms angled in and forward, hands at the keyboard line — inside
-       * the shoulders, not outside them, because that is where a keyboard is.
+       * Hands apart, at the outer edge of the torso, one strike ahead of the
+       * other.
+       *
+       * The width matters more than it sounds. Two pixels in from each
+       * shoulder they met in the middle of the chest, which is not a person at
+       * a keyboard, it is a person holding their own hands, and on a slim
+       * build there was a single pixel between them. At the shoulder line they
+       * sit about a keyboard's width apart and the shirt stays visible between
+       * them, so the torso is not cut in half.
+       *
        * The two hands are driven from opposite ends of `swing` so they never
        * strike together, which is the single thing that makes typing read as
        * typing rather than as a twitch.
@@ -843,19 +930,27 @@ function arms(
       const r = swing > 0.5 ? 1 : 0
       ops.push([lx, shoulder, 2, bodyH - 6, 'outfitShade'])
       ops.push([rx, shoulder, 2, bodyH - 6, 'outfitDeep'])
-      ops.push([lx + 1, handY - 2, 2, 2, 'outfitShade'])
-      ops.push([rx - 1, handY - 2, 2, 2, 'outfitDeep'])
-      ops.push([lx + 2, handY - l, 2, 2, 'skin'])
-      ops.push([rx - 2, handY - r, 2, 2, 'skinShade'])
+      // Forearms coming forward off the elbow.
+      ops.push([lx, handY - 3, 2, 3, 'outfitShade'])
+      ops.push([rx, handY - 3, 2, 3, 'outfitDeep'])
+      ops.push([lx, handY - l, 2, 2, 'skin'])
+      ops.push([rx, handY - r, 2, 2, 'skinShade'])
       break
     }
 
     case 'rest': {
-      // Off the keys, forearms laid on the desk edge, hands together.
+      /*
+       * Off the keys: the forearms come in and the hands meet on the desk.
+       * The inverse of `typing`, on purpose. The two poses have to differ in
+       * silhouette and not only in whether something is moving, or a reading
+       * character and a typing one are the same drawing half the time.
+       */
       ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
       ops.push([rx, shoulder, 2, bodyH - 5, 'outfitDeep'])
-      ops.push([lx + 2, handY, 2, 2, 'skin'])
-      ops.push([rx - 2, handY, 2, 2, 'skinShade'])
+      ops.push([lx + 1, handY, 2, 2, 'outfitShade'])
+      ops.push([rx - 1, handY, 2, 2, 'outfitDeep'])
+      ops.push([lx + 2, handY + 1, 2, 2, 'skin'])
+      ops.push([rx - 2, handY + 1, 2, 2, 'skinShade'])
       break
     }
 
@@ -865,13 +960,32 @@ function arms(
        * chin. This is the pose the whole thinking state rests on, and it is
        * the only one where a hand appears above the shoulder line — which is
        * exactly why it is legible at twenty pixels.
+       *
+       * The climb and the hand go in the `over` pass so they sit in front of
+       * the face rather than behind the skull.
        */
+      const rise = Math.round(swing)
       ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
       ops.push([lx + 2, y + bodyH - 5, w - 4, 2, 'outfitShade'])
-      ops.push([rx, shoulder, 2, 3, 'outfitDeep'])
-      // The forearm climbing to the face, and the hand at the chin.
-      ops.push([rx - 1, y - 2 + Math.round(swing), 2, 5, 'outfitDeep'])
-      ops.push([rx - 1, y - 3 + Math.round(swing), 2, 2, 'skin'])
+      ops.push([rx, shoulder, 2, 4, 'outfitDeep'])
+      // The elbow, tucked in against the ribs.
+      ops.push([rx - 1, y + 2, 2, 3, 'outfitDeep'])
+
+      /*
+       * The forearm climbing to the face, and the hand at the jaw.
+       *
+       * Both carry their own outline, and the hand sits *beside* the chin
+       * rather than over it. Skin on skin is invisible: the first version
+       * drew the hand in the same two tones as the cheek it was resting
+       * against, so the pose rendered as a character sitting perfectly still —
+       * the exact failure the thinking state was being rebuilt to fix. An
+       * outline is what makes a hand read as a separate object at this size.
+       */
+      over.push([rx - 2, y - 1 + rise, 4, 6, 'ink'])
+      over.push([rx - 1, y + rise, 2, 5, 'outfitDeep'])
+      over.push([rx - 2, y - 3 + rise, 4, 4, 'ink'])
+      over.push([rx - 1, y - 2 + rise, 2, 2, 'skin'])
+      over.push([rx - 1, y - 1 + rise, 2, 1, 'skinShade'])
       break
     }
 
@@ -881,8 +995,10 @@ function arms(
       ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
       ops.push([lx, handY, 2, 2, 'skin'])
       ops.push([rx, shoulder, 2, 3, 'outfitDeep'])
-      ops.push([rx, y + 3 - lift, 2, 3, 'outfitDeep'])
-      ops.push([rx + 1, y + 1 - lift, 2, 2, 'skinShade'])
+      ops.push([rx, y + 1 - lift, 3, 6, 'ink'])
+      ops.push([rx, y + 2 - lift, 2, 4, 'outfitDeep'])
+      ops.push([rx, y - 1 - lift, 3, 4, 'ink'])
+      ops.push([rx + 1, y - lift, 2, 2, 'skinShade'])
       break
     }
 
@@ -891,19 +1007,32 @@ function arms(
       const lift = Math.round(swing * 2)
       ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
       ops.push([lx, handY, 2, 2, 'skin'])
+      ops.push([rx, y - 2 - lift, 3, 8, 'ink'])
       ops.push([rx, y - 1 - lift, 2, 6, 'outfitDeep'])
+      ops.push([rx, y - 4 - lift, 3, 3, 'ink'])
       ops.push([rx + 1, y - 3 - lift, 2, 2, 'skinShade'])
       break
     }
 
     case 'folded': {
-      // Crossed at the chest: two horizontal bars and two hands tucked in.
+      /*
+       * Crossed at the chest, with a hard edge above them.
+       *
+       * The first version drew the fold in outfitShade and outfitDeep — the
+       * two tones the torso already uses for its own shading — so a pair of
+       * folded arms was indistinguishable from a plain jacket and the waiting
+       * pose looked exactly like standing still. The outline is what makes
+       * this read from across a room, which is the only place it is ever seen
+       * from.
+       */
       ops.push([lx, shoulder, 2, 3, 'outfitShade'])
       ops.push([rx, shoulder, 2, 3, 'outfitDeep'])
-      ops.push([lx, y + 4, w, 2, 'outfitShade'])
-      ops.push([lx, y + 6, w - 2, 2, 'outfitDeep'])
-      ops.push([lx + 1, y + 6, 2, 2, 'skin'])
-      ops.push([rx, y + 4, 2, 2, 'skinShade'])
+      ops.push([lx - 1, y + 3, w + 2, 5, 'ink'])
+      ops.push([lx, y + 4, w, 3, 'outfitShade'])
+      ops.push([lx, y + 4, w, 1, 'outfitLit'])
+      // Each hand tucked under the opposite elbow.
+      ops.push([lx + 1, y + 4, 2, 2, 'skin'])
+      ops.push([rx - 1, y + 5, 2, 2, 'skinShade'])
       break
     }
 
@@ -919,12 +1048,16 @@ function arms(
     }
 
     case 'slump': {
-      // One hand at the temple, the other hanging. Read as "not again".
+      // One hand up at the temple, the other hanging. Read as "not again".
       ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
       ops.push([lx, handY, 2, 2, 'skin'])
-      ops.push([rx, shoulder, 2, 2, 'outfitDeep'])
-      ops.push([rx, y - 2, 2, 4, 'outfitDeep'])
-      ops.push([rx - 1, y - 4, 2, 2, 'skinShade'])
+      ops.push([rx, shoulder, 2, 3, 'outfitDeep'])
+      // Outlined for the same reason the chin hand is: a hand against a face
+      // needs an edge or it is a smudge on the cheek.
+      over.push([rx - 2, y - 5, 4, 8, 'ink'])
+      over.push([rx - 1, y - 4, 2, 7, 'outfitDeep'])
+      over.push([rx - 2, y - 7, 4, 4, 'ink'])
+      over.push([rx - 1, y - 6, 2, 2, 'skinShade'])
       break
     }
 
@@ -944,7 +1077,7 @@ function arms(
       break
     }
   }
-  return ops
+  return { under: ops, over }
 }
 
 function torso(
@@ -954,7 +1087,7 @@ function torso(
   dx: number,
   arm: ArmPose,
   swing: number
-): Op[] {
+): ArmArt {
   const f = frameFor(a)
   const ops: Op[] = []
   const y = TORSO_Y + dy + f.lean
@@ -1011,13 +1144,14 @@ function torso(
     ops.push([10 + dx, y + 2, 1, 4, 'accent'])
   }
 
-  ops.push(...arms(a, facing, arm, swing, y, left, w, bodyH))
+  const limbs = arms(facing, arm, swing, y, left, w, bodyH)
+  ops.push(...limbs.under)
 
   if (facing === 'side') {
     // Trim the far shoulder so the profile does not read as front-on.
     ops.push([left - 1, y - 1, 2, bodyH + 1, 'none'])
   }
-  return ops
+  return { under: ops, over: limbs.over }
 }
 
 /* ------------------------------------------------------------ accessory -- */
@@ -1140,8 +1274,8 @@ function legPair(
   bob: number,
   liftL: number,
   liftR: number,
-  offL: number,
-  offR: number
+  xL: number,
+  xR: number
 ): Op[] {
   const top = LEG_Y + bob
   const ops: Op[] = []
@@ -1155,13 +1289,22 @@ function legPair(
     ops.push([x + 1, footTop, 3, 1, shoe])
   }
 
-  leg(5 + offL, liftL, 'trousers', 'shoes')
-  leg(11 + offR, liftR, 'trousersShade', 'shoes')
+  /*
+   * The far leg first, so the near one draws over it. In profile the two
+   * overlap, and which is in front is the whole read of which way the stride
+   * is going.
+   */
+  leg(xR, liftR, 'trousersShade', 'shoes')
+  leg(xL, liftL, 'trousers', 'shoes')
   return ops
 }
 
+/** Where the two legs stand when nothing is happening. */
+const LEG_L = 5
+const LEG_R = 11
+
 function standLegs(bob: number): Op[] {
-  return legPair(bob, 0, 0, 0, 0)
+  return legPair(bob, 0, 0, LEG_L, LEG_R)
 }
 
 /**
@@ -1186,13 +1329,49 @@ const WALK: { bob: number; liftL: number; liftR: number; spread: number }[] = [
 
 function walkLegs(frame: number, side: boolean): Op[] {
   const s = WALK[frame % WALK.length]
-  const spread = side ? s.spread * 2 : s.spread
-  return legPair(s.bob, s.liftL, s.liftR, -spread, spread)
+
+  if (side) {
+    /*
+     * In profile the legs are one behind the other, not side by side.
+     *
+     * They start stacked on the body's centre line and scissor apart from
+     * there: at full stride four pixels separate them, at the passing pose
+     * they sit on top of one another, and on the opposite stride they cross
+     * over. Offsetting the standing pair outwards instead — which is what the
+     * first version did — produced a character doing the splits every time
+     * they crossed the room.
+     */
+    const centre = 9
+    return legPair(
+      s.bob,
+      s.liftL,
+      s.liftR,
+      centre - s.spread * 2,
+      centre + s.spread * 2
+    )
+  }
+
+  /*
+   * Face on, the legs keep their stance and only lift.
+   *
+   * A stride towards the viewer is almost entirely foreshortened, so widening
+   * the stance to represent it produced a character waddling: eight pixels
+   * between the ankles at full stride and two at the passing pose, swinging
+   * back and forth four times a second. The lift, the hip drop and the arm
+   * swing carry a front-on walk on their own.
+   */
+  return legPair(s.bob, s.liftL, s.liftR, LEG_L, LEG_R)
 }
 
-/** Seated: knees forward, so the legs read as folded rather than standing. */
-function sitLegs(bob: number): Op[] {
-  const y = LEG_Y + bob
+/**
+ * Seated: knees forward, so the legs read as folded rather than standing.
+ *
+ * Deliberately takes no bob. A seated character's legs are under a desk that
+ * is drawn over them, and moving them with the breath only ever produced a
+ * shoe edge appearing and disappearing below the desk's front panel.
+ */
+function sitLegs(): Op[] {
+  const y = LEG_Y + 1
   return [
     [5, y, 10, 4, 'ink'],
     [6, y + 1, 3, 2, 'trousers'],
@@ -1346,11 +1525,11 @@ const POSTURES: Record<CharacterState, Posture[]> = {
   /** In the chair with nothing running. Breathing, a blink, a look round. */
   sitting: [
     P({ legs: 'sit', bob: 1, arm: 'rest' }),
-    P({ legs: 'sit', bob: 2, arm: 'rest' }),
-    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'blink' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', headDy: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', headDy: 1, gaze: 'blink' }),
     P({ legs: 'sit', bob: 1, arm: 'rest' }),
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'side', headDx: 1 }),
-    P({ legs: 'sit', bob: 2, arm: 'rest' })
+    P({ legs: 'sit', bob: 1, arm: 'rest', headDy: 1 })
   ],
 
   /**
@@ -1361,17 +1540,17 @@ const POSTURES: Record<CharacterState, Posture[]> = {
   sitWorking: [
     P({ legs: 'sit', bob: 1, arm: 'typing', swing: 0, gaze: 'down' }),
     P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'down' }),
-    P({ legs: 'sit', bob: 2, arm: 'typing', swing: 0, gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 0, gaze: 'down', headDy: 1 }),
     P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'ahead' }),
-    P({ legs: 'sit', bob: 2, arm: 'typing', swing: 0, gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 0, gaze: 'down', headDy: 1 }),
     P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'down' })
   ],
 
   /** Reading: hands off the keys, eyes tracking down the screen. */
   sitReading: [
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down' }),
-    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'down', headDy: 1 }),
-    P({ legs: 'sit', bob: 2, arm: 'typing', swing: 1, gaze: 'down' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'down', headDy: 1 }),
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down' }),
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'blink' }),
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'ahead', brow: 'knit' })
@@ -1383,13 +1562,20 @@ const POSTURES: Record<CharacterState, Posture[]> = {
    * that reads at a glance even when the desk hides everything below the
    * chest.
    */
+  /*
+   * `bob` runs the other way here, and that is the point. Typing is hunched
+   * forward at bob 1; sitting back off the keyboard is bob 0, so the head
+   * visibly rises a pixel as the character stops working. Combined with the
+   * hand arriving under the chin and the eyes going up and off the screen, it
+   * is legible as "stopped, considering" without a word of text.
+   */
   sitThinking: [
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down' }),
-    P({ legs: 'sit', bob: 2, arm: 'chin', swing: 1, gaze: 'ahead', lean: 1 }),
-    P({ legs: 'sit', bob: 2, arm: 'chin', swing: 0, gaze: 'up', brow: 'raised', lean: 1 }),
-    P({ legs: 'sit', bob: 2, arm: 'chin', swing: 0, gaze: 'up', brow: 'raised', lean: 1, headDx: 1 }),
-    P({ legs: 'sit', bob: 2, arm: 'chin', swing: 0, gaze: 'side', brow: 'raised', lean: 1 }),
-    P({ legs: 'sit', bob: 1, arm: 'chin', swing: 1, gaze: 'ahead', lean: 1 })
+    P({ legs: 'sit', bob: 1, arm: 'chin', swing: 1, gaze: 'ahead' }),
+    P({ legs: 'sit', bob: 0, arm: 'chin', swing: 0, gaze: 'up', brow: 'raised' }),
+    P({ legs: 'sit', bob: 0, arm: 'chin', swing: 0, gaze: 'up', brow: 'raised' }),
+    P({ legs: 'sit', bob: 0, arm: 'chin', swing: 0, gaze: 'side', brow: 'raised' }),
+    P({ legs: 'sit', bob: 1, arm: 'chin', swing: 1, gaze: 'ahead' })
   ],
 
   /** Turned away from the screen, one hand moving, talking. */
@@ -1407,8 +1593,8 @@ const POSTURES: Record<CharacterState, Posture[]> = {
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'ahead' }),
     P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'ahead' }),
     P({ legs: 'sit', bob: 1, arm: 'typing', swing: 0, gaze: 'ahead' }),
-    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'down' }),
-    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'blink' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'blink', headDy: 1 }),
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'side', headDx: 1 })
   ],
 
@@ -1467,21 +1653,36 @@ export function buildCharacterOps(
     p.legs === 'walk'
       ? walkLegs(frame, facing === 'side')
       : p.legs === 'sit'
-        ? sitLegs(p.bob)
+        ? sitLegs()
         : standLegs(p.bob)
+
+  /*
+   * The head may shift by one column and no more.
+   *
+   * A lean and a head-tilt in the same frame would otherwise stack to two,
+   * and the widest hair in the cast — a ponytail, an afro, shoulder waves —
+   * already reaches within a pixel of the cell wall. A pixel past it is not
+   * clipped: the sheet packs frames side by side, so it appears in the next
+   * frame of somebody's walk cycle.
+   */
+  const dx = Math.max(-1, Math.min(1, p.lean + p.headDx))
 
   const look: Look = {
     dy: p.bob + p.headDy,
-    dx: p.lean + p.headDx,
+    dx,
     gaze: p.gaze,
     brow: p.brow,
     mouth: p.mouth
   }
 
+  const body = torso(a, facing, p.bob, dx, p.arm, p.swing)
+
   return [
-    ...torso(a, facing, p.bob, p.lean, p.arm, p.swing),
+    ...body.under,
     ...head(a, facing, look),
+    // Anything the arms put in front of the face, after the face exists.
+    ...body.over,
     ...legs,
-    ...accessory(a, p.bob, p.lean, p.arm)
+    ...accessory(a, p.bob, dx, p.arm)
   ]
 }
