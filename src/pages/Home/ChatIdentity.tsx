@@ -19,10 +19,23 @@ interface Props {
   states: Record<string, AgentRuntimeState>
   /** Set when the group conversation is on screen rather than a private one. */
   thread: ThreadInfo | null
+  /**
+   * The project's configured team lead, or null if it has none.
+   *
+   * Passed in rather than derived. Which agent coordinates is a project
+   * setting — never a character name, a job title or a theme — and this
+   * component's job is to show it, not to work it out.
+   */
+  leadId: string | null
   providerName: (agent: AgentConfig) => string
   modelName: (agent: AgentConfig) => string
   onStop: (agentId: string) => void
   onLeaveThread: () => void
+}
+
+/** An action line, cut to something that fits on a roster row. */
+function shorten(action: string): string {
+  return action.length > 28 ? `${action.slice(0, 27)}…` : action
 }
 
 /**
@@ -41,6 +54,7 @@ export function ChatIdentity({
   isBroadcast,
   states,
   thread,
+  leadId,
   providerName,
   modelName,
   onStop,
@@ -147,9 +161,28 @@ export function ChatIdentity({
   }
 
   if (isBroadcast) {
-    const isTeamRunning = recipients.some(a => {
-      const state = states[a.id];
-      return state && ['queued', 'thinking', 'working', 'talking', 'waiting'].includes(state.status);
+    /*
+     * Who actually receives this, and what will happen to it.
+     *
+     * Two genuinely different things can happen when the user talks to the
+     * whole team, and the header used to describe neither: it said "N
+     * recipients — team responds sequentially", which was a description of the
+     * old broadcast and was left behind when the team lead was introduced.
+     *
+     * Now the request goes to one agent, the project's lead, who splits it up.
+     * The sequential broadcast still exists as a fallback for a project with
+     * no usable lead — and *that* is the case worth naming, because it is the
+     * one where the user is about to pay for four overlapping answers to one
+     * question and has no way to tell from the screen.
+     */
+    const lead = leadId ? recipients.find((a) => a.id === leadId) : undefined
+    const led = recipients.filter((a) => a.id !== lead?.id)
+    const isTeamRunning = recipients.some((a) => {
+      const state = states[a.id]
+      return (
+        state &&
+        ['queued', 'thinking', 'working', 'talking', 'waiting'].includes(state.status)
+      )
     })
 
     return (
@@ -157,23 +190,84 @@ export function ChatIdentity({
         <div className="flex items-baseline justify-between gap-2">
           <p className="font-pixel text-[12px] font-bold uppercase tracking-[0.08em] text-ink">
             All agents
+            <span className="ml-2 font-normal text-ink-3">
+              {lead ? 'Team workflow' : 'Broadcast'}
+            </span>
           </p>
-          {isTeamRunning && (
-            <button
-              type="button"
-              onClick={() => onStop('all')}
-              className="shrink-0 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
-            >
-              Stop Team
-            </button>
-          )}
-          <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-ink">
-            {recipients.length} recipient{recipients.length === 1 ? '' : 's'}
-          </p>
+          <div className="flex shrink-0 items-baseline gap-2">
+            {isTeamRunning && (
+              <button
+                type="button"
+                onClick={() => onStop('all')}
+                className="border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
+              >
+                Stop team
+              </button>
+            )}
+            <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink">
+              {recipients.length} agent{recipients.length === 1 ? '' : 's'}
+            </p>
+          </div>
         </div>
+
         <p className="mt-0.5 font-ui text-[11px] leading-snug text-ink-3">
-          {recipients.map(characterName).join(', ')} — team responds sequentially.
+          {lead ? (
+            <>
+              1 leader · {led.length} worker{led.length === 1 ? '' : 's'} —{' '}
+              {characterName(lead)} takes the request, splits it up and writes the
+              final answer.
+            </>
+          ) : (
+            /*
+             * Said plainly rather than hidden. Without a spawned lead every
+             * agent answers the whole question separately: four model calls,
+             * four overlapping essays, and no synthesis. The remedy is one
+             * setting away and the user cannot guess that from a roster.
+             */
+            <>
+              This project has no team lead in the office, so every agent
+              answers separately. Spawn the lead — or set one on the Agents
+              page — to have the request split up and answered once.
+            </>
+          )}
         </p>
+
+        {/*
+          The roster, live. Reading the runtime rather than a guess: an agent
+          with nothing to do says so, and one mid-execution says what it is
+          doing. This is the same state the pixel world animates from.
+        */}
+        <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+          {recipients.map((a) => {
+            const state = states[a.id]
+            const busy =
+              state !== undefined &&
+              ['queued', 'thinking', 'working', 'talking', 'waiting'].includes(
+                state.status
+              )
+            return (
+              <li key={a.id} className="flex items-baseline gap-1">
+                <span
+                  aria-hidden
+                  className={
+                    busy
+                      ? 'blink font-mono text-[9px] text-brand-deep'
+                      : 'font-mono text-[9px] text-ink-3'
+                  }
+                >
+                  {busy ? '●' : '○'}
+                </span>
+                <span className="font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink">
+                  {a.id === lead?.id && <span aria-hidden>👑 </span>}
+                  {characterName(a)}
+                </span>
+                <span className="font-mono text-[9px] uppercase tracking-[0.06em] text-ink-3">
+                  {state?.action ? shorten(state.action) : (state?.status ?? 'offline')}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
       </div>
     )
   }

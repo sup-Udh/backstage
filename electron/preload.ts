@@ -67,6 +67,7 @@ const api: BackstageApi = {
     open: (projectId) => ipcRenderer.invoke('projects:open', projectId),
     update: (projectId, patch) =>
       ipcRenderer.invoke('projects:update', projectId, patch),
+    remove: (projectId) => ipcRenderer.invoke('projects:remove', projectId),
     adoptLegacy: (input) => ipcRenderer.invoke('projects:adoptLegacy', input)
   },
 

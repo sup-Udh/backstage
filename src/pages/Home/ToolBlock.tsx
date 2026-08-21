@@ -24,12 +24,27 @@ interface Props {
  * the thing the user is actually watching, and work that is over is evidence
  * they can go back to.
  */
+/** Past this many calls an opened block shows its tail and offers the rest. */
+const RUN_CAP = 12
+
 export function ToolBlock({ block, defaultOpen }: Props) {
   const [open, setOpen] = useState(defaultOpen ?? block.running)
+  const [all, setAll] = useState(false)
 
   const label = GROUP_LABEL[block.group].toUpperCase()
   const count = block.runs.length
   const done = block.runs.filter((r) => r.status !== 'running').length
+
+  /*
+   * An opened block is capped to its most recent calls.
+   *
+   * An agent searching a large repository can make sixty file reads in one
+   * block, and sixty monospace lines is more of the panel than the answer they
+   * produced gets. The tail rather than the head, because the last thing an
+   * agent did is what led to what it said.
+   */
+  const capped = count > RUN_CAP && !all
+  const runs = capped ? block.runs.slice(-RUN_CAP) : block.runs
 
   return (
     <div
@@ -66,7 +81,18 @@ export function ToolBlock({ block, defaultOpen }: Props) {
 
       {open && (
         <ul className="border-t-2 border-rule px-2 py-1">
-          {block.runs.map((run) => (
+          {capped && (
+            <li className="py-px">
+              <button
+                type="button"
+                onClick={() => setAll(true)}
+                className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3 transition-colors hover:text-ink"
+              >
+                + {count - RUN_CAP} earlier calls
+              </button>
+            </li>
+          )}
+          {runs.map((run) => (
             <li key={run.id} className="flex items-baseline gap-1.5 py-px">
               <span
                 aria-hidden

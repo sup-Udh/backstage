@@ -23,6 +23,10 @@ import type { Project } from '../../shared/projects'
  * It is also the only route to a second project. Before this screen there was
  * no way to start one without deleting the first, because setup was reachable
  * only when no project existed at all.
+ *
+ * And it is the only route *out* of one. A project accumulates agents, cases,
+ * automations and transcripts, so the list is the honest place to remove one:
+ * nowhere else can show what is about to go, or what is left afterwards.
  */
 export function ProjectPicker() {
   const showSetup = useBackstage((s) => s.showSetup)
@@ -31,14 +35,22 @@ export function ProjectPicker() {
 
   const projects = useProject((s) => s.projects)
   const open = useProject((s) => s.open)
+  const remove = useProject((s) => s.remove)
   const refreshTeam = useTeam((s) => s.refresh)
 
   /** The project being opened, so its own card can say so. */
   const [opening, setOpening] = useState<string | null>(null)
+  /** The card asking whether it should really be deleted. At most one. */
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  /** Nothing else may be started while a card is opening or being deleted. */
+  const busyElsewhere = opening !== null || deleting !== null
 
   const enter = async (project: Project) => {
     setOpening(project.id)
+    setConfirming(null)
     setError(null)
     try {
       const opened = await open(project.id)
@@ -55,6 +67,34 @@ export function ProjectPicker() {
       setError(err instanceof Error ? err.message : `${project.name} could not be opened.`)
     } finally {
       setOpening(null)
+    }
+  }
+
+  /**
+   * Delete a project, once its own card has asked.
+   *
+   * The confirm is on the card rather than in a dialog because the card is
+   * what identifies the project — the name and, more to the point, the path.
+   * A dialog saying "delete Backstage?" over a list containing two checkouts
+   * of the same repository is asking a question the user cannot answer.
+   *
+   * Deleting the last one leads to setup rather than to an empty list, which
+   * is the same rule the walk-in already follows: with no projects there is
+   * nothing to choose between, only one to make.
+   */
+  const destroy = async (project: Project) => {
+    setDeleting(project.id)
+    setError(null)
+    try {
+      const remaining = await remove(project.id)
+      setConfirming(null)
+      if (remaining.length === 0) showSetup()
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : `${project.name} could not be deleted.`
+      )
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -105,51 +145,120 @@ export function ProjectPicker() {
             {ordered.map((project) => {
               const theme = getTheme(project.themeId)
               const busy = opening === project.id
+              const asking = confirming === project.id
+              const gone = deleting === project.id
               return (
-                <button
+                /*
+                  A card, not a button, since it holds two actions now. The
+                  hover lift and the border move to the open surface inside it
+                  so the card still reads as one object that responds to being
+                  pointed at.
+                */
+                <div
                   key={project.id}
-                  type="button"
-                  onClick={() => void enter(project)}
-                  disabled={opening !== null}
-                  className="group border-[3px] border-rule bg-paper/70 text-left shadow-[4px_4px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:border-ink enabled:hover:bg-paper disabled:opacity-60"
+                  className={`group flex flex-col border-[3px] border-rule bg-paper/70 shadow-[4px_4px_0_0_var(--color-ink)] transition-transform duration-75 focus-within:border-ink hover:border-ink hover:bg-paper ${
+                    busyElsewhere ? '' : 'hover:-translate-x-px hover:-translate-y-px'
+                  }`}
                 >
-                  <div className="overflow-hidden border-b-[3px] border-inherit">
-                    <ThemePreview theme={theme} scale={2} className="w-full" />
-                  </div>
-                  <div className="px-4 py-3">
-                    <p className="font-pixel text-base font-bold uppercase tracking-[0.04em] text-ink">
-                      {project.name}
-                    </p>
-                    {/*
-                      The path in full, and wrapped rather than trimmed. It is
-                      the one fact that decides whether this is the right
-                      project, and an ellipsis in the middle of a path hides
-                      exactly the part that distinguishes two checkouts of the
-                      same repository.
-                    */}
-                    <p className="mt-1.5 break-all font-mono text-[11px] leading-snug text-ink-3">
-                      {project.workspacePath}
-                    </p>
-                    <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
-                      {theme.name}
-                      <span className="mx-1.5 text-rule">·</span>
+                  <button
+                    type="button"
+                    onClick={() => void enter(project)}
+                    disabled={busyElsewhere || asking}
+                    className="flex-1 text-left disabled:opacity-60"
+                  >
+                    <div className="overflow-hidden border-b-[3px] border-rule transition-colors group-focus-within:border-ink group-hover:border-ink">
+                      <ThemePreview theme={theme} scale={2} className="w-full" />
+                    </div>
+                    <div className="px-4 py-3">
+                      <p className="font-pixel text-base font-bold uppercase tracking-[0.04em] text-ink">
+                        {project.name}
+                      </p>
                       {/*
-                        Characters, not agents. The roster is who was cast from
-                        the theme; how many of them currently have an agent
-                        behind them is scoped to the open project, so this
-                        screen cannot know it for the others — and a count that
-                        is right for one card and wrong for the rest is worse
-                        than the honest number.
+                        The path in full, and wrapped rather than trimmed. It is
+                        the one fact that decides whether this is the right
+                        project, and an ellipsis in the middle of a path hides
+                        exactly the part that distinguishes two checkouts of the
+                        same repository.
                       */}
-                      {project.characterRoster.length} characters
-                      <span className="mx-1.5 text-rule">·</span>
-                      {when(project.updatedAt)}
-                    </p>
-                    <p className="mt-3 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-deep">
-                      {busy ? 'Opening…' : 'Open →'}
-                    </p>
+                      <p className="mt-1.5 break-all font-mono text-[11px] leading-snug text-ink-3">
+                        {project.workspacePath}
+                      </p>
+                      <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                        {theme.name}
+                        <span className="mx-1.5 text-rule">·</span>
+                        {/*
+                          Characters, not agents. The roster is who was cast from
+                          the theme; how many of them currently have an agent
+                          behind them is scoped to the open project, so this
+                          screen cannot know it for the others — and a count that
+                          is right for one card and wrong for the rest is worse
+                          than the honest number.
+                        */}
+                        {project.characterRoster.length} characters
+                        <span className="mx-1.5 text-rule">·</span>
+                        {when(project.updatedAt)}
+                      </p>
+                      <p className="mt-3 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-deep">
+                        {busy ? 'Opening…' : 'Open →'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {/*
+                    Deleting is a footer on the card rather than a cross in the
+                    corner of the artwork. A project is a folder a team has been
+                    working in; removing one should take a deliberate look at
+                    which card you are on, not a flick of the mouse at a target
+                    that sits a few pixels from "open".
+                  */}
+                  <div className="border-t-[3px] border-rule px-4 py-2.5 transition-colors group-focus-within:border-ink group-hover:border-ink">
+                    {asking ? (
+                      <div>
+                        <p className="font-ui text-[12px] leading-snug text-ink">
+                          Delete {project.name}? Its agents, automations, cases and
+                          conversations go with it.
+                        </p>
+                        {/*
+                          Said plainly, because this is the fear that stops
+                          someone using the button at all — and because an app
+                          that has read, write and run access to the folder owes
+                          the user an explicit statement that it is not touching
+                          it.
+                        */}
+                        <p className="mt-1 font-ui text-[12px] leading-snug text-ink-3">
+                          The folder on disk is left exactly as it is.
+                        </p>
+                        <div className="mt-2.5 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setConfirming(null)}
+                            disabled={gone}
+                            className="border-2 border-rule px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors enabled:hover:border-ink enabled:hover:text-ink disabled:opacity-40"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void destroy(project)}
+                            disabled={gone}
+                            className="border-2 border-ink bg-rust px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream disabled:opacity-60"
+                          >
+                            {gone ? 'Deleting…' : 'Delete'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirming(project.id)}
+                        disabled={busyElsewhere}
+                        className="font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors enabled:hover:text-rust disabled:opacity-40"
+                      >
+                        Delete project
+                      </button>
+                    )}
                   </div>
-                </button>
+                </div>
               )
             })}
 
@@ -161,7 +270,7 @@ export function ProjectPicker() {
             <button
               type="button"
               onClick={showSetup}
-              disabled={opening !== null}
+              disabled={busyElsewhere}
               className="flex min-h-[200px] flex-col items-center justify-center gap-3 border-[3px] border-dashed border-rule bg-paper/40 px-4 py-8 text-center transition-colors enabled:hover:border-ink enabled:hover:bg-paper disabled:opacity-60"
             >
               <span aria-hidden className="font-pixel text-3xl text-brand-deep">

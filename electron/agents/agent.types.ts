@@ -60,4 +60,12 @@ export interface TaskRequest {
   caseId?: string | null
   /** Prior turns to seed the model with. Trimmed again before the request. */
   history?: import('../providers/provider.types').Turn[]
+  /**
+   * What this task's answer will be, if it is not simply an answer.
+   *
+   * Carried through to the recorded message so the interface can lead with the
+   * team's final answer instead of leaving the user to work out which of five
+   * replies it was.
+   */
+  part?: import('../../src/shared/agents').MessagePart
 }

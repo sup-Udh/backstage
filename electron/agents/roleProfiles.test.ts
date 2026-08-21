@@ -1,5 +1,8 @@
 import { roleProfile } from './roleProfiles'
-import { mayUseTool } from '../tools/toolCapabilities'
+import { mayUseTool, TOOL_CAPABILITIES } from '../tools/toolCapabilities'
+import { TOOL_NAMES } from '../tools/toolNames'
+import { limitsFor } from './limits'
+import type { AgentConfig } from './agent.types'
 import { detectiveCharacters } from '../../src/themes/detective/characters'
 import { officeCharacters } from '../../src/themes/office/characters'
 import { friendsCharacters } from '../../src/themes/friends/characters'
@@ -7,6 +10,7 @@ import { sherlockCharacters } from '../../src/themes/sherlock/characters'
 import { strangerCharacters } from '../../src/themes/stranger/characters'
 import { labCharacters } from '../../src/themes/lab/characters'
 import type { CharacterDef } from '../../src/characters/character.types'
+import { CAPABILITIES } from '../../src/shared/capabilities'
 
 /**
  * Checks that a team cast from any theme can actually work as a team.
@@ -42,6 +46,9 @@ function ok(name: string, condition: boolean, detail = ''): void {
     console.log(`  FAIL  ${name}${detail ? `  (${detail})` : ''}`)
   }
 }
+
+/** Every capability there is, for the "nothing withheld" case. */
+const CAPS_ALL = CAPABILITIES.map((c) => c.id)
 
 const CASTS: [string, CharacterDef[]][] = [
   ['detective', detectiveCharacters],
@@ -136,6 +143,125 @@ console.log('\nRoles still land on sensible permissions')
     CASTS.every(([, cast]) =>
       cast.every((c) => !roleProfile(c.role).capabilities.includes('git.commit'))
     )
+  )
+}
+
+console.log('\nA team that cannot build says so')
+
+
+/*
+ * The other half of the same class of bug, and the more damaging half.
+ *
+ * `files.write` and `terminal.execute` are privileged and correctly withheld
+ * by default — an agent that can rewrite files the moment it is created is not
+ * a default anyone asked for. But a tool an agent lacks is simply absent from
+ * its tool list, so the model is never told the capability exists. Asked to
+ * build a website, an agent with no `files.write` wrote both files into the
+ * chat as text and reported success: nothing created, nothing failed, and no
+ * way for the user to find out why.
+ *
+ * So every seeded agent must be *told* what it cannot do, and told what to ask
+ * for. This checks the sentence exists and names the real control.
+ */
+{
+  const seeded = (role: string): AgentConfig =>
+    ({ id: 'x', name: 'X', role, capabilities: roleProfile(role).capabilities }) as AgentConfig
+
+  for (const [theme, cast] of CASTS) {
+    const silent = cast.filter((c) => {
+      const caps = roleProfile(c.role).capabilities
+      if (caps.includes('files.write')) return false
+      const text = limitsFor(seeded(c.role), false)
+      return !text || !text.includes('create, write or edit any file')
+    })
+    ok(
+      `${theme}: an agent that cannot write files is told so`,
+      silent.length === 0,
+      silent.map((c) => c.name).join(', ')
+    )
+  }
+
+  const text = limitsFor(seeded('Consulting Detective'), false) ?? ''
+  ok('the remedy names the control on the Agents page', text.includes('"Write"'))
+  ok('and says where to find it', text.includes('Agents page'))
+  ok(
+    'and forbids pasting files into the chat instead',
+    text.includes('do not paste file contents')
+  )
+
+  // A fully-equipped agent gets no block at all: an empty heading is something
+  // a model will try to make use of.
+  const full = {
+    id: 'x',
+    name: 'X',
+    role: 'X',
+    capabilities: CAPS_ALL
+  } as AgentConfig
+  ok('an agent with everything is told nothing', limitsFor(full, false) === null)
+
+  /*
+   * The lead is never told it cannot reach its team, because it can — the
+   * capability comes from the nomination rather than the checkbox. An agent
+   * the user has explicitly muted still is.
+   */
+  const muted = {
+    id: 'x',
+    name: 'X',
+    role: 'X',
+    capabilities: ['files.read']
+  } as AgentConfig
+  ok(
+    'the team lead is not told it cannot contact anyone',
+    !(limitsFor(muted, true) ?? '').includes('contact, message or delegate')
+  )
+  ok(
+    'but an agent the user muted is',
+    (limitsFor(muted, false) ?? '').includes('contact, message or delegate')
+  )
+}
+
+console.log('\nEvery registered tool is reachable by somebody')
+
+/*
+ * The exhaustiveness check the mapping's own comment promised.
+ *
+ * `mayUseTool` fails closed, which is the right direction for the mistake to
+ * fail in but a silent one: a tool with no capability recorded is not rejected
+ * loudly, it simply never appears in any agent's tool list. `delegate_to_session`
+ * shipped that way — registered in `teamTools`, described to the team lead in
+ * its own system prompt, and reachable by nobody in any project. The lead was
+ * told to hand work to a Claude Code session with a tool it did not have.
+ *
+ * Registering a tool and forgetting to decide who may use it is now a test
+ * failure rather than a feature that quietly does nothing.
+ */
+{
+  const unmapped = TOOL_NAMES.filter((name) => TOOL_CAPABILITIES[name] === undefined)
+  ok(
+    'every registered tool has a capability',
+    unmapped.length === 0,
+    unmapped.join(', ')
+  )
+
+  const real = new Set<string>(CAPABILITIES.map((c) => c.id))
+  const bogus = Object.entries(TOOL_CAPABILITIES).filter(([, cap]) => !real.has(cap))
+  ok(
+    'and every mapping names a real capability',
+    bogus.length === 0,
+    bogus.map(([t, c]) => `${t} -> ${c}`).join(', ')
+  )
+
+  /*
+   * The lead's toolset checked as a set rather than tool by tool: these are
+   * exactly the four its coordination prompt tells it it has, and the prompt
+   * naming one it does not hold is the bug this file exists for.
+   */
+  const named = ['delegate_task', 'delegate_to_session', 'agent_message', 'team_status']
+  const missing = named.filter((t) => !mayUseTool(t, ['files.read'], ['agents.talk']))
+  ok(
+    'the team lead holds every tool its prompt names',
+    missing.length === 0,
+    missing.join(', ')
   )
 }
 

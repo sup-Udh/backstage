@@ -6,6 +6,7 @@ import { makeId } from '../agents/persist'
 import { recordCollaboration } from '../agents/collaborationStore'
 import { getSettings } from '../agents/settingsStore'
 import { isTeamLead } from '../projects/projectStore'
+import { getTask } from '../agents/taskStore'
 import { agentSessions } from '../terminal/AgentSessionManager'
 import { sessionTranscripts } from '../terminal/sessionTranscript'
 import { terminals } from '../terminal/TerminalSessionManager'
@@ -26,9 +27,28 @@ import { terminals } from '../terminal/TerminalSessionManager'
  */
 
 /** Both messaging tools share the same permission and safety checks. */
+/**
+ * Whether this agent is replying to whoever gave it its current task.
+ *
+ * A delegated agent could not answer the lead that had just delegated to it:
+ * `canTalkTo` starts empty and is the user's to draw, so the reply was refused
+ * as an unauthorised contact. The lead's exception is one-way, which left the
+ * worker able to receive instructions and unable to ask a question about them.
+ *
+ * This is narrower than a general permission. It authorises exactly one edge —
+ * back along a hand-off that already happened, for the task it happened on —
+ * and it expires with the task. Nobody gains reach to an agent that has not
+ * just contacted them.
+ */
+function isReplyingToSender(fromId: string, toId: string, taskId: string): boolean {
+  const task = getTask(taskId)
+  return task?.agentId === fromId && task.originAgentId === toId
+}
+
 function checkSend(
   fromId: string,
-  toId: string
+  toId: string,
+  taskId: string
 ): { ok: false; error: string } | { ok: true; from: NonNullable<ReturnType<typeof getAgent>>; to: NonNullable<ReturnType<typeof getAgent>> } {
   const from = getAgent(fromId)
   if (!from) return { ok: false, error: 'Internal error: your own configuration is missing.' }
@@ -51,7 +71,11 @@ function checkSend(
    * so "anyone" means anyone in this project and nobody outside it — and every
    * other agent still needs an explicit link the user drew.
    */
-  if (!from.canTalkTo.includes(to.id) && !isTeamLead(from.id)) {
+  if (
+    !from.canTalkTo.includes(to.id) &&
+    !isTeamLead(from.id) &&
+    !isReplyingToSender(from.id, to.id, taskId)
+  ) {
     const allowed = from.canTalkTo.length > 0 ? from.canTalkTo.join(', ') : 'nobody'
     return {
       ok: false,
@@ -103,7 +127,7 @@ export const delegateTask: AgentTool = {
       return { success: false, error: 'agentId and task are both required.' }
     }
 
-    const check = checkSend(ctx.agentId, targetId)
+    const check = checkSend(ctx.agentId, targetId, ctx.taskId)
     if (!check.ok) return { success: false, error: check.error }
 
     const settings = getSettings()
@@ -174,7 +198,7 @@ export const messageAgent: AgentTool = {
       return { success: false, error: 'agentId and message are both required.' }
     }
 
-    const check = checkSend(ctx.agentId, targetId)
+    const check = checkSend(ctx.agentId, targetId, ctx.taskId)
     if (!check.ok) return { success: false, error: check.error }
 
     recordCollaboration({

@@ -293,6 +293,31 @@ export function deleteAgent(id: string): void {
 }
 
 /**
+ * Remove every agent belonging to a project, and say which they were.
+ *
+ * Named by project rather than reusing `deleteAgent` in a loop, because
+ * `deleteAgent` only sees the *open* project's roster — a project is deleted
+ * from the picker, where nothing is open, so every one of those calls would
+ * find nothing and return silently. The deleted records come back so the
+ * caller can stop anything they are running and sweep what still points at
+ * them; this store knows about neither.
+ */
+export function removeProjectAgents(projectId: string): AgentConfig[] {
+  if (!projectId) return []
+  const all = loadAgents()
+  const doomed = all.filter((a) => a.projectId === projectId)
+  if (!doomed.length) return []
+
+  agents = all.filter((a) => a.projectId !== projectId)
+  /*
+   * No link sweep: a relationship never crosses projects, so everything that
+   * could have been pointing at these agents has just been deleted with them.
+   */
+  persist()
+  return doomed
+}
+
+/**
  * Create one agent per character the setup wizard picked.
  *
  * The roster arrives as characters because that is how the user chose it, and

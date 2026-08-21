@@ -1,11 +1,13 @@
 import type { WorkspaceInfo } from '../workspace/WorkspaceManager'
-import type { AgentConfig } from './agent.types'
+import type { AgentConfig, AgentTask } from './agent.types'
 import { getAgent, leadOf, listAgents, workersOf } from './agentStore'
 import { agentRegistry } from './AgentRegistry'
 import { groupContextFor } from './groupContext'
+import { chainTasks } from './taskStore'
 import { getActiveProject } from '../projects/projectStore'
 import { agentSessions } from '../terminal/AgentSessionManager'
 import { awarenessFor } from '../workspace/awareness'
+import { limitsFor } from './limits'
 
 /**
  * Agent instructions.
@@ -159,11 +161,83 @@ The team, as it stands:
 ${team}`
 }
 
+/**
+ * The wider job a delegated task belongs to.
+ *
+ * Without this, an agent handed work by the team lead received the
+ * instructions and nothing else: not what the user originally asked, not who
+ * asked it, not who else was working on it. It answered a question with no
+ * idea it was one third of an answer — and, worse, `teamRules` told it in the
+ * same prompt that nobody was connected to it and it should work alone, which
+ * is exactly the opposite of what had just happened.
+ *
+ * Built from the task chain rather than from chat history, because a worker
+ * has no chat history with the lead: the hand-off is a task, and the task
+ * ledger is where its shape is actually recorded.
+ *
+ * Returns null for ordinary work — a task the user asked for directly is not
+ * part of a mission and describing it as one would be inventing a team effort
+ * around a single question.
+ */
+function missionBlock(task: AgentTask): string | null {
+  if (!task.parentTaskId || !task.originAgentId) return null
+
+  const lead = getAgent(task.originAgentId)
+  if (!lead) return null
+
+  const chain = chainTasks(task.correlationId)
+  const root = chain.find((t) => t.depth === 0)
+  const peers = chain.filter((t) => t.id !== task.id && t.depth > 0)
+
+  const lines: string[] = [
+    `You are one part of a job ${lead.name} is coordinating.`
+  ]
+
+  if (root) {
+    lines.push(`
+What the user asked the team:
+${root.prompt.trim()}`)
+  }
+
+  lines.push(`
+Your part of it: ${task.title}
+
+${lead.name} (${lead.id}) split the work and will write the team's single
+answer from what comes back. Do your part and report what you actually found —
+the paths you read, the commands you ran, the result you saw. Do not attempt
+the other parts, and do not answer the whole question: somebody else is
+already on the rest of it, and two agents answering the same thing is what
+this split exists to avoid.`)
+
+  if (peers.length > 0) {
+    const others = peers
+      .map((t) => {
+        const who = getAgent(t.agentId)
+        return who ? `  ${who.name} (${who.role}): ${t.title}` : null
+      })
+      .filter((line): line is string => line !== null)
+    if (others.length > 0) {
+      lines.push(`
+Also working on this:
+${others.join('\n')}`)
+    }
+  }
+
+  lines.push(`
+Your findings reach ${lead.name} automatically when you finish, so there is
+nothing to send. Use agent_message only if you need to tell them something
+before then — a blocker, or a question you cannot answer yourself.`)
+
+  return lines.join('\n')
+}
+
 /** The full system prompt for one agent, in one workspace, with these tools. */
 export function systemPromptFor(
   agent: AgentConfig,
   workspace: WorkspaceInfo,
-  toolNames: string[]
+  toolNames: string[],
+  /** The task about to run, when there is one. Supplies the mission context. */
+  task?: AgentTask
 ): string {
   const workspaceBlock = workspace.root
     ? `Workspace: ${workspace.name}
@@ -192,6 +266,8 @@ ${agent.instructions.trim()}`
    * something a model will try to make use of.
    */
   const group = groupContextFor(agent.id)
+  const limits = limitsFor(agent, isLead)
+  const mission = task ? missionBlock(task) : null
 
   return [
     BASE,
@@ -201,9 +277,15 @@ ${agent.instructions.trim()}`
     '',
     '--- your workspace ---',
     workspaceBlock,
+    ...(limits ? ['', '--- what you cannot do ---', limits] : []),
     '',
     '--- your team ---',
-    teamRules(agent, canDelegate),
+    /*
+     * On a mission, the mission *is* the team situation. The generic rules
+     * would otherwise tell an agent that was just handed work by the lead that
+     * nobody is connected to it and it should work alone.
+     */
+    mission ?? teamRules(agent, canDelegate),
     ...(isLead ? ['', '--- you lead this team ---', godAgentRules(teamRoster(agent.id))] : []),
     ...(group ? ['', '--- your group ---', group] : []),
     '',

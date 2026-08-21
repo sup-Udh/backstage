@@ -228,6 +228,8 @@ export interface AgentTask {
   endedAt: number | null
   result: string | null
   error: string | null
+  /** What this task's answer plays in a larger piece of work, if anything. */
+  part?: MessagePart
 }
 
 /* ---------------------------------------------------------------- events -- */
@@ -446,10 +448,27 @@ export interface AwarenessSnapshot {
 /* ------------------------------------------------------------ transcript -- */
 
 /** A line in one agent's private conversation. */
+/**
+ * What part an agent's answer plays in a larger piece of work.
+ *
+ * Absent for ordinary work, which is most of it. `synthesis` marks the team
+ * lead's final answer to a whole-team request — the one message the user
+ * should read first, and the one the ALL AGENTS view leads with.
+ *
+ * Recorded on the message rather than derived in the renderer because the
+ * renderer cannot tell: a synthesis is an ordinary completed task from an
+ * ordinary agent, distinguishable only by why it was submitted, which is
+ * knowledge the main process has and the transcript would otherwise lose on
+ * reload.
+ */
+export type MessagePart = 'synthesis'
+
 export interface ChatMessage {
   id: string
   kind: 'user' | 'agent' | 'system' | 'collaboration'
   agentId: string
+  /** Set when this answer is more than one agent's reply. See MessagePart. */
+  part?: MessagePart
   /** Who spoke, when it was not this agent or the user. */
   fromAgentId?: string
   fromName?: string

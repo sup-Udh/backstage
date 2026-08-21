@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CharacterDef } from '../../characters/character.types'
 import { castNameForSlot } from '../../project/cast'
 import {
@@ -12,6 +12,10 @@ import { activityLine, blocksFrom, type ToolBlock as Block } from '../../agents/
 import { findWorker, type Worker } from '../../agents/workers'
 import { ToolBlock } from './ToolBlock'
 import { SessionBlock } from './SessionBlock'
+import { TeamRunView } from './TeamRunView'
+import { Markdown } from '../../components/Markdown/Markdown'
+import { latestTeamRun } from '../../agents/teamRun'
+import { useProject } from '../../stores/projectStore'
 
 interface Props {
   /** The project's cast, for naming an agent with no live worker entry. */
@@ -71,6 +75,12 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
   const agents = useTeam((s) => s.agents)
   const retry = useTeam((s) => s.retry)
   const tasks = useTeam((s) => s.tasks)
+  /*
+   * Who coordinates, read from the project rather than worked out from a name
+   * or a job title. This is the single setting the whole team workflow hangs
+   * off, and it is the user's to change.
+   */
+  const leadId = useProject((s) => s.project?.godAgentId ?? null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -261,6 +271,32 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
     .map((id) => ({ id, state: agentStates[id] }))
     .filter((a) => a.state?.executionId)
 
+  /*
+   * The team's own account of a whole-team request.
+   *
+   * Reconstructed from the task ledger rather than from the messages, so it
+   * describes what the runtime actually did — who was given what, what came
+   * back, which answer was the final one — instead of the order things
+   * happened to be said in. Null when the last thing that ran was not a team
+   * request, in which case the merged transcript below is the whole story.
+   */
+  const teamRun = useMemo(
+    () =>
+      isBroadcast
+        ? latestTeamRun({
+            tasks,
+            agents,
+            states: agentStates,
+            messages: agentMessages,
+            leadId,
+            nameOf: nameFor,
+            modelOf: modelFor
+          })
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isBroadcast, tasks, agents, agentStates, agentMessages, leadId, cast, workers]
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
@@ -268,12 +304,28 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
         onScroll={onScroll}
         className="min-h-0 flex-1 overflow-y-auto px-3 py-3"
       >
+        {/*
+          ALL AGENTS is not a broadcast: it goes to the project's team lead,
+          who splits the work up and writes the final answer. So it does not
+          get the same renderer as a one-to-one conversation — the same
+          components, but arranged by what the team did rather than by when
+          each line was said. The full merged transcript is still underneath.
+        */}
+        {teamRun && (
+          <div className="mb-3">
+            <TeamRunView run={teamRun} streaming={streaming} />
+          </div>
+        )}
+
         {entries.length === 0 ? (
-          <Empty
-            present={present.length}
-            onSubmit={onSubmit}
-          />
+          teamRun ? null : (
+            <Empty
+              present={present.length}
+              onSubmit={onSubmit}
+            />
+          )
         ) : (
+          <Transcript count={entries.length} folded={teamRun !== null}>
           <ol className="flex flex-col gap-3">
             {entries.map((entry) => {
               if (entry.kind === 'session') {
@@ -377,13 +429,21 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
                   <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-3">
                     {modelFor(message.agentId)}
                   </p>
-                  <p className="mt-1.5 whitespace-pre-wrap font-ui text-[12.5px] leading-[1.65] text-ink">
-                    {message.text}
-                  </p>
+                  {/*
+                    The answer as the document it is. It arrives as Markdown —
+                    every model writes it whether asked to or not — and was
+                    previously rendered as preformatted text, so headings,
+                    lists and code blocks showed up as literal hashes, dashes
+                    and backticks in one grey rectangle.
+                  */}
+                  <div className="mt-1.5">
+                    <Markdown text={message.text} />
+                  </div>
                 </li>
               )
             })}
           </ol>
+          </Transcript>
         )}
 
         {/*
@@ -394,7 +454,7 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
           answer, so the response does not visibly reflow when the real
           message replaces it — only the caret disappears.
         */}
-        {working.length > 0 && (
+        {working.length > 0 && !teamRun && (
           <ul className="mt-3 flex flex-col gap-3">
             {working.map(({ id, state }) => {
               const partial = streaming[id]
@@ -415,15 +475,22 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
                       <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-3">
                         {modelFor(id)}
                       </p>
-                      <p className="mt-1.5 whitespace-pre-wrap font-ui text-[12.5px] leading-[1.65] text-ink">
-                        {partial}
+                      {/*
+                        Rendered exactly as a finished answer is, so the
+                        response does not visibly reflow when the real message
+                        replaces it — only the caret disappears. Markdown
+                        renders incrementally: a half-written fence is shown as
+                        the code block it is turning into.
+                      */}
+                      <div className="mt-1.5">
+                        <Markdown text={partial} />
                         <span
                           aria-hidden
                           className="blink ml-0.5 inline-block align-baseline text-brand-deep"
                         >
                           ▌
                         </span>
-                      </p>
+                      </div>
                     </>
                   ) : (
                     <p className="flex items-center gap-1.5">
@@ -445,6 +512,51 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * The raw merged transcript, folded away when there is a better account above.
+ *
+ * Nothing is ever removed from the conversation — every message and every tool
+ * call is still here, in time order, attributed. But once the team view has
+ * explained the run, this is the third thing in the reading order rather than
+ * the only thing, so it starts closed. On a one-to-one conversation there is
+ * nothing above it and it is simply the conversation, so it is not folded at
+ * all and renders without a wrapper.
+ */
+function Transcript({
+  count,
+  folded,
+  children
+}: {
+  count: number
+  folded: boolean
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(false)
+  if (!folded) return <>{children}</>
+
+  return (
+    <section className="border-2 border-rule bg-paper">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-2 py-1 text-left transition-colors hover:bg-brand-pale"
+      >
+        <span className="font-pixel text-[10px] font-semibold uppercase tracking-[0.1em] text-ink">
+          Full transcript
+        </span>
+        <span className="ml-auto font-mono text-[10px] tabular-nums text-ink-3">
+          {count}
+        </span>
+        <span aria-hidden className="font-mono text-[10px] text-ink-3">
+          {open ? '−' : '+'}
+        </span>
+      </button>
+      {open && <div className="border-t-2 border-rule px-2 py-2">{children}</div>}
+    </section>
   )
 }
 

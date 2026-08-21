@@ -236,7 +236,16 @@ describe the delegation itself unless it changes what the answer is.`
        * request and never itself synthesised.
        */
       origin: 'user',
-      caseId: entry.caseId
+      caseId: entry.caseId,
+      /*
+       * Marked, so the interface can lead with it.
+       *
+       * Without this the team's final answer is indistinguishable from the
+       * four replies above it — same agent, same shape, same transcript — and
+       * the user is left to work out which of five messages was the one
+       * written to answer their question.
+       */
+      part: 'synthesis'
     })
 
     if (wasRejected(result)) {

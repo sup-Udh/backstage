@@ -124,6 +124,25 @@ export function deleteCase(id: string): void {
 }
 
 /**
+ * Drop every case belonging to a project.
+ *
+ * Not `deleteCase` in a loop: `getCase` resolves against the open project, and
+ * a project is deleted from the picker with nothing open, so each call would
+ * find nothing.
+ */
+export function removeProjectCases(projectId: string): number {
+  if (!projectId) return 0
+  const all = load()
+  const kept = all.filter((c) => c.projectId !== projectId)
+  if (kept.length === all.length) return 0
+
+  const removed = all.length - kept.length
+  cases = kept
+  persist()
+  return removed
+}
+
+/**
  * Record that a task ran under a case.
  *
  * Called by the orchestrator as work is queued, so the case's membership is

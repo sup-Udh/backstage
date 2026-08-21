@@ -130,6 +130,39 @@ export function createProject(input: {
 }
 
 /**
+ * Remove a project from the registry.
+ *
+ * The folder on disk is deliberately untouched. Backstage was given access to
+ * a repository; forgetting it is the app's business, and deleting the user's
+ * source tree because they tidied a list is not a mistake that can be undone.
+ *
+ * If the project being deleted was the open one, the workspace is closed with
+ * it. Leaving it pointed at a folder no project claims any more would keep
+ * every file and terminal tool live against a project that no longer exists —
+ * the one state the security boundary is meant to make impossible. Nothing is
+ * opened in its place: which project to open next is the picker's question,
+ * and answering it here would be the app choosing a repository again.
+ *
+ * Child records are *not* swept here. `projectStore` knows nothing about
+ * agents, cases or automations, and teaching it would make it and `agentStore`
+ * import each other; the IPC layer, which can see all of them, composes the
+ * full delete.
+ */
+export function deleteProject(id: string): boolean {
+  const s = load()
+  const index = s.projects.findIndex((p) => p.id === id)
+  if (index === -1) return false
+
+  s.projects.splice(index, 1)
+  if (s.activeProjectId === id) {
+    s.activeProjectId = null
+    setWorkspace(null)
+  }
+  persist()
+  return true
+}
+
+/**
  * Whether this agent coordinates the open project.
  *
  * Lives here, beside the setting itself, because three separate places need

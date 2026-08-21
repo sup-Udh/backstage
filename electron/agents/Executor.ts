@@ -3,6 +3,7 @@ import type { Turn } from '../providers/provider.types'
 import { getProvider, getProviderDefinition } from '../providers/registry'
 import { readConfig } from '../credentials/secureStore'
 import { getTool, toolsForCapabilities } from '../tools/registry'
+import { teamTools } from '../tools/team'
 import { isTeamLead } from '../projects/projectStore'
 import { getWorkspace, getWorkspaceRoot } from '../workspace/WorkspaceManager'
 import { systemPromptFor } from './prompts'
@@ -24,6 +25,16 @@ import { requestApproval, denyForExecution } from './approvals'
  * what the model asks for and feeds the results back. OpenAI and Gemini take
  * the identical path.
  */
+
+/**
+ * The tools that still work with no workspace folder open.
+ *
+ * Derived from the team tool list rather than spelled out, because it was
+ * spelled out and drifted: `delegate_to_session` was added to the team tools
+ * and never added here, so even once it was reachable it would still have
+ * vanished for a project with no folder open.
+ */
+const TEAM_TOOLS = new Set(teamTools.map((t) => t.name))
 
 export class CancelledError extends Error {
   constructor() {
@@ -120,9 +131,7 @@ export class Execution {
       (t) =>
         this.workspaceRoot !== null ||
         t.name.startsWith('web_') ||
-        t.name === 'delegate_task' ||
-        t.name === 'agent_message' ||
-        t.name === 'team_status'
+        TEAM_TOOLS.has(t.name)
     )
     const allowed = new Set(tools.map((t) => t.name))
     const specs = tools.map((t) => ({
@@ -135,7 +144,9 @@ export class Execution {
     const system = systemPromptFor(
       this.agent,
       getWorkspace(),
-      tools.map((t) => t.name)
+      tools.map((t) => t.name),
+      // The task, so a delegated agent is told what larger job it is part of.
+      this.task
     )
     const tracker = new BudgetTracker(budgetFor(this.agent.profile))
 

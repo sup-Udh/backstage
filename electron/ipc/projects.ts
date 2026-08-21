@@ -13,19 +13,31 @@ import {
   deleteCase,
   getCase,
   listCases,
+  removeProjectCases,
   renameCase,
   setCaseStatus
 } from '../cases/caseStore'
 import { tasksInCase } from '../agents/taskStore'
 import {
   createProject,
+  deleteProject,
   getActiveProject,
+  getProject,
   listProjects,
   setActiveProject,
   updateProject
 } from '../projects/projectStore'
 import { adoptLegacy, bootstrapProjects } from '../projects/bootstrap'
-import { listAgents, seedRoster } from '../agents/agentStore'
+import { listAgents, removeProjectAgents, seedRoster } from '../agents/agentStore'
+/*
+ * The rules module directly, not the store's wrappers: those resolve against
+ * the *open* project's roster, and this deletes a project that is not open.
+ */
+import { groupOf, threadIdFor } from '../agents/relationships'
+import { agentRegistry } from '../agents/AgentRegistry'
+import { orchestrator } from '../agents/AgentOrchestrator'
+import { conversationStore } from '../agents/conversationStore'
+import { forgetAgent, removeProjectTriggers } from '../agents/triggerStore'
 import { pickFolder } from '../workspace/WorkspaceManager'
 import { PROVIDERS } from '../providers/registry'
 import { statusFor } from './providers'
@@ -114,6 +126,64 @@ export function registerProjectsHandlers(): void {
     'projects:adoptLegacy',
     (_e, input: LegacyAdoption): ProjectSnapshot | null => adoptLegacy(input)
   )
+
+  /**
+   * Delete a project and everything scoped to it.
+   *
+   * Composed here for the same reason creation is: this is the only layer that
+   * can see the project registry, the roster, the automations, the cases and
+   * the transcripts at once. Leaving any of them behind would not be a tidy
+   * remainder — an agent whose project is gone is stamped with an id nothing
+   * resolves, so it is invisible in every view and impossible to delete from
+   * the interface afterwards.
+   *
+   * The order matters. Running work is cancelled before its configuration
+   * stops existing, and the transcripts are removed while the agents that key
+   * them are still known.
+   *
+   * What is *not* touched is the folder on disk. Backstage was given access to
+   * a repository; forgetting it is all this does.
+   */
+  ipcMain.handle('projects:remove', (_e, projectId: unknown): Project[] => {
+    const id = String(projectId ?? '')
+    const project = getProject(id)
+    if (!project) return listProjects()
+
+    const doomed = removeProjectAgents(id)
+
+    /*
+     * Every group conversation among them, worked out from the relationships
+     * they still carry — a thread id is derived from its members, so once the
+     * agents are gone the file can no longer be named.
+     */
+    const threadIds = new Set<string>()
+    for (const agent of doomed) {
+      const members = groupOf(doomed, agent.id)
+      if (members.length > 1) threadIds.add(threadIdFor(members))
+    }
+
+    for (const agent of doomed) {
+      // Stop it before it stops existing, as `agents:remove` does.
+      orchestrator.cancel(agent.id)
+      /*
+       * Triggers are swept app-wide rather than project-wide: an automation in
+       * another project could name one of these agents, and `forgetAgent`
+       * already covers exactly that case.
+       */
+      forgetAgent(agent.id)
+      conversationStore.forget(project.workspacePath, agent.id)
+    }
+    for (const threadId of threadIds) {
+      conversationStore.forget(project.workspacePath, threadId)
+    }
+
+    removeProjectTriggers(id)
+    removeProjectCases(id)
+    deleteProject(id)
+    agentRegistry.refreshAll()
+
+    return listProjects()
+  })
 
   /* ----------------------------------------------------------- cases -- */
 

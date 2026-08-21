@@ -311,6 +311,13 @@ export interface BackstageApi {
     create(draft: ProjectDraft): Promise<ProjectSnapshot | { error: string }>
     open(projectId: string): Promise<ProjectSnapshot | null>
     update(projectId: string, patch: ProjectPatch): Promise<Project | null>
+    /**
+     * Forget a project, with its agents, automations, cases and transcripts.
+     *
+     * The folder on disk is not touched. Returns the projects that remain, so
+     * the caller never has to re-list to find out what is left.
+     */
+    remove(projectId: string): Promise<Project[]>
     /** Fold pre-project workspace, roster and theme into a real project. */
     adoptLegacy(input: LegacyAdoption): Promise<ProjectSnapshot | null>
   }

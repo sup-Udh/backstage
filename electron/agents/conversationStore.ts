@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ChatMessage } from './agent.types'
 import type { Turn } from '../providers/provider.types'
@@ -70,6 +70,23 @@ export class ConversationStore {
 
   clear(workspaceId: string, agentId: string): void {
     this.save(workspaceId, agentId, [])
+  }
+
+  /**
+   * Delete a transcript outright, rather than emptying it.
+   *
+   * `clear` is for an agent that still exists and is starting fresh. This is
+   * for one that has been deleted with its project: an empty file keyed to an
+   * id nothing can reach again is a private conversation left on disk after
+   * the user asked for it to be gone.
+   */
+  forget(workspaceId: string, agentId: string): void {
+    try {
+      const path = this.path(workspaceId, agentId)
+      if (existsSync(path)) rmSync(path)
+    } catch {
+      // A transcript that cannot be removed is not worth failing a delete over.
+    }
   }
 
   /**

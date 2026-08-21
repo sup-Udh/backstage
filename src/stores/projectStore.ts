@@ -52,6 +52,13 @@ interface ProjectState {
   create: (draft: ProjectDraft) => Promise<{ project?: Project; error?: string }>
   open: (projectId: string) => Promise<Project | null>
   update: (patch: ProjectPatch) => Promise<Project | null>
+  /**
+   * Forget a project and everything scoped to it. The folder is left alone.
+   *
+   * Returns what remains, so the picker can decide where to go next without
+   * re-reading the store mid-render.
+   */
+  remove: (projectId: string) => Promise<Project[]>
   /** Fold pre-project workspace and roster into a project, with a theme. */
   adoptLegacy: (name: string) => Promise<Project | null>
   /** Change the project's world. Staged, so it reads as walking onto a set. */
@@ -109,6 +116,25 @@ export const useProject = create<ProjectState>((set, get) => ({
       projects: s.projects.map((p) => (p.id === next.id ? next : p))
     }))
     return next
+  },
+
+  /*
+   * The mirror is replaced with the list the main process returns rather than
+   * filtered locally, for the same reason every other mutator round-trips: the
+   * UI must not show a deletion that did not persist.
+   *
+   * `project` is cleared when the deleted one was the open — or last opened —
+   * project. The main process closes the workspace with it, so leaving the
+   * mirror pointing at it would leave the app holding a theme and a roster for
+   * a project that no longer exists.
+   */
+  remove: async (projectId) => {
+    const remaining = await window.backstage.projects.remove(projectId)
+    set((s) => ({
+      projects: remaining,
+      project: s.project?.id === projectId ? null : s.project
+    }))
+    return remaining
   },
 
   /*

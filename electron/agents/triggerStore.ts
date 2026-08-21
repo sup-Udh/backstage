@@ -173,6 +173,24 @@ export function deleteTrigger(id: string): void {
 }
 
 /**
+ * Drop every automation belonging to a project.
+ *
+ * Same reason the agent and case stores have one: `deleteTrigger` resolves
+ * against the open project, and a project is deleted with nothing open.
+ */
+export function removeProjectTriggers(projectId: string): number {
+  if (!projectId) return 0
+  const list = load()
+  const kept = list.filter((t) => t.projectId !== projectId)
+  if (kept.length === list.length) return 0
+
+  const removed = list.length - kept.length
+  triggers = kept
+  persist()
+  return removed
+}
+
+/**
  * Remove triggers pointing at an agent that no longer exists.
  *
  * Swept across every project rather than only the open one. Agent ids are

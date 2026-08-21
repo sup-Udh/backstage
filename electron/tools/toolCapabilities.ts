@@ -36,6 +36,18 @@ export const TOOL_CAPABILITIES: Record<string, CapabilityId> = {
   web_fetch: 'web.search',
   web_search: 'web.search',
   delegate_task: 'agents.talk',
+  /*
+   * Handing work to a running CLI session is the same permission as handing it
+   * to an API agent: it is contacting a teammate. Which of them the agent may
+   * reach is decided in the tool itself — `delegate_to_session` is team-lead
+   * only — not by giving it a capability of its own that no role ever grants.
+   *
+   * Its absence here is what the exhaustiveness check below now catches. The
+   * mapping fails closed, so an unmapped tool is granted to nobody: this tool
+   * was registered, described to the lead in its system prompt, and reachable
+   * by no agent in any project. The lead was told to use it and never had it.
+   */
+  delegate_to_session: 'agents.talk',
   agent_message: 'agents.talk',
   team_status: 'agents.talk'
 }

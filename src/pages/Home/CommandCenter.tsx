@@ -9,6 +9,7 @@ import {
   type TabId
 } from '../../stores/backstageStore'
 import { recipientsFor, spawnedAgents, useTeam } from '../../stores/teamStore'
+import { useProject } from '../../stores/projectStore'
 import { PromptBox } from './PromptBox'
 import { TeamHeader } from './TeamHeader'
 import { ChatIdentity } from './ChatIdentity'
@@ -85,6 +86,13 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
   const refreshTasks = useTeam((s) => s.refreshTasks)
 
   const { workspace, anyConnected } = useProviders()
+
+  /*
+   * The project's team lead. A project setting, never a name or a job title:
+   * the header states who coordinates, and it has to be the same agent the
+   * runtime actually routes ALL AGENTS requests to.
+   */
+  const leadId = useProject((s) => s.project?.godAgentId ?? null)
 
   /** The footer's query, for the surfaces that filter rather than send. */
   const [query, setQuery] = useState('')
@@ -422,6 +430,7 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
           isBroadcast={isBroadcast}
           states={agentStates}
           thread={inThread ? thread : null}
+          leadId={leadId}
           providerName={providerName}
           modelName={modelName}
           onStop={(agentId) => {

@@ -145,7 +145,8 @@ export class AgentOrchestrator {
       startedAt: null,
       endedAt: null,
       result: null,
-      error: null
+      error: null,
+      part: request.part
     }
     recordTask(task)
     if (caseId) attachTask(caseId, task.id, agent.id)
@@ -250,7 +251,14 @@ export class AgentOrchestrator {
         agentId,
         text,
         at: Date.now(),
-        taskId: task.id
+        taskId: task.id,
+        /*
+         * Carried from the request onto the stored message, so which answer
+         * was the team's final one survives a reload. Everything else about a
+         * synthesis is an ordinary completed task, and the interface has no
+         * other way to tell it apart.
+         */
+        part: task.part
       })
 
       systemBus.emit({
