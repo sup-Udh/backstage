@@ -326,7 +326,7 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
           )
         ) : (
           <Transcript count={entries.length} folded={teamRun !== null}>
-          <ol className="flex flex-col gap-3">
+            <ol className="flex flex-col gap-3">
             {entries.map((entry) => {
               if (entry.kind === 'session') {
                 return (
@@ -442,7 +442,7 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
                 </li>
               )
             })}
-          </ol>
+            </ol>
           </Transcript>
         )}
 

@@ -288,8 +288,20 @@ console.log('\nEvery theme can be set up as a working team')
  *   - That lead can delegate, which is the whole workflow.
  *   - So can every other member, because the user may nominate any of them
  *     and the original bug was exactly this being true for some casts only.
- *   - Somebody on the team can run commands and somebody can write files, or
- *     the lead has nobody to hand real work to.
+ *   - Every member can read the project and use the team tools, which is the
+ *     floor the workflow needs: read to have anything to report, team tools to
+ *     report it.
+ *
+ * Deliberately *not* asserted: that a default cast can write files or run
+ * commands. Those are privileged and withheld from every freshly seeded agent
+ * on purpose — see `limits.ts` — so a team that cannot yet build is the
+ * intended starting state, not a regression. Which roles happen to be seeded
+ * with them still varies by how a theme worded its job titles ("Lab
+ * Technician" matches the engineer profile, "Technical Investigator" does
+ * not), and that variance is safe precisely because it only ever withholds:
+ * the user grants what they want on the Agents page, and an agent that lacks a
+ * capability is now told so in its own prompt rather than silently working
+ * around it.
  *
  * Nothing here is theme-specific. The same four checks run against all six
  * casts, and a new world is covered by adding one line to CASTS.
@@ -319,13 +331,14 @@ for (const [theme, cast] of CASTS) {
     mute.map((c) => c.name).join(', ')
   )
 
-  const caps = roster.flatMap((c) => roleProfile(c.role).capabilities)
+  const floorless = roster.filter((c) => {
+    const caps = roleProfile(c.role).capabilities
+    return !caps.includes('files.read') || !caps.includes('agents.talk')
+  })
   ok(
-    `${theme}: the team can read, run and write between them`,
-    caps.includes('files.read') &&
-      caps.includes('terminal.execute') &&
-      caps.includes('files.write'),
-    [...new Set(caps)].join(', ')
+    `${theme}: every member can read the project and reach the team`,
+    floorless.length === 0,
+    floorless.map((c) => `${c.name} (${c.role})`).join(', ')
   )
 }
 
