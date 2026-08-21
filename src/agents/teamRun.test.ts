@@ -261,6 +261,51 @@ console.log('\nWhat is not a team run')
   ok('no tasks at all is not a team run', latestTeamRun({ ...input, tasks: [] }) === null)
 }
 
+{
+  /*
+   * The case that matters now ALL AGENTS broadcasts again.
+   *
+   * A broadcast gives every agent its own depth-0 task under one shared
+   * correlation id. Nobody handed anybody anything, so matching on the chain
+   * alone would present three independent answers as three delegations from
+   * whoever happened to be first — a claim about what happened, and a false
+   * one. `parentTaskId` is what separates the two.
+   */
+  const broadcast = scenario({ lead: 'Jane', workers: ['Lisbon', 'Cho'] })
+  broadcast.tasks = ['a_lead', 'a_w1', 'a_w2'].map((agentId, i) =>
+    task({
+      id: `b${i}`,
+      agentId,
+      depth: 0,
+      origin: 'user',
+      parentTaskId: null,
+      correlationId: 'broadcast1',
+      title: 'Analyse this project',
+      createdAt: T0 + i
+    })
+  )
+
+  ok('a broadcast to three agents is not a team run', latestTeamRun(broadcast) === null)
+
+  // But one of them delegating during it still is.
+  broadcast.tasks = [
+    ...broadcast.tasks,
+    task({
+      id: 'handoff',
+      agentId: 'a_w2',
+      depth: 1,
+      origin: 'agent',
+      parentTaskId: 'b0',
+      correlationId: 'broadcast1',
+      title: 'Check the theme configuration',
+      result: 'Checked.'
+    })
+  ]
+  const run = latestTeamRun(broadcast)
+  ok('a real hand-off during one still is', run !== null)
+  ok('and only the handed-off task counts as delegated', run?.findings.length === 1)
+}
+
 console.log('\nTwo runs never mix')
 
 {

@@ -32,7 +32,6 @@ import {
 } from '../agents/threads'
 import { agentRegistry, validateAgent } from '../agents/AgentRegistry'
 import { orchestrator, wasRejected } from '../agents/AgentOrchestrator'
-import { godAgent } from '../agents/GodAgent'
 import { initTriggerEngine } from '../agents/TriggerEngine'
 import { systemBus } from '../agents/EventBus'
 import { conversationStore } from '../agents/conversationStore'
@@ -190,31 +189,33 @@ export function registerAgentHandlers(): void {
     void refreshGit()
 
     /*
-     * Talking to the whole team.
+     * Talking to the whole team reaches the whole team.
      *
-     * It goes to one agent — the project's team lead — who splits it up and
-     * hands the parts out. Running every agent over the same prompt instead,
-     * which is what used to happen here, produced five overlapping answers to
-     * one question and billed five model calls to do it.
+     * This used to route to one agent — the project's team lead — who was
+     * asked to split the request up and hand the parts out with
+     * delegate_task. Every gate on that path was verified working: the lead
+     * was correctly configured, held the tool, and had three spawned
+     * teammates to give work to. It simply did not call it. The model read a
+     * prompt telling it to delegate, had the tool in its list, and answered
+     * the whole request itself anyway — which is not something the runtime
+     * can fix, because nothing was failing.
      *
-     * The fallback matters: a project whose lead was deleted or never spawned
-     * still has to answer "talk to everyone" somehow, so it degrades to the
-     * old broadcast rather than refusing over a setting the user may not know
-     * exists.
+     * The result was worse than the broadcast it replaced: one agent silently
+     * doing everything while three sat idle, and no way for the user to tell
+     * that was what had happened.
+     *
+     * So the request goes to every spawned agent again, each answering
+     * independently in its own session. Delegation is untouched as a
+     * *capability* — `delegate_task`, `agent_message` and the connections the
+     * user draws all work exactly as before, and an agent that decides to
+     * hand work to a teammate still can. What has been removed is the
+     * assumption that one agent will reliably do so on the user's behalf.
+     *
+     * `GodAgent` is deliberately left intact rather than deleted. Nothing
+     * calls `run()` now; restoring this is re-adding the branch, and it is
+     * worth re-testing whenever the models in use get better at multi-step
+     * tool use.
      */
-    if (params?.target === 'all' || Array.isArray(params?.target)) {
-      const led = godAgent.run(prompt)
-      if (!('error' in led)) {
-        conversationStore.append(workspaceId(), led.leadId, {
-          id: makeId('msg'),
-          kind: 'user',
-          agentId: led.leadId,
-          text: prompt,
-          at: Date.now()
-        })
-        return { accepted: true, taskIds: [led.taskId], agentIds: [led.leadId] }
-      }
-    }
 
     const targets = recipients(params?.target)
     if (targets.length === 0) {

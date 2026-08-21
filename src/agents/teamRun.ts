@@ -6,17 +6,21 @@ import type {
 } from '../shared/providerApi'
 
 /**
- * What actually happened when the user talked to the whole team.
+ * What actually happened when one agent handed work to another.
  *
- * ALL AGENTS is not a broadcast any more — it goes to the project's team lead,
- * who splits it up, hands parts out and writes the final answer. The chat did
- * not know that. It merged every participant's messages into one time-ordered
- * list, so a request, three delegations, three sets of findings and a synthesis
- * arrived as one undifferentiated column of prose and the user was left to
- * reconstruct the chain of events by reading it.
+ * When work is genuinely split up, the plain transcript is a poor account of
+ * it: a request, three hand-offs, three sets of findings and a final answer
+ * all arrive as one undifferentiated column of prose, and the user is left to
+ * reconstruct the chain of events by reading it. This rebuilds that chain from
+ * what the runtime recorded, so the interface can show the shape of the work
+ * instead of its transcript.
  *
- * This rebuilds that chain from what the runtime recorded, so the interface
- * can show the shape of the work instead of its transcript.
+ * It renders only when delegation really happened. ALL AGENTS broadcasts to
+ * every agent — each answering independently — and a broadcast is not a team
+ * run however many agents took part in it; `parentTaskId` is what separates
+ * the two. So this returns null for the common case and the ordinary
+ * transcript shows it, which is the right way round: a workflow diagram of a
+ * workflow that did not happen is worse than no diagram.
  *
  * The backbone is the task ledger, not the messages. A delegated task carries
  * `parentTaskId` and a `depth` above zero, which is a structural fact the
@@ -125,10 +129,10 @@ export function latestTeamRun(input: RunInput): TeamRun | null {
   const { tasks, leadId } = input
 
   /*
-   * A team run starts with a depth-0 task given to the lead by the user.
-   * Anything else at depth 0 is an ordinary one-to-one request, and treating
-   * those as team runs is what would put a private conversation into the team
-   * view.
+   * A run starts with a depth-0 task the user gave to an agent. When the
+   * project names a lead, only that agent's task can root one — otherwise a
+   * one-to-one conversation with a worker that happened to delegate would be
+   * presented as a whole-team effort.
    */
   const roots = tasks
     .filter(
@@ -147,7 +151,16 @@ export function latestTeamRun(input: RunInput): TeamRun | null {
     .filter((t) => t.correlationId === root.correlationId)
     .sort((a, b) => a.createdAt - b.createdAt)
 
-  const delegated = chain.filter((t) => t.id !== root.id)
+  /*
+   * Genuinely delegated work, not merely work in the same chain.
+   *
+   * `parentTaskId` is the difference and it matters now that ALL AGENTS
+   * broadcasts again: a broadcast gives every agent its own depth-0 task under
+   * one shared correlation id, so matching on the chain alone would present
+   * three agents answering independently as three agents the first one had
+   * handed work to. That is a claim about what happened, and it would be false.
+   */
+  const delegated = chain.filter((t) => t.id !== root.id && t.parentTaskId !== null)
 
   /*
    * The synthesis is submitted as its own chain — deliberately, so it cannot
@@ -168,6 +181,13 @@ export function latestTeamRun(input: RunInput): TeamRun | null {
         (m) => m.taskId === synthesisTask.id && m.kind === 'agent'
       ) ?? null
     : null
+
+  /*
+   * Nothing was handed out and no answer was pulled together, so this was one
+   * agent answering a question — which the ordinary transcript already shows
+   * better than a workflow diagram of a workflow that did not happen.
+   */
+  if (delegated.length === 0 && !synthesisTask) return null
 
   const members = buildMembers(input, root, delegated, synthesisTask)
   const findings = buildFindings(input, delegated)

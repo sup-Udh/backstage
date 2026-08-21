@@ -161,7 +161,15 @@ pass along a finding. You do not direct them and they do not direct you.`)
  * and a prompt that only described coordination produced an agent that
  * delegated everything and answered nothing itself.
  */
-function godAgentRules(team: string): string {
+/*
+ * Exported, though nothing calls it today.
+ *
+ * It is the coordination prompt, kept intact for whenever ALL AGENTS routes
+ * to a lead again — see the note at its call site in `systemPromptFor`.
+ * Exporting is what lets it survive `noUnusedLocals` without a suppression
+ * comment that would read as an oversight rather than a decision.
+ */
+export function godAgentRules(team: string): string {
   return `You are the team lead for this project. When the user addresses the
 whole team, the request comes to you.
 
@@ -318,7 +326,21 @@ ${agent.instructions.trim()}`
      * nobody is connected to it and it should work alone.
      */
     mission ?? teamRules(agent, canDelegate, isLead),
-    ...(isLead ? ['', '--- you lead this team ---', godAgentRules(teamRoster(agent.id))] : []),
+    /*
+     * The coordination block is deliberately not included any more.
+     *
+     * It opened with "when the user addresses the whole team, the request
+     * comes to you", and that stopped being true when ALL AGENTS went back to
+     * reaching every agent directly. Leaving it in would tell one agent it
+     * owned every whole-team request while the other three were answering the
+     * same request independently — which is the "Jane takes over everything"
+     * behaviour, now stated in the prompt as fact.
+     *
+     * `godAgentRules` and `teamRoster` are kept for whenever the routing is
+     * restored; putting this line back is all that is needed. The lead keeps
+     * its permissions in the meantime — it may still reach anyone in the
+     * project — it is simply no longer told it is the team's front door.
+     */
     ...(group ? ['', '--- your group ---', group] : []),
     '',
     '--- what is happening right now ---',
@@ -336,7 +358,7 @@ ${agent.instructions.trim()}`
  * same thing: something that can be given a task and will report back. The
  * distinction that matters is which tool reaches them, so each line says.
  */
-function teamRoster(leadId: string): string {
+export function teamRoster(leadId: string): string {
   const lines: string[] = []
 
   for (const agent of listAgents()) {
