@@ -107,12 +107,18 @@ export class Director {
     this.homes.forget(c.agentId)
   }
 
-  private take(c: CharacterRuntime, key: string, spot: Spot, seated = false): void {
+  private take(
+    c: CharacterRuntime,
+    key: string,
+    spot: Spot,
+    /** Present when the destination is a chair, and which one. */
+    into?: Workstation
+  ): void {
     this.reserved.set(key, c.agentId)
     c.spotKey = key
     c.destFacing = spot.facing
-    c.destSeated = seated
-    c.path = this.route(c, spot.x, spot.y, seated)
+    c.destSeated = into !== undefined
+    c.path = this.route(c, spot.x, spot.y, into)
   }
 
   private station(index: number | null): Workstation | null {
@@ -133,7 +139,7 @@ export class Director {
     c: CharacterRuntime,
     tx: number,
     ty: number,
-    seated: boolean
+    into?: Workstation
   ): PathNode[] {
     const lane = this.scene.laneY
     const nodes: PathNode[] = []
@@ -161,10 +167,7 @@ export class Director {
      * short move up the screen from the standing spot — and is the moment the
      * desk starts drawing over the character's legs.
      */
-    if (seated) {
-      const to = this.scene.workstations.find((w) => w.seat.x === tx && w.seat.y === ty)
-      if (to) nodes.push({ x: to.stand.x, y: to.stand.y })
-    }
+    if (into) nodes.push({ x: into.stand.x, y: into.stand.y })
 
     nodes.push({ x: tx, y: ty })
     return nodes
@@ -219,7 +222,7 @@ export class Director {
     }
 
     this.release(c)
-    this.take(c, key, station.seat, true)
+    this.take(c, key, station.seat, station)
     return true
   }
 
@@ -266,11 +269,17 @@ export class Director {
        * Standing up to celebrate and sitting down again reads as a glitch,
        * and walking away from a failed run reads as somebody leaving the
        * scene of it.
+       *
+       * Somebody mid-journey is left to finish it. Cutting the path would
+       * stop them dead in the middle of the floor and strand them there, which
+       * is worse than either.
        */
       case 'success':
       case 'error':
-        c.path = []
-        c.destSeated = c.place === 'seated'
+        if (c.place !== 'walking') {
+          c.path = []
+          c.destSeated = c.place === 'seated'
+        }
         return
 
       case 'idle': {

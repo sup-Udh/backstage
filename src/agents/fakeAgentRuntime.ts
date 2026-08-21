@@ -1,4 +1,5 @@
 import type { Agent, AgentListener, AgentRuntime, AgentStatus } from './agent.types'
+import { groupForTool, type ToolGroup } from './toolActivity'
 import { makeRng } from '../world/pixel/ops'
 import { EventBus } from './agentEvents'
 import { buildTaskScript, type Beat } from './taskScript'
@@ -59,6 +60,17 @@ const WEIGHTS: [AgentStatus, number][] = [
   ['idle', 0.15],
   ['success', 0.08]
 ]
+
+/**
+ * The tool family each simulated task line implies.
+ *
+ * Keyed by the same phrases `TASKS` uses, so the shop window's characters read
+ * a screen for a task about reading and type for a task about writing. It is a
+ * simulation, so this is invented — but it is invented *from the task line
+ * already shown to the user*, so what the character does and what the label
+ * says still agree, which is the property that matters.
+ */
+const SHOWCASE_ACTIVITY: ToolGroup[] = ['files', 'terminal', 'git', 'web', 'files', 'terminal']
 
 const DURATIONS: Partial<Record<AgentStatus, [number, number]>> = {
   working: [16, 30],
@@ -299,6 +311,16 @@ export class FakeAgentRuntime implements AgentRuntime {
     const a = this.agents[i]
     a.status = status
     a.task = this.task(status)
+    /*
+     * A different tool family each time somebody picks work up, so a row of
+     * busy desks is not a row of identical typing animations. The office is
+     * meant to look like several people doing several different things.
+     */
+    a.activity =
+      status === 'working'
+        ? SHOWCASE_ACTIVITY[Math.floor(this.rng() * SHOWCASE_ACTIVITY.length)]
+        : null
+    if (status !== 'talking') a.partnerId = null
     this.remaining[i] = this.duration(status)
   }
 
@@ -382,8 +404,15 @@ export class FakeAgentRuntime implements AgentRuntime {
         if (id) this.hold(id, 'thinking', event.action ?? 'Working out what to look at')
         break
 
-      case 'agent.working':
       case 'agent.tool.started':
+        if (id && event.tool) {
+          const agent = this.get(id)
+          if (agent) agent.activity = groupForTool(event.tool)
+        }
+        if (id) this.hold(id, 'working', event.action ?? 'Working')
+        break
+
+      case 'agent.working':
         /*
          * The specific action - "Reading package.json" - becomes the agent's
          * task line, so the hover card and the world tag say what is actually
@@ -397,6 +426,12 @@ export class FakeAgentRuntime implements AgentRuntime {
         break
 
       case 'agent.delegated':
+        if (id && event.targetAgentId) {
+          const from = this.get(id)
+          const to = this.get(event.targetAgentId)
+          if (from) from.partnerId = event.targetAgentId
+          if (to) to.partnerId = id
+        }
         if (id && event.targetAgentId) {
           // Phase 18: Pixel-World Synchronization
           // When an agent delegates a task to someone, both walk to a conversation spot and talk.
@@ -527,6 +562,10 @@ export class FakeAgentRuntime implements AgentRuntime {
           for (const idx of [i, partner]) {
             this.agents[idx].status = 'talking'
             this.agents[idx].task = topic
+            // Each end knows the other, so the pair turn to face each other
+            // instead of addressing the room.
+            this.agents[idx].partnerId =
+              this.agents[idx === i ? partner : i].id
             this.remaining[idx] = d
           }
           this.conversation = [i, partner]

@@ -21,7 +21,21 @@ interface Props {
  * one working, there is exactly one status on screen and it is the one worth
  * reading. Labelling everybody's idleness was most of the clutter.
  */
-const ACTIVE: AgentStatus[] = ['working', 'thinking', 'talking', 'success']
+const ACTIVE: AgentStatus[] = [
+  'working',
+  'thinking',
+  'talking',
+  'success',
+  /*
+   * Waiting and error earn a chip for the same reason the others do: they are
+   * states the user may need to act on. Waiting often means an approval is
+   * sitting in the dock, and an error means a run has stopped. The body says
+   * both — arms folded, or slumped with a hand at the temple — but these are
+   * the two where being certain matters more than reading the room.
+   */
+  'waiting',
+  'error'
+]
 
 /**
  * How many rows a label may be pushed away from its character to clear one

@@ -1,6 +1,7 @@
 import { buildCharacterOps, SPRITE_H, SPRITE_W } from './characterSprite'
 import { frameCount } from '../../characters/character.states'
-import type { CharacterState, SpriteFacing } from '../../characters/character.types'
+import type { CharacterState } from '../../characters/character.types'
+import type { SpriteFacing } from './characterSprite'
 import { detectiveCharacters } from '../../themes/detective/characters'
 
 function raster(ops: ReturnType<typeof buildCharacterOps>): string[] {
