@@ -1,5 +1,5 @@
 import type { CharacterAppearance, CharacterState, Facing } from '../../characters/character.types'
-import { ANIMATIONS } from '../../characters/character.states'
+import { frameCount, MAX_CLIP_FRAMES } from '../../characters/character.states'
 import { createPixelCanvas, paint, type Op, type Palette } from '../pixel/ops'
 import {
   appearancePalette,
@@ -18,6 +18,14 @@ import {
  * startup and the render loop only ever blits.
  */
 
+/**
+ * The sheet's rows, in order.
+ *
+ * Fifteen poses rather than eight, because half of them are what a character
+ * looks like *in a chair*. That split is the reason an agent's model call no
+ * longer sends its body walking across the office: thinking at a desk and
+ * thinking at a board are two drawings, not one drawing and a relocation.
+ */
 const STATES: CharacterState[] = [
   'idle',
   'walking',
@@ -26,75 +34,73 @@ const STATES: CharacterState[] = [
   'talking',
   'waiting',
   'success',
-  'error'
+  'error',
+  'sitting',
+  'sitWorking',
+  'sitReading',
+  'sitThinking',
+  'sitTalking',
+  'sitWaiting',
+  'sitError'
 ]
 
 const FACINGS: Facing[] = ['down', 'up', 'left', 'right']
 
-const MAX_FRAMES = 4
+/**
+ * Columns in the sheet.
+ *
+ * Derived from the longest clip rather than fixed at four. It *was* fixed at
+ * four, and that cap is most of why "working" looked like standing: a state
+ * could not be given a sixth frame because there was nowhere on the sheet to
+ * put it, so every pose was authored as two frames of one-pixel hand movement
+ * and the difference between working, waiting and idling came down to the word
+ * printed underneath.
+ */
+const MAX_FRAMES = MAX_CLIP_FRAMES
 
 /**
  * How large a character stands in the world, relative to its source art.
  *
- * The office is the setting and the agents are people working in it, so the
- * cast has to read as inhabitants rather than as the subject of the picture.
- * At full size a character was taller than the desk it sat at and wider than
- * the monitor on it, which reversed that.
+ * One. Not 0.6, which is what it was, and which was not a size change — it was
+ * a nearest-neighbour resample that deleted two of every five rows and columns
+ * of a twenty-by-thirty sprite. A brow on this skeleton is one pixel tall, an
+ * eye is two by two, a nose is one; a reduction at that ratio does not shrink
+ * those features, it removes whichever of them the arithmetic lands on. Every
+ * character in every theme had a deliberately specified face and none of them
+ * survived to the screen, which is exactly the "faces are too generic" the
+ * whole cast was accused of.
  *
- * Expressed as a ratio rather than a pixel size on purpose. Characters are
- * drawn in scene pixels and the camera scales the whole scene by a whole
- * number, so this one figure holds the same character-to-furniture proportion
- * at every zoom level and every window size — there is no size that is only
- * correct at one viewport.
+ * The environment is made dominant by being large and dense — a wider room,
+ * more workstations, more furniture per square foot of floor — rather than by
+ * making the people in it unreadable. That is the trade the constant used to
+ * get wrong: it bought proportion with identity, and identity is the thing the
+ * product is about.
  *
- * ── Why this number ──
- *
- * The art is 20x30. Shrinking it is a nearest-neighbour resample, and that
- * only stays clean when both axes land on whole pixels *and* the sheet's cell
- * grid survives — the sheet is 4 frames wide and 32 rows tall, so every row
- * boundary has to land on a whole pixel too, or the frame grid comes apart
- * and characters start showing slices of the pose above them.
- *
- * Any multiple of 0.1 satisfies that. 0.45 would have been a tidy-sounding
- * 25% cut and does not: it gives 9 x 13.5, and 32 rows of 13.5 puts every
- * boundary after the first on a half pixel.
- *
- * 0.6 gives 12x18 from the 20x30 art, and 32 rows of 18 lands every cell
- * boundary on a whole pixel — so the frame grid survives the resample intact.
- *
- * ── Why it came down from 0.8 ──
- *
- * The cast was too large for the room: at 16x24 a seated character was as tall
- * as the monitor beside them and the office read as a set built around the
- * people rather than a place they work in. A quarter off fixes the proportion,
- * and it is only affordable now because the faces were redrawn in the same
- * pass — the old heads relied on hair and clothing to tell people apart, which
- * stops working the moment the head is twelve pixels wide. A face built from
- * deliberate features survives the reduction; a recoloured one does not.
+ * Kept as a named constant, at 1, so that the decision is visible rather than
+ * absent — and so nothing re-derives a fractional scale by accident.
  */
-export const CHARACTER_SCALE = 0.6
+export const CHARACTER_SCALE = 1
 
 /** The character's footprint in the world, in scene pixels. */
-export const WORLD_SPRITE_W = Math.round(SPRITE_W * CHARACTER_SCALE)
-export const WORLD_SPRITE_H = Math.round(SPRITE_H * CHARACTER_SCALE)
+export const WORLD_SPRITE_W = SPRITE_W
+export const WORLD_SPRITE_H = SPRITE_H
 
 export interface CharacterSheet {
-  /** Full-colour frames. */
+  /** Full-colour frames, one row per state/facing pair. */
   sheet: HTMLCanvasElement
-  /** Same frames as a flat silhouette, used to draw the hover outline. */
-  silhouette: HTMLCanvasElement
 }
 
 function rowIndex(state: CharacterState, facing: Facing): number {
-  return STATES.indexOf(state) * FACINGS.length + FACINGS.indexOf(facing)
+  const s = STATES.indexOf(state)
+  // An unknown state would otherwise index row -4..-1 and draw the bottom of
+  // the sheet, which reads as a character abruptly changing pose for no
+  // reason. Falling back to idle is wrong quietly rather than wrong loudly.
+  return (s < 0 ? 0 : s) * FACINGS.length + FACINGS.indexOf(facing)
 }
 
 const ROWS = STATES.length * FACINGS.length
 
-export function buildCharacterSheet(
-  appearance: CharacterAppearance,
-  outlineColour: string
-): CharacterSheet {
+export function buildCharacterSheet(appearance: CharacterAppearance): CharacterSheet {
   const palette: Palette = appearancePalette(appearance)
   const { canvas: sheet, ctx } = createPixelCanvas(
     SPRITE_W * MAX_FRAMES,
@@ -104,13 +110,13 @@ export function buildCharacterSheet(
   const scratch = createPixelCanvas(SPRITE_W, SPRITE_H)
 
   for (const state of STATES) {
-    const clip = ANIMATIONS[state]
+    const frames = frameCount(state)
     for (const facing of FACINGS) {
       const row = rowIndex(state, facing)
       const mirror = isMirrored(facing)
       for (let f = 0; f < MAX_FRAMES; f++) {
         // Short clips repeat, so every column of the sheet is valid.
-        const frame = f % clip.frames
+        const frame = f % frames
         const ops: Op[] = buildCharacterOps(
           appearance,
           state,
@@ -138,17 +144,7 @@ export function buildCharacterSheet(
     }
   }
 
-  // Flatten to a single colour for the hover outline.
-  const { canvas: silhouette, ctx: sctx } = createPixelCanvas(
-    sheet.width,
-    sheet.height
-  )
-  sctx.drawImage(sheet, 0, 0)
-  sctx.globalCompositeOperation = 'source-in'
-  sctx.fillStyle = outlineColour
-  sctx.fillRect(0, 0, sheet.width, sheet.height)
-
-  return { sheet, silhouette }
+  return { sheet }
 }
 
 /** Source rectangle for one frame within a sheet. */
@@ -166,55 +162,50 @@ export function frameRect(
 /* ------------------------------------------------------- world-scale art -- */
 
 /**
- * The same sheet at the size characters actually stand in the office.
+ * A character sheet as it stands in the office.
  *
- * Resampled once at startup rather than scaled on every blit: the render loop
- * keeps doing plain 1:1 draws, and the resampling decision is made in exactly
- * one place instead of being repeated per frame with whatever the context's
- * smoothing flag happened to be.
- *
- * The art itself is untouched — same ops, same palette, same proportions. Only
- * how many screen pixels it occupies changes. `createPixelCanvas` leaves image
- * smoothing off, so this is a nearest-neighbour resample: edges stay hard and
- * nothing is blended, which is the only kind of scaling pixel art survives.
- *
- * The whole sheet is resampled in one draw, which is what keeps the frame grid
- * intact: both the sheet width and its height are exact multiples of the cell
- * size, so every cell boundary still lands on a whole pixel afterwards.
+ * The same sheet, at the same size. This used to resample the art down and no
+ * longer does; the function survives as the name the world asks by, so the
+ * decision about how characters are sized in the world stays in one place
+ * rather than being spread across the renderer, the engine and the preview.
  */
-function shrink(source: HTMLCanvasElement): HTMLCanvasElement {
-  const { canvas, ctx } = createPixelCanvas(
-    Math.round(source.width * CHARACTER_SCALE),
-    Math.round(source.height * CHARACTER_SCALE)
-  )
-  ctx.drawImage(source, 0, 0, canvas.width, canvas.height)
-  return canvas
-}
-
-/**
- * A character sheet at world scale.
- *
- * Deliberately separate from `buildCharacterSheet`, which stays at full size:
- * the team cards and the inspector show a character as a portrait, and those
- * want the original art. Only the office shrinks.
- */
-export function buildWorldSheet(
-  appearance: CharacterAppearance,
-  outlineColour: string
-): CharacterSheet {
-  const full = buildCharacterSheet(appearance, outlineColour)
-  return { sheet: shrink(full.sheet), silhouette: shrink(full.silhouette) }
+export function buildWorldSheet(appearance: CharacterAppearance): CharacterSheet {
+  return buildCharacterSheet(appearance)
 }
 
 /** Source rectangle for one frame within a world-scale sheet. */
-export function worldFrameRect(
-  state: CharacterState,
-  facing: Facing,
-  frame: number
-): { sx: number; sy: number } {
+export const worldFrameRect = frameRect
+
+/**
+ * A one-colour stamp of a single frame, for the hover outline.
+ *
+ * Made on demand into a shared scratch canvas rather than baked as a second
+ * full sheet per character. A silhouette sheet is exactly as large as the art
+ * it flattens, so baking one for everybody doubled the office's texture memory
+ * to serve the one character the pointer happens to be over. At most one is
+ * needed at a time, and rebuilding a twenty-by-thirty stamp is four canvas
+ * calls.
+ */
+export function makeSilhouette(): {
+  stamp: (
+    sheet: HTMLCanvasElement,
+    sx: number,
+    sy: number,
+    colour: string
+  ) => HTMLCanvasElement
+} {
+  const { canvas, ctx } = createPixelCanvas(SPRITE_W, SPRITE_H)
   return {
-    sx: (frame % MAX_FRAMES) * WORLD_SPRITE_W,
-    sy: rowIndex(state, facing) * WORLD_SPRITE_H
+    stamp(sheet, sx, sy, colour) {
+      ctx.clearRect(0, 0, SPRITE_W, SPRITE_H)
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.drawImage(sheet, sx, sy, SPRITE_W, SPRITE_H, 0, 0, SPRITE_W, SPRITE_H)
+      ctx.globalCompositeOperation = 'source-in'
+      ctx.fillStyle = colour
+      ctx.fillRect(0, 0, SPRITE_W, SPRITE_H)
+      ctx.globalCompositeOperation = 'source-over'
+      return canvas
+    }
   }
 }
 

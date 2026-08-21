@@ -159,6 +159,7 @@ export function backdrop(spec: BackdropSpec): Op[] {
 export type SceneLayout = Pick<
   SceneDef,
   | 'desks'
+  | 'workstations'
   | 'boardSpots'
   | 'talkSpots'
   | 'coffeeSpots'

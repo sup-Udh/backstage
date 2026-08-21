@@ -5,11 +5,13 @@ import {
   deskUnit,
   DESK_BASE,
   DESK_VARIANTS,
+  laneRunner,
   SEAT_DX,
   SEAT_DY,
+  zoneFloor,
   type DeskParts
 } from './props'
-import type { Prop, SceneDef, Spot } from '../types'
+import type { Prop, SceneDef, Spot, Workstation } from '../types'
 
 /**
  * The shape every Backstage world is built on.
@@ -399,10 +401,13 @@ export function doorwayX(grid: OfficeGrid, side: 'left' | 'right' = 'left'): num
 /**
  * How far apart two characters stand to talk, in scene pixels.
  *
- * Sized off the sprite rather than picked by eye: characters are ten pixels
- * wide, so this leaves a clear gap between shoulders at any zoom.
+ * Sized off the sprite rather than picked by eye. Characters are twenty
+ * pixels wide now that the world stopped resampling them down, and the body
+ * inside that is about fourteen — so this leaves a clear gap between two sets
+ * of shoulders while keeping the pair close enough to read as one
+ * conversation rather than two people who happen to be facing each other.
  */
-const TALK_GAP = 13
+const TALK_GAP = 16
 
 /** Evenly spaced positions across a span, with the ends inset. */
 function spread(count: number, from: number, to: number): number[] {
@@ -419,11 +424,26 @@ function spread(count: number, from: number, to: number): number[] {
  * same spot because two lists were edited separately.
  */
 export function officeLayout(grid: OfficeGrid): SceneLayout {
-  const desks: Spot[] = grid.stations.map((s) => ({
-    x: s.x + SEAT_DX,
-    y: s.y + SEAT_DY,
-    facing: 'down' as const
+  /*
+   * A workstation is a small sequence, not a point: approach it from the
+   * front, step in behind it, sit. `stand` is below the desk's sort baseline
+   * so an arriving character is drawn fully in front of the desk, and `seat`
+   * is above it so a seated one is drawn behind it from the waist down. That
+   * single fact — which side of `baseY` the feet are on — is what makes
+   * sitting down read as sitting down rather than as a change of pose.
+   *
+   * `monitor` is filled in by `composeOffice`, which is the only place that
+   * knows how many screens each station contributed to the scene's list.
+   */
+  const workstations: Workstation[] = grid.stations.map((s) => ({
+    index: s.index,
+    seat: { x: s.x + SEAT_DX, y: s.y + SEAT_DY, facing: 'down' as const },
+    stand: { x: s.x + SEAT_DX, y: s.y + STAND_DY, facing: 'up' as const },
+    monitor: -1,
+    baseY: s.y + DESK_BASE
   }))
+
+  const desks: Spot[] = workstations.map((w) => w.seat)
 
   /*
    * Standing at the wall: in front of every panel except the ends, which is
@@ -475,6 +495,7 @@ export function officeLayout(grid: OfficeGrid): SceneLayout {
 
   return {
     desks,
+    workstations,
     deskBaseY: grid.deskBaseY,
     boardSpots,
     talkSpots,
@@ -483,6 +504,15 @@ export function officeLayout(grid: OfficeGrid): SceneLayout {
     laneY: grid.laneY
   }
 }
+
+/**
+ * How far in front of the desk surface a character stands before sitting.
+ *
+ * Six pixels past the desk's own sort baseline. Closer and the desk would
+ * draw over the standing figure's legs — the exact thing that made characters
+ * look stuck to the furniture rather than using it.
+ */
+const STAND_DY = DESK_BASE + 6
 
 /* ----------------------------------------------------------- composition -- */
 
@@ -580,9 +610,39 @@ export function composeOffice(
   const layout = officeLayout(grid)
 
   const props: Prop[] = []
-  const monitors: { x: number; y: number }[] = []
-  const leds: { x: number; y: number }[] = []
+  const monitors: { x: number; y: number; baseY: number }[] = []
+  const leds: { x: number; y: number; baseY: number }[] = []
   const steamVents: { x: number; y: number; baseY: number }[] = []
+
+  /*
+   * Floor treatment first, so everything else stands on it.
+   *
+   * `baseY: 0` files these with the wall: they are part of the ground, never
+   * sorted against the cast, and a character walking over a mat has to be
+   * drawn on top of it rather than being depth-tested against it.
+   *
+   * This is what turns three anonymous stretches of carpet into a meeting
+   * area, a common area and a break area. The floor was never empty so much
+   * as undifferentiated, and undifferentiated floor is what makes furniture
+   * look scattered rather than arranged.
+   */
+  for (const zone of grid.zones) {
+    props.push({
+      id: `zone-floor-${zone.index}`,
+      ops: zoneFloor(
+        zone.x + 6,
+        zone.baseY - 30,
+        zone.w - 12,
+        Math.max(20, grid.height - (zone.baseY - 30) - 6)
+      ),
+      baseY: 0
+    })
+  }
+  props.push({
+    id: 'lane',
+    ops: laneRunner(16, grid.laneY, grid.width - 32),
+    baseY: 0
+  })
 
   /* The back wall. Flat against it, so it never sorts against the cast. */
   for (const slot of grid.wall) {
@@ -617,8 +677,21 @@ export function composeOffice(
   for (const slot of grid.stations) {
     const desk = build(slot)
     props.push({ id: `station-${slot.index}`, ops: desk.ops, baseY: desk.baseY })
-    monitors.push(...desk.monitors)
-    leds.push(desk.led)
+
+    /*
+     * Which screen belongs to whom, recorded as it is added.
+     *
+     * A station may contribute one screen or two, so the index of a given
+     * desk's primary monitor is only knowable here, while the list is being
+     * built. Without it the renderer had no way to make a screen respond to
+     * the person at it — which is why every monitor in the office scrolled
+     * the same invented code whether anybody was sitting there or not.
+     */
+    const station = layout.workstations.find((w) => w.index === slot.index)
+    if (station) station.monitor = monitors.length
+
+    for (const m of desk.monitors) monitors.push({ ...m, baseY: desk.baseY })
+    leds.push({ ...desk.led, baseY: desk.baseY })
   }
 
   /* The lower zones. */

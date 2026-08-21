@@ -5,6 +5,7 @@ import type {
   Expression,
   Facing
 } from '../../characters/character.types'
+import { frameCount } from '../../characters/character.states'
 
 /**
  * The sprite skeleton.
@@ -30,6 +31,16 @@ import type {
  * The head is deliberately narrower than the torso. An equal-width head and
  * body is what made the first attempt read as a rectangle rather than a
  * person, and no amount of detail rescues a silhouette that shape.
+ *
+ * These twenty by thirty pixels are also, now, exactly what appears on screen.
+ * The world used to resample them to 12x18 — a x0.6 nearest-neighbour
+ * reduction, which does not "make a sprite smaller", it deletes two of every
+ * five rows and columns. A brow is one pixel tall and an eye is two; a
+ * reduction that drops rows at that ratio destroys a face's identity and keeps
+ * whichever half of it the arithmetic happened to land on. Every character in
+ * the app had a carefully specified face and none of them survived to the
+ * screen. Characters are drawn 1:1 now, and the office reads as large by being
+ * large rather than by shrinking the people in it.
  */
 export const SPRITE_W = 20
 export const SPRITE_H = 30
@@ -137,16 +148,17 @@ interface Head {
   /** Top of the skull, already offset by the frame's bob. */
   y: number
   h: number
-  /** Vertical centre line. Always 10. */
+  /** Vertical centre line, already offset by the frame's lean. */
   cx: number
 }
 
-function headGeom(a: CharacterAppearance, dy: number): Head {
+function headGeom(a: CharacterAppearance, dy: number, dx = 0): Head {
   // 7 / 8 / 9 wide. One pixel either side of the head is clearly visible at
   // this size, which is why the steps are single pixels where the shoulders'
   // are not.
   const w = a.faceWidth === 'narrow' ? 7 : a.faceWidth === 'wide' ? 9 : 8
-  return { x: CENTRE - (w >> 1), w, y: HEAD_Y + dy, h: HEAD_H, cx: CENTRE }
+  const cx = CENTRE + dx
+  return { x: cx - (w >> 1), w, y: HEAD_Y + dy, h: HEAD_H, cx }
 }
 
 /**
@@ -363,15 +375,26 @@ function hairFront(a: CharacterAppearance, h: Head): Op[] {
  * *identifying* — shape comes from the character and only the offsets come
  * from their mood, so a sceptical Wainwright and a sceptical Bertram do not
  * arrive at the same eyebrows.
+ *
+ * `mood` is the frame's own contribution on top of the character's: a raised
+ * brow while thinking, a knitted one while an error is on the screen. It moves
+ * the line by a pixel and never changes its shape, so a character's brow is
+ * still recognisably theirs in every pose.
  */
-function brows(a: CharacterAppearance, exp: Expression, h: Head): Op[] {
+function brows(
+  a: CharacterAppearance,
+  exp: Expression,
+  h: Head,
+  mood: BrowMood
+): Op[] {
   const { l, r } = eyeColumns(a, h)
   const y = h.y + 4
   const shape = a.browShape ?? 'flat'
 
   // Mood raises or lowers the whole brow line, and tilts it.
-  const lift = exp === 'friendly' ? -1 : 0
-  const inner = exp === 'serious' || exp === 'focused' ? 1 : 0
+  const lift = (exp === 'friendly' ? -1 : 0) + (mood === 'raised' ? -1 : 0)
+  const inner =
+    (exp === 'serious' || exp === 'focused' ? 1 : 0) + (mood === 'knit' ? 1 : 0)
   // One brow a pixel higher. The whole read of "sceptical" is that offset.
   const cocked = exp === 'skeptical' ? -1 : 0
 
@@ -415,21 +438,45 @@ function brows(a: CharacterAppearance, exp: Expression, h: Head): Op[] {
   return ops
 }
 
-function eyes(a: CharacterAppearance, exp: Expression, h: Head): Op[] {
+/**
+ * Eyes, and where they are looking.
+ *
+ * The pupil moves within the white rather than the whole eye moving, which is
+ * a single pixel of difference and the whole reason a thinking character reads
+ * as thinking: eyes up and off the screen is what people actually do when they
+ * stop reading and start considering.
+ */
+function eyes(
+  a: CharacterAppearance,
+  exp: Expression,
+  h: Head,
+  gaze: Gaze
+): Op[] {
   const { l, r } = eyeColumns(a, h)
   const y = h.y + 5
   const ops: Op[] = []
 
-  if (exp === 'friendly' || exp === 'tired') {
+  const shut = gaze === 'blink' || exp === 'friendly' || exp === 'tired'
+
+  if (shut) {
     // Creased shut: a flat line rather than a pupil.
     ops.push([l, y + 1, EYE_W, 1, 'ink'])
     ops.push([r, y + 1, EYE_W, 1, 'ink'])
   } else {
     ops.push([l, y, EYE_W, 2, 'white'])
     ops.push([r, y, EYE_W, 2, 'white'])
-    // Pupils, both looking the same way so the gaze is not cross-eyed.
-    ops.push([l + 1, y, 1, 2, 'ink'])
-    ops.push([r + 1, y, 1, 2, 'ink'])
+
+    /*
+     * Pupils, both looking the same way so the gaze is never cross-eyed.
+     * `up` and `down` move within the two rows of white; `side` moves within
+     * the two columns. Off-grid gazes are not possible, which is what keeps
+     * an eye from becoming a solid dark block at this size.
+     */
+    const px = gaze === 'side' ? 0 : 1
+    const py = gaze === 'up' ? 0 : gaze === 'down' ? 1 : 0
+    const ph = gaze === 'up' || gaze === 'down' ? 1 : 2
+    ops.push([l + px, y + py, 1, ph, 'ink'])
+    ops.push([r + px, y + py, 1, ph, 'ink'])
   }
 
   if (a.glasses) {
@@ -439,8 +486,16 @@ function eyes(a: CharacterAppearance, exp: Expression, h: Head): Op[] {
     ops.push([r - 1, y - 1, EYE_W + 2, 4, 'ink2'])
     ops.push([l, y, EYE_W, 2, 'white'])
     ops.push([r, y, EYE_W, 2, 'white'])
-    ops.push([l + 1, y, 1, 2, 'ink'])
-    ops.push([r + 1, y, 1, 2, 'ink'])
+    if (shut) {
+      ops.push([l, y + 1, EYE_W, 1, 'ink'])
+      ops.push([r, y + 1, EYE_W, 1, 'ink'])
+    } else {
+      const px = gaze === 'side' ? 0 : 1
+      const py = gaze === 'up' ? 0 : gaze === 'down' ? 1 : 0
+      const ph = gaze === 'up' || gaze === 'down' ? 1 : 2
+      ops.push([l + px, y + py, 1, ph, 'ink'])
+      ops.push([r + px, y + py, 1, ph, 'ink'])
+    }
     const bridge = r - 1 - (l + EYE_W + 1)
     if (bridge > 0) ops.push([l + EYE_W + 1, y, bridge, 1, 'ink2'])
   }
@@ -533,14 +588,24 @@ function beard(a: CharacterAppearance, h: Head): Op[] {
   }
 }
 
-function head(
-  a: CharacterAppearance,
-  facing: SpriteFacing,
-  dy: number,
-  mouthOpen: boolean
-): Op[] {
+/** Where the eyes are pointed this frame. */
+type Gaze = 'ahead' | 'up' | 'down' | 'side' | 'blink'
+/** The frame's contribution to the brow, on top of the character's own. */
+type BrowMood = 'none' | 'raised' | 'knit'
+/** The mouth this frame. `wide` is only used for a celebration. */
+type Mouth = 'closed' | 'open' | 'wide'
+
+interface Look {
+  dy: number
+  dx: number
+  gaze: Gaze
+  brow: BrowMood
+  mouth: Mouth
+}
+
+function head(a: CharacterAppearance, facing: SpriteFacing, look: Look): Op[] {
   const exp = expressionOf(a)
-  const h = headGeom(a, dy)
+  const h = headGeom(a, look.dy, look.dx)
   const { x, w, y } = h
   const ops: Op[] = []
 
@@ -569,10 +634,20 @@ function head(
     // The nose in profile is the one place it breaks the silhouette.
     ops.push([x + w, y + 5, 1, a.noseShape === 'broad' ? 2 : 1, 'skin'])
     ops.push([x + w - 3, y + 5, 2, 2, 'white'])
-    ops.push([x + w - 2, y + 5, 1, 2, 'ink'])
-    ops.push([x + w - 3, y + 4, 2, 1, 'hairShade'])
+    if (look.gaze === 'blink') {
+      ops.push([x + w - 3, y + 6, 2, 1, 'ink'])
+    } else {
+      ops.push([x + w - 2, y + (look.gaze === 'up' ? 5 : 5), 1, 2, 'ink'])
+    }
+    ops.push([x + w - 3, y + 4 + (look.brow === 'raised' ? -1 : 0), 2, 1, 'hairShade'])
     if (a.glasses) ops.push([x + w - 4, y + 4, 4, 1, 'ink2'])
-    ops.push([x + w - 3, y + 8, 2, 1, mouthOpen ? 'ink' : 'skinShade'])
+    ops.push([
+      x + w - 3,
+      y + 8,
+      2,
+      1,
+      look.mouth === 'closed' ? 'skinShade' : 'ink'
+    ])
     ops.push([x + 2, y + 5, 2, 2, 'skinShade']) // ear
     ops.push(...beard(a, h))
     return ops
@@ -591,17 +666,18 @@ function head(
 
   ops.push(...nose(a, h))
   ops.push(...hairFront(a, h))
-  ops.push(...brows(a, exp, h))
-  ops.push(...eyes(a, exp, h))
-  ops.push(...mouth(exp, h, mouthOpen))
+  ops.push(...brows(a, exp, h, look.brow))
+  ops.push(...eyes(a, exp, h, look.gaze))
+  ops.push(...mouth(exp, h, look.mouth))
   ops.push(...beard(a, h))
   return ops
 }
 
-function mouth(exp: Expression, h: Head, open: boolean): Op[] {
+function mouth(exp: Expression, h: Head, m: Mouth): Op[] {
   const y = h.y + 8
   const x = h.cx - 1
-  if (open) return [[x - 1, y - 1, 3, 2, 'ink']]
+  if (m === 'wide') return [[x - 1, y - 1, 4, 3, 'ink']]
+  if (m === 'open') return [[x - 1, y - 1, 3, 2, 'ink']]
 
   switch (exp) {
     case 'smirk':
@@ -630,7 +706,38 @@ function expressionOf(a: CharacterAppearance): Expression {
 
 /* --------------------------------------------------------------- torso --- */
 
-type ArmPose = 'down' | 'typing' | 'chin' | 'gesture' | 'up' | 'hold'
+/**
+ * What the arms are doing.
+ *
+ * Every one of these is a *readable silhouette* rather than a shade of the
+ * same one. That is the whole test the old sprite failed: `working` and
+ * `waiting` both drew a body with its arms at its sides and differed by one
+ * pixel of hand, so the only thing telling the user which was which was the
+ * word printed underneath.
+ */
+type ArmPose =
+  /** Hanging at the sides. */
+  | 'down'
+  /** Swinging, for the walk cycle. Driven by the frame's `swing`. */
+  | 'swing'
+  /** Forward and low, on a keyboard. */
+  | 'typing'
+  /** One hand at the chin, the other folded across. */
+  | 'chin'
+  /** One hand raised and moving: speech. */
+  | 'gesture'
+  /** Both up: a celebration. */
+  | 'up'
+  /** Carrying the character's item. */
+  | 'hold'
+  /** Crossed. Reads as waiting from right across the room. */
+  | 'folded'
+  /** One arm out to a board or a wall. */
+  | 'reach'
+  /** Resting on the desk edge, off the keys. */
+  | 'rest'
+  /** One hand up at the temple, the body low: something went wrong. */
+  | 'slump'
 
 /** How much room a held object needs beside the hand, in pixels. */
 const HELD_W = 4
@@ -662,34 +769,203 @@ function frameFor(a: CharacterAppearance): Frame {
   }
 }
 
+/**
+ * The arms.
+ *
+ * Drawn as their own limbs rather than as two darker columns of the jacket,
+ * which is what the sprite used to do. A column cannot swing, cannot fold and
+ * cannot reach — so every pose that needed an arm to be somewhere had to be
+ * expressed by moving a two-pixel hand, and none of them read.
+ *
+ * The upper arm hugs the torso's outer column and the forearm is what moves.
+ * Both stay inside the cell for the widest build: broad shoulders put the
+ * outer column at x=15..16, and a full swing outwards lands on 17 — one clear
+ * of the edge.
+ */
+function arms(
+  a: CharacterAppearance,
+  facing: SpriteFacing,
+  pose: ArmPose,
+  swing: number,
+  y: number,
+  left: number,
+  w: number,
+  bodyH: number
+): Op[] {
+  const ops: Op[] = []
+  const lx = left
+  const rx = left + w - 2
+  const shoulder = y + 1
+  const handY = y + bodyH - 3
+
+  /** One arm: sleeve from the shoulder down, then a hand. */
+  const limb = (
+    x: number,
+    top: number,
+    len: number,
+    hx: number,
+    hy: number,
+    sleeve: string,
+    skin: string
+  ) => {
+    if (len > 0) ops.push([x, top, 2, len, sleeve])
+    ops.push([hx, hy, 2, 2, skin])
+  }
+
+  switch (pose) {
+    case 'swing': {
+      /*
+       * Front-on, an arm swing is mostly depth, so it is drawn as the hands
+       * rising and falling a pixel and the elbows opening a pixel outwards.
+       * In profile it is the real thing: the forward arm crosses the body and
+       * the trailing one clears the hip.
+       */
+      const s = Math.round(swing)
+      if (facing === 'side') {
+        limb(rx, shoulder, bodyH - 5, rx + s, handY - Math.abs(s), 'outfitShade', 'skin')
+        limb(lx, shoulder, bodyH - 5, lx - s, handY - Math.abs(s), 'outfitDeep', 'skinShade')
+      } else {
+        limb(lx, shoulder, bodyH - 5, lx - (s > 0 ? 1 : 0), handY - (s > 0 ? 1 : 0), 'outfitShade', 'skin')
+        limb(rx, shoulder, bodyH - 5, rx + (s < 0 ? 1 : 0), handY - (s < 0 ? 1 : 0), 'outfitDeep', 'skinShade')
+      }
+      break
+    }
+
+    case 'typing': {
+      /*
+       * Forearms angled in and forward, hands at the keyboard line — inside
+       * the shoulders, not outside them, because that is where a keyboard is.
+       * The two hands are driven from opposite ends of `swing` so they never
+       * strike together, which is the single thing that makes typing read as
+       * typing rather than as a twitch.
+       */
+      const l = swing > 0.5 ? 0 : 1
+      const r = swing > 0.5 ? 1 : 0
+      ops.push([lx, shoulder, 2, bodyH - 6, 'outfitShade'])
+      ops.push([rx, shoulder, 2, bodyH - 6, 'outfitDeep'])
+      ops.push([lx + 1, handY - 2, 2, 2, 'outfitShade'])
+      ops.push([rx - 1, handY - 2, 2, 2, 'outfitDeep'])
+      ops.push([lx + 2, handY - l, 2, 2, 'skin'])
+      ops.push([rx - 2, handY - r, 2, 2, 'skinShade'])
+      break
+    }
+
+    case 'rest': {
+      // Off the keys, forearms laid on the desk edge, hands together.
+      ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
+      ops.push([rx, shoulder, 2, bodyH - 5, 'outfitDeep'])
+      ops.push([lx + 2, handY, 2, 2, 'skin'])
+      ops.push([rx - 2, handY, 2, 2, 'skinShade'])
+      break
+    }
+
+    case 'chin': {
+      /*
+       * One forearm folded across the chest, the other rising from it to the
+       * chin. This is the pose the whole thinking state rests on, and it is
+       * the only one where a hand appears above the shoulder line — which is
+       * exactly why it is legible at twenty pixels.
+       */
+      ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
+      ops.push([lx + 2, y + bodyH - 5, w - 4, 2, 'outfitShade'])
+      ops.push([rx, shoulder, 2, 3, 'outfitDeep'])
+      // The forearm climbing to the face, and the hand at the chin.
+      ops.push([rx - 1, y - 2 + Math.round(swing), 2, 5, 'outfitDeep'])
+      ops.push([rx - 1, y - 3 + Math.round(swing), 2, 2, 'skin'])
+      break
+    }
+
+    case 'gesture': {
+      // One hand up and open, moving; the other stays down.
+      const lift = Math.round(swing * 2)
+      ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
+      ops.push([lx, handY, 2, 2, 'skin'])
+      ops.push([rx, shoulder, 2, 3, 'outfitDeep'])
+      ops.push([rx, y + 3 - lift, 2, 3, 'outfitDeep'])
+      ops.push([rx + 1, y + 1 - lift, 2, 2, 'skinShade'])
+      break
+    }
+
+    case 'reach': {
+      // One arm out and up to a board; the body stays square to it.
+      const lift = Math.round(swing * 2)
+      ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
+      ops.push([lx, handY, 2, 2, 'skin'])
+      ops.push([rx, y - 1 - lift, 2, 6, 'outfitDeep'])
+      ops.push([rx + 1, y - 3 - lift, 2, 2, 'skinShade'])
+      break
+    }
+
+    case 'folded': {
+      // Crossed at the chest: two horizontal bars and two hands tucked in.
+      ops.push([lx, shoulder, 2, 3, 'outfitShade'])
+      ops.push([rx, shoulder, 2, 3, 'outfitDeep'])
+      ops.push([lx, y + 4, w, 2, 'outfitShade'])
+      ops.push([lx, y + 6, w - 2, 2, 'outfitDeep'])
+      ops.push([lx + 1, y + 6, 2, 2, 'skin'])
+      ops.push([rx, y + 4, 2, 2, 'skinShade'])
+      break
+    }
+
+    case 'up': {
+      const lift = Math.round(swing)
+      ops.push([lx - 3, y - 4 + lift, 3, 7, 'ink'])
+      ops.push([rx + 2, y - 4 + lift, 3, 7, 'ink'])
+      ops.push([lx - 2, y - 3 + lift, 2, 5, 'outfit'])
+      ops.push([rx + 2, y - 3 + lift, 2, 5, 'outfitShade'])
+      ops.push([lx - 2, y - 3 + lift, 2, 1, 'skin'])
+      ops.push([rx + 2, y - 3 + lift, 2, 1, 'skin'])
+      break
+    }
+
+    case 'slump': {
+      // One hand at the temple, the other hanging. Read as "not again".
+      ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
+      ops.push([lx, handY, 2, 2, 'skin'])
+      ops.push([rx, shoulder, 2, 2, 'outfitDeep'])
+      ops.push([rx, y - 2, 2, 4, 'outfitDeep'])
+      ops.push([rx - 1, y - 4, 2, 2, 'skinShade'])
+      break
+    }
+
+    case 'hold': {
+      ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
+      ops.push([rx, shoulder, 2, bodyH - 5, 'outfitDeep'])
+      ops.push([lx + 1, handY, 2, 2, 'skin'])
+      ops.push([rx - 1, handY, 2, 2, 'skinShade'])
+      break
+    }
+
+    default: {
+      ops.push([lx, shoulder, 2, bodyH - 5, 'outfitShade'])
+      ops.push([rx, shoulder, 2, bodyH - 5, 'outfitDeep'])
+      ops.push([lx, handY, 2, 2, 'skin'])
+      ops.push([rx, handY, 2, 2, 'skinShade'])
+      break
+    }
+  }
+  return ops
+}
+
 function torso(
   a: CharacterAppearance,
   facing: SpriteFacing,
   dy: number,
-  arms: ArmPose,
-  frame: number
+  dx: number,
+  arm: ArmPose,
+  swing: number
 ): Op[] {
   const f = frameFor(a)
   const ops: Op[] = []
   const y = TORSO_Y + dy + f.lean
-  const left = Math.round(10 - f.half)
+  const left = Math.round(10 + dx - f.half)
   const w = Math.round(f.half * 2)
   const style = a.outfitStyle ?? 'suit'
   // A coat hangs past the hips, which lengthens the silhouette.
   const bodyH = style === 'coat' || style === 'labcoat' ? TORSO_H + 3 : TORSO_H
 
-  if (arms === 'up') {
-    const lift = frame % 2 === 0 ? 0 : -1
-    ops.push([left - 3, y - 4 + lift, 3, 7, 'ink'])
-    ops.push([left + w, y - 4 + lift, 3, 7, 'ink'])
-    ops.push([left - 2, y - 3 + lift, 2, 5, 'outfit'])
-    ops.push([left + w, y - 3 + lift, 2, 5, 'outfitShade'])
-    ops.push([left - 2, y - 3 + lift, 2, 1, 'skin'])
-    ops.push([left + w, y - 3 + lift, 2, 1, 'skin'])
-  }
-
   // Neck, in shadow under the jaw.
-  ops.push([9, 11 + dy, 3, 2, 'skinShade'])
+  ops.push([9 + dx, 11 + dy, 3, 2, 'skinShade'])
 
   if (style === 'hoodie') {
     // The hood is the silhouette: a raised collar behind the neck.
@@ -704,63 +980,38 @@ function torso(
   ops.push([left + w - 2, y, 2, bodyH - 1, 'outfitShade'])
   ops.push([left, y + bodyH - 2, w, 1, 'outfitDeep'])
 
-  // Sleeves, a shade darker so the arms separate from the chest.
-  ops.push([left, y + 2, 2, bodyH - 4, 'outfitShade'])
-  ops.push([left + w - 2, y + 2, 2, bodyH - 4, 'outfitDeep'])
-
   if (style === 'hoodie') {
     ops.push([left + 2, y + 4, w - 4, 2, 'outfitShade'])
-    ops.push([9, y, 1, 3, 'shirtLit'])
-    ops.push([11, y, 1, 3, 'shirtLit'])
+    ops.push([9 + dx, y, 1, 3, 'shirtLit'])
+    ops.push([11 + dx, y, 1, 3, 'shirtLit'])
   } else if (style === 'cardigan') {
-    ops.push([9, y, 3, bodyH - 1, 'shirt'])
-    ops.push([9, y, 1, bodyH - 1, 'shirtShade'])
-    ops.push([10, y + 2, 1, 1, 'acc'])
-    ops.push([10, y + 5, 1, 1, 'acc'])
+    ops.push([9 + dx, y, 3, bodyH - 1, 'shirt'])
+    ops.push([9 + dx, y, 1, bodyH - 1, 'shirtShade'])
+    ops.push([10 + dx, y + 2, 1, 1, 'acc'])
+    ops.push([10 + dx, y + 5, 1, 1, 'acc'])
   } else {
     // Shirt showing in the jacket opening.
-    ops.push([9, y, 3, 2, 'shirt'])
-    ops.push([9, y, 3, 1, 'shirtLit'])
+    ops.push([9 + dx, y, 3, 2, 'shirt'])
+    ops.push([9 + dx, y, 3, 1, 'shirtLit'])
     if (a.vest) {
-      ops.push([9, y + 2, 3, bodyH - 4, 'vest'])
-      ops.push([11, y + 2, 1, bodyH - 4, 'vestShade'])
+      ops.push([9 + dx, y + 2, 3, bodyH - 4, 'vest'])
+      ops.push([11 + dx, y + 2, 1, bodyH - 4, 'vestShade'])
     }
     if (style === 'suit' || style === 'blazer' || style === 'vest' || style === 'coat') {
       // Lapels: the two diagonal pixels that make a jacket read as a jacket.
-      ops.push([8, y, 1, 2, 'outfitLit'])
-      ops.push([12, y, 1, 2, 'outfitShade'])
-      ops.push([8, y + 2, 1, 1, 'outfitDeep'])
-      ops.push([12, y + 2, 1, 1, 'outfitDeep'])
+      ops.push([8 + dx, y, 1, 2, 'outfitLit'])
+      ops.push([12 + dx, y, 1, 2, 'outfitShade'])
+      ops.push([8 + dx, y + 2, 1, 1, 'outfitDeep'])
+      ops.push([12 + dx, y + 2, 1, 1, 'outfitDeep'])
     }
   }
 
   if (a.accent) {
-    ops.push([10, y + 1, 1, 1, 'accentShade'])
-    ops.push([10, y + 2, 1, 4, 'accent'])
+    ops.push([10 + dx, y + 1, 1, 1, 'accentShade'])
+    ops.push([10 + dx, y + 2, 1, 4, 'accent'])
   }
 
-  // Hands. Their position is the main read on what a character is doing.
-  const handY = y + bodyH - 3
-  if (arms === 'down') {
-    ops.push([left, handY, 2, 2, 'skin'])
-    ops.push([left + w - 2, handY, 2, 2, 'skinShade'])
-  } else if (arms === 'typing') {
-    const l = frame % 2 === 0 ? 0 : -1
-    const r = frame % 2 === 0 ? -1 : 0
-    ops.push([left + 1, handY + l, 2, 2, 'skin'])
-    ops.push([left + w - 3, handY + r, 2, 2, 'skinShade'])
-  } else if (arms === 'chin') {
-    ops.push([left + w - 1, y, 2, bodyH - 2, 'ink'])
-    ops.push([left + w - 1, y + 1, 2, bodyH - 4, 'outfitShade'])
-    ops.push([12, 11 + dy - (frame % 2), 2, 2, 'skin'])
-    ops.push([left, handY, 2, 2, 'skin'])
-  } else if (arms === 'gesture') {
-    ops.push([left, handY, 2, 2, 'skin'])
-    ops.push([left + w - 1, y + 2 - (frame % 2), 3, 2, 'skin'])
-  } else if (arms === 'hold') {
-    ops.push([left + 1, handY, 2, 2, 'skin'])
-    ops.push([left + w - 3, handY, 2, 2, 'skinShade'])
-  }
+  ops.push(...arms(a, facing, arm, swing, y, left, w, bodyH))
 
   if (facing === 'side') {
     // Trim the far shoulder so the profile does not read as front-on.
@@ -776,18 +1027,23 @@ function torso(
  * break the silhouette — which is the point of having it. Everything here is
  * placed outside the torso block, so nothing ever covers the chest.
  */
-function accessory(a: CharacterAppearance, dy: number, arms: ArmPose): Op[] {
+function accessory(
+  a: CharacterAppearance,
+  dy: number,
+  dx: number,
+  arm: ArmPose
+): Op[] {
   const f = frameFor(a)
   const y = TORSO_Y + dy + f.lean
-  const left = Math.round(10 - f.half)
+  const left = Math.round(10 + dx - f.half)
   const w = Math.round(f.half * 2)
   const ops: Op[] = []
   const handY = y + TORSO_H - 3
-  const free = arms === 'down' || arms === 'hold'
+  const free = arm === 'down' || arm === 'hold'
 
   // Anything worn on the head has to follow the head, which is no longer the
   // same width for everybody.
-  const h = headGeom(a, dy)
+  const h = headGeom(a, dy, dx)
 
   /*
    * Where a held object may start, so it still fits.
@@ -825,7 +1081,7 @@ function accessory(a: CharacterAppearance, dy: number, arms: ArmPose): Op[] {
       }
       break
     case 'mug':
-      if (arms !== 'up') {
+      if (arm !== 'up' && arm !== 'typing' && arm !== 'folded') {
         ops.push([heldRight, handY, 4, 4, 'ink'])
         ops.push([heldRight + 1, handY + 1, 2, 2, 'white'])
         ops.push([heldRight + 3, handY + 1, 1, 1, 'ink'])
@@ -843,7 +1099,7 @@ function accessory(a: CharacterAppearance, dy: number, arms: ArmPose): Op[] {
       ops.push([left + w - 2, y + 1, 1, 4, 'acc'])
       break
     case 'briefcase':
-      if (arms === 'down') {
+      if (arm === 'down' || arm === 'swing') {
         const bx = Math.min(left + w, SPRITE_W - 5)
         ops.push([bx, handY + 2, 5, 5, 'ink'])
         ops.push([bx + 1, handY + 3, 3, 3, 'accShade'])
@@ -869,44 +1125,74 @@ function accessory(a: CharacterAppearance, dy: number, arms: ArmPose): Op[] {
 /* ----------------------------------------------------------------- legs -- */
 
 const LEG_Y = 21
+/** The row the soles rest on. Feet occupy this row and the one below it. */
+const GROUND = LEG_Y + 6
 
-/** Two legs with a two-pixel gap, so the lower body is never a solid slab. */
-function standLegs(dy: number): Op[] {
-  const y = LEG_Y + dy
-  return [
-    [5, y, 4, 6, 'ink'],
-    [11, y, 4, 6, 'ink'],
-    [6, y, 2, 5, 'trousers'],
-    [12, y, 2, 5, 'trousersShade'],
-    [6, y, 2, 1, 'trousers'],
-    [5, y + 6, 5, 2, 'ink'],
-    [10, y + 6, 5, 2, 'ink'],
-    [6, y + 6, 3, 1, 'shoes'],
-    [11, y + 6, 3, 1, 'shoes']
-  ]
+/**
+ * Two legs with a two-pixel gap, so the lower body is never a solid slab.
+ *
+ * `bob` lowers the *hips* only: the feet stay on `GROUND` and the legs get
+ * shorter. That is the difference between a character who is walking and one
+ * who is being slid up and down the screen — which is what the previous cycle
+ * did, because it moved the whole leg group including the shoes.
+ */
+function legPair(
+  bob: number,
+  liftL: number,
+  liftR: number,
+  offL: number,
+  offR: number
+): Op[] {
+  const top = LEG_Y + bob
+  const ops: Op[] = []
+
+  const leg = (x: number, lift: number, trousers: string, shoe: string) => {
+    const footTop = GROUND - lift
+    const len = Math.max(1, footTop - top)
+    ops.push([x, top, 4, len, 'ink'])
+    ops.push([x + 1, top, 2, Math.max(1, len - 1), trousers])
+    ops.push([x, footTop, 5, 2, 'ink'])
+    ops.push([x + 1, footTop, 3, 1, shoe])
+  }
+
+  leg(5 + offL, liftL, 'trousers', 'shoes')
+  leg(11 + offR, liftR, 'trousersShade', 'shoes')
+  return ops
 }
 
-/** 4-frame walk cycle: neutral, left lift, neutral, right lift. */
-function walkLegs(dy: number, frame: number): Op[] {
-  const f = frame % 4
-  if (f === 0 || f === 2) return standLegs(dy)
-  const y = LEG_Y + dy
-  const liftLeft = f === 1
-  return [
-    [5, y, 4, liftLeft ? 5 : 6, 'ink'],
-    [11, y, 4, liftLeft ? 6 : 5, 'ink'],
-    [6, y, 2, liftLeft ? 4 : 5, 'trousers'],
-    [12, y, 2, liftLeft ? 5 : 4, 'trousersShade'],
-    liftLeft ? [5, y + 5, 5, 2, 'ink'] : [5, y + 6, 5, 2, 'ink'],
-    liftLeft ? [10, y + 6, 5, 2, 'ink'] : [10, y + 5, 5, 2, 'ink'],
-    liftLeft ? [6, y + 5, 3, 1, 'shoes'] : [6, y + 6, 3, 1, 'shoes'],
-    liftLeft ? [11, y + 6, 3, 1, 'shoes'] : [11, y + 5, 3, 1, 'shoes']
-  ]
+function standLegs(bob: number): Op[] {
+  return legPair(bob, 0, 0, 0, 0)
+}
+
+/**
+ * The walk cycle, as eight held poses.
+ *
+ * Contact, down, passing, up — twice, once per leg. The hips drop on `down`
+ * and rise on `up`, which is where a walk gets its rhythm; the legs spread on
+ * contact and close on passing, which is where it gets its stride. In profile
+ * the spread is doubled and the trailing leg is drawn dark, so the two legs
+ * read as one in front of the other rather than as a pair side by side.
+ */
+const WALK: { bob: number; liftL: number; liftR: number; spread: number }[] = [
+  { bob: 1, liftL: 0, liftR: 0, spread: 1 },
+  { bob: 2, liftL: 0, liftR: 0, spread: 1 },
+  { bob: 1, liftL: 2, liftR: 0, spread: 0 },
+  { bob: 0, liftL: 1, liftR: 0, spread: -1 },
+  { bob: 1, liftL: 0, liftR: 0, spread: -1 },
+  { bob: 2, liftL: 0, liftR: 0, spread: -1 },
+  { bob: 1, liftL: 0, liftR: 2, spread: 0 },
+  { bob: 0, liftL: 0, liftR: 1, spread: 1 }
+]
+
+function walkLegs(frame: number, side: boolean): Op[] {
+  const s = WALK[frame % WALK.length]
+  const spread = side ? s.spread * 2 : s.spread
+  return legPair(s.bob, s.liftL, s.liftR, -spread, spread)
 }
 
 /** Seated: knees forward, so the legs read as folded rather than standing. */
-function sitLegs(dy: number): Op[] {
-  const y = LEG_Y + dy
+function sitLegs(bob: number): Op[] {
+  const y = LEG_Y + bob
   return [
     [5, y, 10, 4, 'ink'],
     [6, y + 1, 3, 2, 'trousers'],
@@ -918,11 +1204,255 @@ function sitLegs(dy: number): Op[] {
   ]
 }
 
+/* ------------------------------------------------------------- postures -- */
+
+/**
+ * One frame of one state, as a set of held offsets.
+ *
+ * This table *is* the animation. Everything above it is a way of drawing a
+ * body in a given attitude; everything below it is a way of getting the right
+ * row out of a sprite sheet. The reason it is a table rather than a switch
+ * full of `frame % 2` arithmetic is that a switch cannot be read: nobody
+ * looking at `bob = frame % 2` can tell whether the resulting animation is
+ * meant to be breathing or typing, and the old sprite had six states that were
+ * all exactly that expression.
+ *
+ * Read a row across and it says what the character looks like at that moment.
+ */
+interface Posture {
+  /** Whole-body drop, in pixels. Never negative: the cell has no headroom. */
+  bob: number
+  /** Horizontal shift of the upper body — turning, leaning, slumping. */
+  lean: number
+  /** Extra head-only drop, for a nod or a hang. */
+  headDy: number
+  /** Extra head-only shift, for a tilt. */
+  headDx: number
+  arm: ArmPose
+  /** Free parameter the arm pose interprets: swing, lift, strike. */
+  swing: number
+  legs: 'stand' | 'walk' | 'sit'
+  gaze: Gaze
+  brow: BrowMood
+  mouth: Mouth
+}
+
+/** Defaults, so a posture row only states what makes it different. */
+function P(p: Partial<Posture>): Posture {
+  return {
+    bob: 0,
+    lean: 0,
+    headDy: 0,
+    headDx: 0,
+    arm: 'down',
+    swing: 0,
+    legs: 'stand',
+    gaze: 'ahead',
+    brow: 'none',
+    mouth: 'closed',
+    ...p
+  }
+}
+
+/**
+ * Every pose, frame by frame.
+ *
+ * The frame counts here have to match the clip lengths in `ANIMATIONS`, which
+ * `assertPostures` below checks at module load — a state whose table is one
+ * row short would otherwise silently freeze on its last frame.
+ */
+const POSTURES: Record<CharacterState, Posture[]> = {
+  /* --- standing ------------------------------------------------------- */
+
+  /** Breathing, a blink, and a glance around the room. */
+  idle: [
+    P({ bob: 0 }),
+    P({ bob: 1 }),
+    P({ bob: 1, gaze: 'blink' }),
+    P({ bob: 0 }),
+    P({ bob: 0, gaze: 'side', headDx: 1 }),
+    P({ bob: 1 })
+  ],
+
+  walking: [
+    P({ legs: 'walk', bob: 1, arm: 'swing', swing: 1 }),
+    P({ legs: 'walk', bob: 2, arm: 'swing', swing: 1 }),
+    P({ legs: 'walk', bob: 1, arm: 'swing', swing: 0 }),
+    P({ legs: 'walk', bob: 0, arm: 'swing', swing: -1 }),
+    P({ legs: 'walk', bob: 1, arm: 'swing', swing: -1 }),
+    P({ legs: 'walk', bob: 2, arm: 'swing', swing: -1 }),
+    P({ legs: 'walk', bob: 1, arm: 'swing', swing: 0 }),
+    P({ legs: 'walk', bob: 0, arm: 'swing', swing: 1 })
+  ],
+
+  /** Standing work: reading a board, reaching up to it, marking it. */
+  working: [
+    P({ arm: 'reach', swing: 0, gaze: 'up' }),
+    P({ arm: 'reach', swing: 1, gaze: 'up', bob: 1 }),
+    P({ arm: 'reach', swing: 1, gaze: 'up' }),
+    P({ arm: 'reach', swing: 0, gaze: 'side' }),
+    P({ arm: 'reach', swing: 1, gaze: 'up', bob: 1 }),
+    P({ arm: 'reach', swing: 0, gaze: 'ahead' })
+  ],
+
+  /** Stop, hand to the chin, look up, hold it, come back. */
+  thinking: [
+    P({ arm: 'down', gaze: 'ahead', bob: 1 }),
+    P({ arm: 'chin', swing: 1, gaze: 'ahead', bob: 1 }),
+    P({ arm: 'chin', swing: 0, gaze: 'up', brow: 'raised', headDy: 0 }),
+    P({ arm: 'chin', swing: 0, gaze: 'up', brow: 'raised', bob: 1 }),
+    P({ arm: 'chin', swing: 0, gaze: 'side', headDx: 1, brow: 'raised' }),
+    P({ arm: 'chin', swing: 1, gaze: 'ahead', bob: 1 })
+  ],
+
+  talking: [
+    P({ arm: 'gesture', swing: 0, mouth: 'open' }),
+    P({ arm: 'gesture', swing: 0.5, mouth: 'closed' }),
+    P({ arm: 'gesture', swing: 1, mouth: 'open', bob: 1 }),
+    P({ arm: 'gesture', swing: 1, mouth: 'closed' }),
+    P({ arm: 'gesture', swing: 0.5, mouth: 'open' }),
+    P({ arm: 'gesture', swing: 0, mouth: 'closed', bob: 1 })
+  ],
+
+  /** Arms crossed, weight shifting, the occasional glance at the door. */
+  waiting: [
+    P({ arm: 'folded' }),
+    P({ arm: 'folded', bob: 1 }),
+    P({ arm: 'folded', bob: 1, lean: 1 }),
+    P({ arm: 'folded', lean: 1, gaze: 'side', headDx: 1 }),
+    P({ arm: 'folded', lean: 1 }),
+    P({ arm: 'folded', gaze: 'blink' })
+  ],
+
+  success: [
+    P({ arm: 'up', swing: 0, mouth: 'wide', bob: 1 }),
+    P({ arm: 'up', swing: 1, mouth: 'wide' }),
+    P({ arm: 'up', swing: 0, mouth: 'wide', bob: 1 }),
+    P({ arm: 'up', swing: 1, mouth: 'open' }),
+    P({ arm: 'up', swing: 0, mouth: 'wide', bob: 1 }),
+    P({ arm: 'down', mouth: 'closed', bob: 1 })
+  ],
+
+  /** Stop dead, hand to the temple, a small shake of the head. */
+  error: [
+    P({ arm: 'down', bob: 1, gaze: 'down', brow: 'knit' }),
+    P({ arm: 'slump', bob: 2, gaze: 'down', brow: 'knit', headDx: -1 }),
+    P({ arm: 'slump', bob: 2, gaze: 'down', brow: 'knit', headDx: 1 }),
+    P({ arm: 'slump', bob: 2, gaze: 'down', brow: 'knit' })
+  ],
+
+  /* --- seated --------------------------------------------------------- */
+
+  /** In the chair with nothing running. Breathing, a blink, a look round. */
+  sitting: [
+    P({ legs: 'sit', bob: 1, arm: 'rest' }),
+    P({ legs: 'sit', bob: 2, arm: 'rest' }),
+    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'blink' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'side', headDx: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'rest' })
+  ],
+
+  /**
+   * Typing. Neutral, left hand, strike, posture shift, right hand, neutral —
+   * with the head dipping towards the screen on the strikes, because that is
+   * what somebody actually does.
+   */
+  sitWorking: [
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 0, gaze: 'down' }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'down' }),
+    P({ legs: 'sit', bob: 2, arm: 'typing', swing: 0, gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'ahead' }),
+    P({ legs: 'sit', bob: 2, arm: 'typing', swing: 0, gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'down' })
+  ],
+
+  /** Reading: hands off the keys, eyes tracking down the screen. */
+  sitReading: [
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down' }),
+    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'typing', swing: 1, gaze: 'down' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'blink' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'ahead', brow: 'knit' })
+  ],
+
+  /**
+   * Push back from the desk, hand to the chin, look up and away, hold, return.
+   * `lean` moves the whole upper body back off the keyboard, which is the part
+   * that reads at a glance even when the desk hides everything below the
+   * chest.
+   */
+  sitThinking: [
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down' }),
+    P({ legs: 'sit', bob: 2, arm: 'chin', swing: 1, gaze: 'ahead', lean: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'chin', swing: 0, gaze: 'up', brow: 'raised', lean: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'chin', swing: 0, gaze: 'up', brow: 'raised', lean: 1, headDx: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'chin', swing: 0, gaze: 'side', brow: 'raised', lean: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'chin', swing: 1, gaze: 'ahead', lean: 1 })
+  ],
+
+  /** Turned away from the screen, one hand moving, talking. */
+  sitTalking: [
+    P({ legs: 'sit', bob: 1, arm: 'gesture', swing: 0, mouth: 'open', lean: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'gesture', swing: 0.5, lean: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'gesture', swing: 1, mouth: 'open', lean: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'gesture', swing: 1, lean: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'gesture', swing: 0.5, mouth: 'open', lean: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'gesture', swing: 0, lean: 1 })
+  ],
+
+  /** Seated and blocked: a finger tap, then back to watching the screen. */
+  sitWaiting: [
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'ahead' }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'ahead' }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 0, gaze: 'ahead' }),
+    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'down' }),
+    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'blink' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'side', headDx: 1 })
+  ],
+
+  sitError: [
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down', brow: 'knit' }),
+    P({ legs: 'sit', bob: 2, arm: 'slump', gaze: 'down', brow: 'knit', headDx: -1 }),
+    P({ legs: 'sit', bob: 2, arm: 'slump', gaze: 'down', brow: 'knit', headDx: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'slump', gaze: 'down', brow: 'knit' })
+  ]
+}
+
+/**
+ * The postures and the clips have to agree.
+ *
+ * They are two halves of one animation — one says how long a frame is held,
+ * the other says what is drawn — and they live apart because timing is a
+ * property of the state and drawing is a property of the sprite. A mismatch
+ * is not a visual bug you would notice: the clip simply runs off the end of
+ * the table and the last pose sticks. Checked once, at load.
+ */
+function assertPostures(): void {
+  for (const key of Object.keys(POSTURES) as CharacterState[]) {
+    const rows = POSTURES[key].length
+    const frames = frameCount(key)
+    if (rows !== frames) {
+      throw new Error(
+        `character sprite: ${key} has ${rows} postures but ${frames} clip frames`
+      )
+    }
+  }
+}
+assertPostures()
+
 /* -------------------------------------------------------------- compose -- */
 
 /**
  * Build one animation frame. `frame` has already been reduced to the clip
  * length by the caller.
+ *
+ * Draw order is torso, head, legs, accessory — the head over the collar, the
+ * legs over the jacket's hem, the item over everything. The bob never goes
+ * negative: the sheet packs frames directly above one another, so a pixel that
+ * escapes the top of the cell is not clipped, it appears in somebody else's
+ * pose, and tall hair already uses both spare rows.
  */
 export function buildCharacterOps(
   a: CharacterAppearance,
@@ -930,71 +1460,28 @@ export function buildCharacterOps(
   frame: number,
   facing: SpriteFacing
 ): Op[] {
-  /*
-   * The bob never goes negative.
-   *
-   * It used to lift the upper body by a pixel on alternate frames, which is
-   * visually identical to dropping it on the others — and is the difference
-   * between having two rows of headroom above the skull and having one. Tall
-   * hair needs those two rows: a bun, a topknot and an afro all sit proud of
-   * the head, and the sheet packs frames directly above one another, so a
-   * pixel that escapes the cell is not clipped, it appears in somebody else's
-   * pose.
-   */
-  let bob = 0
-  let arms: ArmPose = 'down'
-  let mouthOpen = false
-  let legs: Op[]
+  const table = POSTURES[state]
+  const p = table[frame % table.length]
 
-  const idleArms: ArmPose =
-    a.accessory === 'notebook' || a.accessory === 'tablet' ? 'hold' : 'down'
+  const legs =
+    p.legs === 'walk'
+      ? walkLegs(frame, facing === 'side')
+      : p.legs === 'sit'
+        ? sitLegs(p.bob)
+        : standLegs(p.bob)
 
-  switch (state) {
-    case 'walking':
-      bob = frame % 2 === 1 ? 0 : 1
-      arms = idleArms
-      legs = walkLegs(bob, frame)
-      break
-    case 'working':
-      arms = 'typing'
-      legs = sitLegs(0)
-      break
-    case 'thinking':
-      arms = 'chin'
-      bob = frame % 2
-      legs = standLegs(bob)
-      break
-    case 'talking':
-      arms = 'gesture'
-      mouthOpen = frame % 2 === 1
-      bob = frame % 2
-      legs = standLegs(bob)
-      break
-    case 'success':
-      arms = 'up'
-      mouthOpen = true
-      bob = frame % 2 === 0 ? 0 : 1
-      legs = standLegs(bob)
-      break
-    case 'error':
-      arms = idleArms
-      bob = frame % 2
-      legs = standLegs(bob)
-      break
-    case 'waiting':
-    case 'idle':
-    default:
-      // Breathing: the whole upper body drifts a single pixel.
-      bob = frame % 2
-      arms = idleArms
-      legs = standLegs(bob)
-      break
+  const look: Look = {
+    dy: p.bob + p.headDy,
+    dx: p.lean + p.headDx,
+    gaze: p.gaze,
+    brow: p.brow,
+    mouth: p.mouth
   }
 
   return [
-    ...torso(a, facing, bob, arms, frame),
-    ...head(a, facing, bob, mouthOpen),
+    ...torso(a, facing, p.bob, p.lean, p.arm, p.swing),
+    ...head(a, facing, look),
     ...legs,
-    ...accessory(a, bob, arms)
+    ...accessory(a, p.bob, p.lean, p.arm)
   ]
 }

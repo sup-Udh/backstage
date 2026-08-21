@@ -445,6 +445,55 @@ export function boxStack(x: number, y: number): Op[] {
   return ops
 }
 
+/**
+ * The floor treatment that tells a zone apart from the floor around it.
+ *
+ * Deliberately made of the floor's own colours rather than the brand's: this
+ * is drawn in every zone of every world, and a yellow-bordered mat repeated
+ * eighteen times would become the loudest thing in the office. What it has to
+ * do is say "this area is for something", which a change of tone and a border
+ * does on its own.
+ *
+ * This is most of the answer to the room having large empty stretches of
+ * floor. The floor was never really empty — it was undifferentiated, which
+ * looks the same and is a different problem: furniture standing on an
+ * unmarked plain reads as furniture that was put down anywhere.
+ */
+export function zoneFloor(x: number, y: number, w: number, h: number): Op[] {
+  return [
+    [x, y, w, h, 'floorAlt'],
+    [x, y, w, 1, 'floorLine'],
+    [x, y + h - 1, w, 1, 'floorLine'],
+    [x, y, 1, h, 'floorLine'],
+    [x + w - 1, y, 1, h, 'floorLine'],
+    // Two inset corner marks, so the mat reads as laid rather than painted.
+    [x + 2, y + 2, 3, 1, 'floorShadow'],
+    [x + w - 5, y + h - 3, 3, 1, 'floorShadow']
+  ]
+}
+
+/**
+ * The walking corridor between the desk rows.
+ *
+ * Characters already route along this line; drawing it is what turns that
+ * from an invisible rule into a piece of the floor plan. It also gives the
+ * middle of the room something to be, which is where the office looked
+ * emptiest — a wide band of nothing between two rows of desks.
+ */
+export function laneRunner(x: number, y: number, w: number): Op[] {
+  const ops: Op[] = [
+    [x, y - 9, w, 18, 'floorAlt'],
+    [x, y - 9, w, 1, 'floorLine'],
+    [x, y + 8, w, 1, 'floorLine']
+  ]
+  // Dashes down the middle, spaced so they read as a runner and not as road
+  // markings.
+  for (let dx = 10; dx < w - 10; dx += 22) {
+    ops.push([x + dx, y, 10, 1, 'floorLine'])
+  }
+  return ops
+}
+
 /** A flat rug. Part of the ground layer, never sorted. */
 export function rug(x: number, y: number, w: number, h: number): Op[] {
   return [
