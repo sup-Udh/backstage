@@ -81,9 +81,35 @@ function describe(ids: string[]): string[] {
  * the other, which is exactly how a task ends up handed back and forth while
  * both of them bill for the round trip.
  */
-function teamRules(agent: AgentConfig, canDelegate: boolean): string {
+function teamRules(agent: AgentConfig, canDelegate: boolean, isLead: boolean): string {
   if (!canDelegate) {
     return `You are working alone on this. You have no way to contact other agents; do not claim to have asked anyone for help.`
+  }
+
+  /*
+   * The project's team lead is never "connected to nobody".
+   *
+   * Everything below reads the connections the user drew by hand. The lead's
+   * reach does not come from those — `isTeamLead` lets it contact every agent
+   * in its own project whether or not a single link exists — so running it
+   * through the same code produced the fallback at the bottom of this
+   * function: "the user has not connected you to anyone yet. Do the work
+   * yourself."
+   *
+   * That sentence landed in the prompt immediately above the coordination
+   * block telling the same agent to split the request up and hand the parts
+   * out, and it landed first. A lead given both instructions did the obvious
+   * thing with the contradiction and answered everything alone, which looked
+   * exactly like delegation being broken.
+   *
+   * So the lead is told what it may actually do here, and the block below
+   * tells it what to do with that. The roster it may reach is listed there
+   * rather than twice.
+   */
+  if (isLead) {
+    return `You coordinate this project, so you may contact every agent on it —
+the user does not have to connect you to anyone first. The roster below lists
+who exists, what they do and whether they are able to take work right now.`
   }
 
   const workers = describe(workersOf(agent.id))
@@ -285,7 +311,7 @@ ${agent.instructions.trim()}`
      * would otherwise tell an agent that was just handed work by the lead that
      * nobody is connected to it and it should work alone.
      */
-    mission ?? teamRules(agent, canDelegate),
+    mission ?? teamRules(agent, canDelegate, isLead),
     ...(isLead ? ['', '--- you lead this team ---', godAgentRules(teamRoster(agent.id))] : []),
     ...(group ? ['', '--- your group ---', group] : []),
     '',
