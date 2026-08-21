@@ -34,7 +34,16 @@ const ACTIVE: AgentStatus[] = [
    * the two where being certain matters more than reading the room.
    */
   'waiting',
-  'error'
+  'error',
+  /*
+   * And the two that are about a run the user has a stake in. `stopping` is
+   * the reply to somebody having just clicked Stop, which is the one moment
+   * they are certainly watching that character; `queued` says work is banked
+   * behind the current task rather than lost. Neither is guessable from a
+   * pose — both look like waiting, because both are.
+   */
+  'stopping',
+  'queued'
 ]
 
 /**

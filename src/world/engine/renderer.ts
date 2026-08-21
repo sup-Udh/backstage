@@ -394,8 +394,7 @@ export class WorldRenderer {
   ): void {
     if (c.bubble === 'none' || c.settled < 0.45) return
     const cx = Math.round(c.x)
-    const top =
-      Math.round(c.y) - (c.place === 'seated' ? WORLD_SPRITE_H - 4 : WORLD_SPRITE_H)
+    const top = Math.round(c.y) - WORLD_SPRITE_H
 
     if (c.bubble === 'spark') {
       // A short burst of pixel sparkles.

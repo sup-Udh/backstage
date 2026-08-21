@@ -39,32 +39,43 @@ function bakePreview(theme: Theme): HTMLCanvasElement {
   const { scene, palette } = theme
   const full = createPixelCanvas(scene.width, scene.height)
   paint(full.ctx, scene.background, palette)
-  for (const prop of [...scene.props].sort((a, b) => a.baseY - b.baseY)) {
-    paint(full.ctx, prop.ops, palette)
-  }
 
   /*
-   * World-scale art, not the full-size portrait sheet. The preview is a claim
-   * about what the room looks like, so the cast has to stand in it at the
-   * size they actually stand in it — at full size they were twice the height
-   * of the desk they sit at, which is the exact impression this pass exists
-   * to correct.
+   * The cast is sorted into the furniture, not painted over it.
+   *
+   * The preview is a claim about what the room looks like, so it has to be
+   * composed the way the room is: a character at a desk sorts *behind* that
+   * desk, which is the whole reason they read as sitting at it. Drawn last
+   * they stood in front of their own workstation, and the theme cards were
+   * then advertising the one thing about the world that had just been fixed.
    */
+  const drawn: { baseY: number; draw: () => void }[] = scene.props.map((prop) => ({
+    baseY: prop.baseY,
+    draw: () => paint(full.ctx, prop.ops, palette)
+  }))
+
   theme.characters.slice(0, 2).forEach((c, i) => {
     const art = buildWorldSheet(c.appearance)
-    const { sx, sy } = worldFrameRect('idle', 'down', 0)
-    full.ctx.drawImage(
-      art.sheet,
-      sx,
-      sy,
-      WORLD_SPRITE_W,
-      WORLD_SPRITE_H,
-      CAST_X[i] - (WORLD_SPRITE_W >> 1),
-      CAST_Y - WORLD_SPRITE_H,
-      WORLD_SPRITE_W,
-      WORLD_SPRITE_H
-    )
+    const { sx, sy } = worldFrameRect('sitWorking', 'down', i * 2)
+    drawn.push({
+      baseY: CAST_Y,
+      draw: () =>
+        full.ctx.drawImage(
+          art.sheet,
+          sx,
+          sy,
+          WORLD_SPRITE_W,
+          WORLD_SPRITE_H,
+          CAST_X[i] - (WORLD_SPRITE_W >> 1),
+          CAST_Y - WORLD_SPRITE_H,
+          WORLD_SPRITE_W,
+          WORLD_SPRITE_H
+        )
+    })
   })
+
+  drawn.sort((a, b) => a.baseY - b.baseY)
+  for (const item of drawn) item.draw()
 
   const out = createPixelCanvas(CROP.w, CROP.h)
   out.ctx.drawImage(

@@ -428,15 +428,7 @@ export class WorldEngine {
      * belongs to rather than a fraction off it.
      */
     return this.chars.map((c) => {
-      /*
-       * A seated character's head is where their head is, not where it would
-       * be if they were standing: the sprite's own legs are folded and its
-       * lower half is behind the desk. Anchoring to the sprite's top edge
-       * regardless is what kept name plates floating a body's height above
-       * everybody who was sitting down.
-       */
-      const top = c.place === 'seated' ? SEATED_HEAD : WORLD_SPRITE_H
-      const head = c.y - top - LABEL_GAP
+      const head = c.y - WORLD_SPRITE_H - LABEL_GAP
       const feet = c.y + LABEL_GAP
 
       const screenX = Math.round(c.x * scale)
@@ -749,13 +741,11 @@ export class WorldEngine {
   hitTest(sx: number, sy: number): { id: string; x: number; y: number } | null {
     const ordered = [...this.chars].sort((a, b) => b.y - a.y)
     for (const c of ordered) {
-      const top = c.place === 'seated' ? SEATED_HEAD : WORLD_SPRITE_H
       const left = Math.round(c.x) - (HIT_W >> 1)
-      const y0 = Math.round(c.y) - top - HIT_PAD
-      const h = top + HIT_PAD * 2
-      if (sx >= left && sx < left + HIT_W && sy >= y0 && sy < y0 + h) {
+      const top = Math.round(c.y) - WORLD_SPRITE_H - HIT_PAD
+      if (sx >= left && sx < left + HIT_W && sy >= top && sy < top + HIT_H) {
         // The tooltip and the card anchor to the sprite, not to the padding.
-        return { id: c.agentId, x: c.x, y: Math.round(c.y) - top }
+        return { id: c.agentId, x: c.x, y: Math.round(c.y) - WORLD_SPRITE_H }
       }
     }
     return null
@@ -807,15 +797,6 @@ const MARGIN = 12
 const LABEL_GAP = 2
 
 /**
- * How far above the feet a seated character's head is, in scene pixels.
- *
- * A seated sprite folds its legs, so its head sits several rows lower in the
- * cell than a standing one's. Measuring from the cell's top edge for everybody
- * is what left name plates hovering above the people sitting down.
- */
-const SEATED_HEAD = WORLD_SPRITE_H - 4
-
-/**
  * The scale used before the panel has reported its size.
  *
  * Whole-number, like every scale in this engine: a fractional one puts sprite
@@ -854,6 +835,7 @@ const ROOM_STEP = 16
  */
 const HIT_PAD = 3
 const HIT_W = WORLD_SPRITE_W + HIT_PAD * 2
+const HIT_H = WORLD_SPRITE_H + HIT_PAD * 2
 
 /**
  * How far from a connection line still counts as clicking it, in scene
