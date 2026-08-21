@@ -38,6 +38,22 @@ const THREAD_CHANGING = new Set<RuntimeEvent['type']>([
   'agent.disconnected'
 ])
 
+/**
+ * Events that add a line to the agent-to-agent record.
+ *
+ * The record is held in the main process — it is written whether or not anyone
+ * is watching — so the renderer has to re-read it when something lands. It was
+ * read exactly once, at mount, which meant the copy the world drew from was
+ * frozen at whatever had happened before the window opened: the collaboration
+ * links in the office could never light up during a hand-off, because the only
+ * hand-offs the renderer knew about were ones from a previous session.
+ */
+const COLLABORATION_CHANGING = new Set<RuntimeEvent['type']>([
+  'agent.delegated',
+  'agent.message.sent',
+  'agent.message.received'
+])
+
 export function useTeamSync(): void {
   const ingestEvent = useBackstage((s) => s.ingestEvent)
   const setAgentStates = useBackstage((s) => s.setAgentStates)
@@ -92,6 +108,10 @@ export function useTeamSync(): void {
         teamRuntime.applyStates([event.state])
       }
 
+      if (COLLABORATION_CHANGING.has(event.type)) {
+        void window.backstage.agents.collaboration().then(setCollaboration)
+      }
+
       // Spawning, despawning and connecting change the roster, not just a
       // status. The world draws links from it, so it has to be re-read.
       if (
@@ -114,7 +134,7 @@ export function useTeamSync(): void {
         void useBackstage.getState().refreshThread()
       }
     })
-  }, [ingestEvent])
+  }, [ingestEvent, setCollaboration])
 
   /*
    * Connection state can change without anyone asking: the keys on disk are

@@ -3,6 +3,7 @@ import type { Turn } from '../providers/provider.types'
 import { getProvider, getProviderDefinition } from '../providers/registry'
 import { readConfig } from '../credentials/secureStore'
 import { getTool, toolsForCapabilities } from '../tools/registry'
+import { isTeamLead } from '../projects/projectStore'
 import { getWorkspace, getWorkspaceRoot } from '../workspace/WorkspaceManager'
 import { systemPromptFor } from './prompts'
 import { BudgetTracker, budgetFor } from './budget'
@@ -99,7 +100,23 @@ export class Execution {
      * usable: without a folder open there is nothing local to act on, but web
      * and team tools still work.
      */
-    const tools = toolsForCapabilities(this.agent.capabilities).filter(
+    /*
+     * The team lead can always reach its team.
+     *
+     * A capability normally comes from a checkbox, but this one comes from the
+     * project's `godAgentId` — the user nominating somebody to receive ALL
+     * AGENTS requests and split them up. Deriving it from the agent's *role
+     * string* instead, which is what happened before, made the whole feature a
+     * lottery on wording: "Team Lead" matched the keyword and got the tool,
+     * "Consulting Detective" did not, so a Sherlock project's lead silently
+     * answered every whole-team request alone while a detective project's
+     * delegated properly. Which theme you picked decided whether the product's
+     * headline feature worked.
+     */
+    const tools = toolsForCapabilities(
+      this.agent.capabilities,
+      isTeamLead(this.agent.id) ? ['agents.talk'] : []
+    ).filter(
       (t) =>
         this.workspaceRoot !== null ||
         t.name.startsWith('web_') ||

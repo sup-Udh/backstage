@@ -5,7 +5,7 @@ import { systemBus } from '../agents/EventBus'
 import { makeId } from '../agents/persist'
 import { recordCollaboration } from '../agents/collaborationStore'
 import { getSettings } from '../agents/settingsStore'
-import { getActiveProject } from '../projects/projectStore'
+import { isTeamLead } from '../projects/projectStore'
 import { agentSessions } from '../terminal/AgentSessionManager'
 import { sessionTranscripts } from '../terminal/sessionTranscript'
 import { terminals } from '../terminal/TerminalSessionManager'
@@ -24,11 +24,6 @@ import { terminals } from '../terminal/TerminalSessionManager'
  * cap, the cooldown and the duplicate check in one place instead of being
  * re-implemented per tool.
  */
-
-/** Whether this agent is the project's team lead. */
-function isGodAgent(agentId: string): boolean {
-  return getActiveProject()?.godAgentId === agentId
-}
 
 /** Both messaging tools share the same permission and safety checks. */
 function checkSend(
@@ -56,7 +51,7 @@ function checkSend(
    * so "anyone" means anyone in this project and nobody outside it — and every
    * other agent still needs an explicit link the user drew.
    */
-  if (!from.canTalkTo.includes(to.id) && !isGodAgent(from.id)) {
+  if (!from.canTalkTo.includes(to.id) && !isTeamLead(from.id)) {
     const allowed = from.canTalkTo.length > 0 ? from.canTalkTo.join(', ') : 'nobody'
     return {
       ok: false,
@@ -270,7 +265,7 @@ export const delegateToSession: AgentTool = {
     if (!me) {
       return { success: false, error: 'Internal error: your own configuration is missing.' }
     }
-    if (!isGodAgent(me.id)) {
+    if (!isTeamLead(me.id)) {
       return {
         success: false,
         error:
@@ -363,7 +358,7 @@ export const teamStatus: AgentTool = {
   describe: () => 'Checked on the team',
   execute: async (_input, ctx) => {
     const me = getAgent(ctx.agentId)
-    const lead = isGodAgent(ctx.agentId)
+    const lead = isTeamLead(ctx.agentId)
     const others = listAgents().filter((a) => a.id !== ctx.agentId)
 
     const lines = others.map((a) => {

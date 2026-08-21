@@ -63,6 +63,16 @@ export interface Worker {
   /** Agents this one is connected to. Always agent ids. */
   connections: string[]
   /**
+   * Whether this worker coordinates the project.
+   *
+   * Carried rather than re-derived per component, because it changes what the
+   * worker *can do*: the lead may hand work to anyone in its project without a
+   * drawn connection, which is a real relationship the office had no way to
+   * show. Always false for a CLI session — a session is a process, not a
+   * nomination.
+   */
+  isLead: boolean
+  /**
    * Of those, the ones this worker leads and may assign work to.
    *
    * Always empty for a CLI session: a session is a process the user started,
@@ -187,6 +197,8 @@ export interface WorkerInputs {
    * up able to name a character nobody had picked.
    */
   cast: CharacterDef[]
+  /** The project's team lead, if it has one. */
+  leadId: string | null
 }
 
 /**
@@ -202,7 +214,8 @@ export function buildWorkers({
   states,
   sessions,
   providers,
-  cast
+  cast,
+  leadId = null
 }: WorkerInputs): Worker[] {
   const characterName = (slot: number) => castNameForSlot(cast, slot)
 
@@ -236,7 +249,8 @@ export function buildWorkers({
       canStop: state?.executionId !== null || (state?.queued ?? 0) > 0,
       characterSlot: agent.characterSlot,
       connections: agent.canTalkTo,
-      leads: agent.leads
+      leads: agent.leads,
+      isLead: agent.id === leadId
     })
   }
 
@@ -277,6 +291,7 @@ export function buildWorkers({
       // Sessions are peers. Nothing in the app grants one authority over
       // another, so claiming a direction here would draw one that is not real.
       leads: [],
+      isLead: false,
       sessionId: session.id,
       terminalSessionId: session.terminalSessionId
     })

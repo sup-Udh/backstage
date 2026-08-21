@@ -62,6 +62,17 @@ export interface WorldLink {
   active: boolean
   /** True when `a` leads `b`. False for a peer link with no stated direction. */
   directed: boolean
+  /**
+   * True when the link follows from the project's team lead rather than from a
+   * connection the user drew.
+   *
+   * Drawn more faintly, and it cannot be removed: there is nothing stored to
+   * remove. It exists because the relationship is real — the lead may hand
+   * work to anyone in its project — and an office that only drew the links
+   * somebody had dragged out by hand showed nothing at all in a project where
+   * nobody had, while the lead was demonstrably running the team.
+   */
+  derived?: boolean
 }
 
 /**
@@ -481,7 +492,9 @@ export class WorldRenderer {
     to: { x: number; y: number },
     t: number,
     active: boolean,
-    directed: boolean
+    directed: boolean,
+    /** A relationship that follows from the roster rather than one drawn. */
+    faint = false
   ): void {
     const ax = Math.round(from.x)
     const ay = Math.round(from.y - WORLD_SPRITE_H * 0.55)
@@ -494,7 +507,7 @@ export class WorldRenderer {
     if (len < 1) return
 
     ctx.save()
-    ctx.globalAlpha = active ? 0.95 : 0.4
+    ctx.globalAlpha = active ? 0.95 : faint ? 0.22 : 0.4
     ctx.fillStyle = active ? this.pal.brand : this.pal.brandDeep
 
     // Stamped pixel by pixel rather than stroked: a 1px diagonal line drawn
@@ -511,7 +524,7 @@ export class WorldRenderer {
 
     const mx = Math.round(ax + dx / 2)
     const my = Math.round(ay + dy / 2)
-    ctx.globalAlpha = active ? 1 : 0.65
+    ctx.globalAlpha = active ? 1 : faint ? 0.4 : 0.65
 
     if (directed) {
       /*
@@ -752,7 +765,9 @@ export class WorldRenderer {
     for (const link of links) {
       const a = at.get(link.a)
       const b = at.get(link.b)
-      if (a && b) this.drawLink(ctx, a, b, t, link.active, link.directed)
+      if (a && b) {
+        this.drawLink(ctx, a, b, t, link.active, link.directed, link.derived === true)
+      }
     }
 
     if (pending) {

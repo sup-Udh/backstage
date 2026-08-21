@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useBackstage } from '../stores/backstageStore'
 import { useTeam } from '../stores/teamStore'
-import { useProjectCast } from '../stores/projectStore'
+import { useProject, useProjectCast } from '../stores/projectStore'
 import { buildWorkers, type Worker } from './workers'
 
 /**
@@ -22,9 +22,10 @@ export function useWorkers(): Worker[] {
   const sessions = useBackstage((s) => s.agentSessions)
   const providers = useBackstage((s) => s.providers)
   const cast = useProjectCast()
+  const leadId = useProject((s) => s.project?.godAgentId ?? null)
 
   return useMemo(
-    () => buildWorkers({ agents, states, sessions, providers, cast }),
-    [agents, states, sessions, providers, cast]
+    () => buildWorkers({ agents, states, sessions, providers, cast, leadId }),
+    [agents, states, sessions, providers, cast, leadId]
   )
 }

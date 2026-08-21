@@ -197,11 +197,59 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
     return out
   }, [workers, collaboration])
 
-  useEffect(() => {
-    engine.setLinks(links)
-  }, [engine, links])
+  /**
+   * The team lead's links, which nobody drew.
+   *
+   * The lead may hand work to anyone in its project — that is what nominating
+   * one *means*, and the main process has always enforced it that way. The
+   * office, though, only drew links the user had dragged out by hand, so in
+   * every project where they had not the room showed a team with no
+   * relationships while the lead was visibly running it. That is the whole of
+   * "the head is not detected on the other themes": the detective office had
+   * hand-drawn connections and no other project did.
+   *
+   * Derived rather than stored, so nothing is written to the roster on the
+   * user's behalf, and drawn faintly so a connection somebody actually made
+   * still reads as the stronger statement.
+   */
+  const leadLinks = useMemo<WorldLink[]>(() => {
+    const lead = workers.find((w) => w.isLead)
+    if (!lead) return []
 
-  /** How many teammates each agent already has, for the drop rules. */
+    const now = Date.now()
+    const recent = collaboration.filter((m) => now - m.at < 4000)
+    const drawn = new Set(links.map((l) => [l.a, l.b].sort().join('|')))
+
+    return workers
+      .filter((w) => w.kind === 'agent' && w.id !== lead.id)
+      .filter((w) => !drawn.has([lead.id, w.id].sort().join('|')))
+      .map((w) => ({
+        a: lead.id,
+        b: w.id,
+        directed: true,
+        derived: true,
+        active: recent.some(
+          (m) =>
+            (m.senderAgentId === lead.id && m.receiverAgentId === w.id) ||
+            (m.senderAgentId === w.id && m.receiverAgentId === lead.id)
+        )
+      }))
+  }, [workers, links, collaboration])
+
+  const allLinks = useMemo(() => [...links, ...leadLinks], [links, leadLinks])
+
+  useEffect(() => {
+    engine.setLinks(allLinks)
+  }, [engine, allLinks])
+
+  /**
+   * How many teammates each agent already has, for the drop rules.
+   *
+   * Counted from the drawn links only. The lead's derived links are not
+   * connections the user made and must not consume their allowance — counting
+   * them would let one nomination fill every agent's quota and make the
+   * drag-to-connect gesture refuse everything in the room.
+   */
   const degree = useMemo(() => {
     const counts = new Map<string, number>()
     for (const link of links) {
@@ -500,6 +548,16 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
             const a = findWorker(workers, linkMenu.a)
             const b = findWorker(workers, linkMenu.b)
             if (!a || !b) return null
+            /*
+             * A derived link has nothing behind it to delete, so the menu says
+             * what it is instead of offering a Remove that would silently do
+             * nothing.
+             */
+            const derived = leadLinks.some(
+              (l) =>
+                (l.a === linkMenu.a && l.b === linkMenu.b) ||
+                (l.a === linkMenu.b && l.b === linkMenu.a)
+            )
             return (
               <div
                 className="absolute z-30 -translate-x-1/2 -translate-y-full border-2 border-ink bg-cream shadow-[3px_3px_0_0_var(--color-ink)]"
@@ -514,27 +572,33 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
                 <p className="border-b-2 border-rule px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink">
                   {a.name} {a.leads.includes(b.id) ? '→' : '↔'} {b.name}
                 </p>
-                {a.leads.includes(b.id) && (
+                {(derived || a.leads.includes(b.id)) && (
                   <p className="border-b-2 border-rule px-2 py-1 font-ui text-[11px] leading-snug text-ink-3">
-                    {a.name} leads. {b.name} reports back.
+                    {derived
+                      ? `${a.name} is this project's team lead, so ALL AGENTS work reaches ${b.name} through them. Change the lead in Settings.`
+                      : `${a.name} leads. ${b.name} reports back.`}
                   </p>
                 )}
                 <div className="flex">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void link(linkMenu.a, linkMenu.b, false).then(report)
-                      setLinkMenu(null)
-                    }}
-                    className="flex-1 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-rust transition-colors hover:bg-rust hover:text-cream"
-                  >
-                    Remove
-                  </button>
+                  {!derived && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void link(linkMenu.a, linkMenu.b, false).then(report)
+                        setLinkMenu(null)
+                      }}
+                      className="flex-1 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-rust transition-colors hover:bg-rust hover:text-cream"
+                    >
+                      Remove
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setLinkMenu(null)}
                     aria-label="Close"
-                    className="border-l-2 border-rule px-2 py-1 font-mono text-[10px] text-ink-3 transition-colors hover:text-ink"
+                    className={`px-2 py-1 font-mono text-[10px] text-ink-3 transition-colors hover:text-ink ${
+                      derived ? 'flex-1' : 'border-l-2 border-rule'
+                    }`}
                   >
                     ✕
                   </button>

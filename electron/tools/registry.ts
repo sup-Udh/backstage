@@ -1,5 +1,6 @@
 import type { AgentTool } from './types'
 import type { CapabilityId } from '../../src/shared/agents'
+import { capabilityForTool, mayUseTool } from './toolCapabilities'
 import { filesystemTools } from './filesystem'
 import { terminalTools } from './terminal'
 import { gitTools } from './git'
@@ -16,10 +17,9 @@ import { teamTools } from './team'
  * make: "may the researcher run shell commands?" not "may it call
  * terminal_run?".
  *
- * The mapping is exhaustive and fails closed: a tool with no capability
- * recorded here is granted to nobody. Adding a tool without deciding who may
- * use it therefore makes it unreachable rather than universal, which is the
- * safe direction for that mistake to fail in.
+ * Which capability each tool requires is `toolCapabilities.ts`, kept separate
+ * so it can be checked without booting the application — this module reaches
+ * the agent store, the workspace and Electron through the tools it collects.
  */
 
 const ALL: AgentTool[] = [
@@ -31,26 +31,6 @@ const ALL: AgentTool[] = [
   ...teamTools
 ]
 
-const REQUIRES: Record<string, CapabilityId> = {
-  // Orientation is the cheap way to start reading, so it sits with reading.
-  workspace_overview: 'files.read',
-  filesystem_list: 'files.read',
-  filesystem_read: 'files.read',
-  filesystem_search: 'files.read',
-  filesystem_create: 'files.write',
-  filesystem_edit: 'files.write',
-  terminal_run: 'terminal.execute',
-  git_status: 'git.read',
-  git_diff: 'git.read',
-  git_log: 'git.read',
-  git_commit: 'git.commit',
-  web_fetch: 'web.search',
-  web_search: 'web.search',
-  delegate_task: 'agents.talk',
-  agent_message: 'agents.talk',
-  team_status: 'agents.talk'
-}
-
 const BY_NAME = new Map(ALL.map((t) => [t.name, t]))
 
 export function allTools(): AgentTool[] {
@@ -58,7 +38,7 @@ export function allTools(): AgentTool[] {
 }
 
 export function capabilityFor(toolName: string): CapabilityId | null {
-  return REQUIRES[toolName] ?? null
+  return capabilityForTool(toolName)
 }
 
 /**
@@ -67,13 +47,20 @@ export function capabilityFor(toolName: string): CapabilityId | null {
  * An empty capability list grants nothing. That is deliberate: the previous
  * behaviour treated "no families selected" as "every family", which meant the
  * least-configured agent was the most powerful one.
+ *
+ * `alsoGranted` is for capabilities an agent holds because of the job the user
+ * gave it rather than because of a checkbox — at present exactly one: the
+ * project's team lead can talk to its team. That is not a loophole in the
+ * permission model, it is the model catching up with a decision the user
+ * already made explicitly somewhere else, and the alternative is what this
+ * fixes: a lead that the permission check waves through and the toolset never
+ * equips.
  */
-export function toolsForCapabilities(capabilities: CapabilityId[]): AgentTool[] {
-  const granted = new Set<CapabilityId>(capabilities)
-  return ALL.filter((tool) => {
-    const needed = REQUIRES[tool.name]
-    return needed !== undefined && granted.has(needed)
-  })
+export function toolsForCapabilities(
+  capabilities: CapabilityId[],
+  alsoGranted: readonly CapabilityId[] = []
+): AgentTool[] {
+  return ALL.filter((tool) => mayUseTool(tool.name, capabilities, alsoGranted))
 }
 
 export function getTool(name: string): AgentTool | undefined {

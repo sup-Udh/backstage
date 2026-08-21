@@ -129,6 +129,21 @@ export function createProject(input: {
   return project
 }
 
+/**
+ * Whether this agent coordinates the open project.
+ *
+ * Lives here, beside the setting itself, because three separate places need
+ * the answer and each one used to work it out for itself — the permission
+ * check in the team tools, the system prompt, and the tool list. They had
+ * already drifted: the permission check and the prompt agreed that the lead
+ * may reach its whole team, and the tool list did not, so the lead was
+ * authorised to do something it had no tool to do.
+ */
+export function isTeamLead(agentId: string): boolean {
+  const project = getActiveProject()
+  return !!project?.godAgentId && project.godAgentId === agentId
+}
+
 export function updateProject(id: string, patch: ProjectPatch): Project | null {
   const project = getProject(id)
   if (!project) return null
