@@ -9,5 +9,6 @@ export const officeTheme: Theme = {
   palette: officePalette,
   scene: officeScene,
   buildScene: buildOfficeScene,
-  characters: officeCharacters
+  characters: officeCharacters,
+  suggestedLeaderId: 'michael'
 }

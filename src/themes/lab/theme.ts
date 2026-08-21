@@ -9,5 +9,6 @@ export const labTheme: Theme = {
   palette: labPalette,
   scene: labScene,
   buildScene: buildLabScene,
-  characters: labCharacters
+  characters: labCharacters,
+  suggestedLeaderId: 'walter'
 }

@@ -9,5 +9,6 @@ export const friendsTheme: Theme = {
   palette: friendsPalette,
   scene: friendsScene,
   buildScene: buildFriendsScene,
-  characters: friendsCharacters
+  characters: friendsCharacters,
+  suggestedLeaderId: 'rachel'
 }

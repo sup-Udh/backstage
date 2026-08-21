@@ -11,6 +11,7 @@ import { strangerCharacters } from '../../src/themes/stranger/characters'
 import { labCharacters } from '../../src/themes/lab/characters'
 import type { CharacterDef } from '../../src/characters/character.types'
 import { CAPABILITIES } from '../../src/shared/capabilities'
+import { themes } from '../../src/themes'
 
 /**
  * Checks that a team cast from any theme can actually work as a team.
@@ -49,6 +50,14 @@ function ok(name: string, condition: boolean, detail = ''): void {
 
 /** Every capability there is, for the "nothing withheld" case. */
 const CAPS_ALL = CAPABILITIES.map((c) => c.id)
+
+/** The wizard's default team size, mirrored from the setup page. */
+const DEFAULT_TEAM_SIZE = 4
+
+/** Each world's own suggestion for who should coordinate. */
+const SUGGESTED_LEADER: Record<string, string | undefined> = Object.fromEntries(
+  Object.entries(themes).map(([id, theme]) => [id, theme.suggestedLeaderId])
+)
 
 const CASTS: [string, CharacterDef[]][] = [
   ['detective', detectiveCharacters],
@@ -262,6 +271,61 @@ console.log('\nEvery registered tool is reachable by somebody')
     'the team lead holds every tool its prompt names',
     missing.length === 0,
     missing.join(', ')
+  )
+}
+
+console.log('\nEvery theme can be set up as a working team')
+
+/*
+ * The matrix the brief asks for, at the level a plain test can actually
+ * assert: for every world Backstage ships, the cast the setup wizard offers
+ * must produce a team where the workflow is possible.
+ *
+ * What "possible" means precisely, and why each line is here:
+ *
+ *   - The suggested lead is a real member of the cast, or the wizard would
+ *     pre-select a coordinator that cannot be chosen.
+ *   - That lead can delegate, which is the whole workflow.
+ *   - So can every other member, because the user may nominate any of them
+ *     and the original bug was exactly this being true for some casts only.
+ *   - Somebody on the team can run commands and somebody can write files, or
+ *     the lead has nobody to hand real work to.
+ *
+ * Nothing here is theme-specific. The same four checks run against all six
+ * casts, and a new world is covered by adding one line to CASTS.
+ */
+for (const [theme, cast] of CASTS) {
+  const roster = cast.slice(0, DEFAULT_TEAM_SIZE)
+  const suggested = SUGGESTED_LEADER[theme]
+
+  ok(
+    `${theme}: the suggested lead is in the default cast`,
+    roster.some((c) => c.id === suggested),
+    `${suggested} not among ${roster.map((c) => c.id).join(', ')}`
+  )
+
+  const lead = roster.find((c) => c.id === suggested)
+  ok(
+    `${theme}: the suggested lead can delegate`,
+    lead !== undefined && mayUseTool('delegate_task', roleProfile(lead.role).capabilities)
+  )
+
+  const mute = roster.filter(
+    (c) => !mayUseTool('delegate_task', roleProfile(c.role).capabilities)
+  )
+  ok(
+    `${theme}: so could any of the others, if nominated instead`,
+    mute.length === 0,
+    mute.map((c) => c.name).join(', ')
+  )
+
+  const caps = roster.flatMap((c) => roleProfile(c.role).capabilities)
+  ok(
+    `${theme}: the team can read, run and write between them`,
+    caps.includes('files.read') &&
+      caps.includes('terminal.execute') &&
+      caps.includes('files.write'),
+    [...new Set(caps)].join(', ')
   )
 }
 

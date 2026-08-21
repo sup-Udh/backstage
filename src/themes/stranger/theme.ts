@@ -9,5 +9,6 @@ export const strangerTheme: Theme = {
   palette: strangerPalette,
   scene: strangerScene,
   buildScene: buildStrangerScene,
-  characters: strangerCharacters
+  characters: strangerCharacters,
+  suggestedLeaderId: 'mike'
 }

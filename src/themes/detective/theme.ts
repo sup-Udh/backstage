@@ -10,5 +10,6 @@ export const detectiveTheme: Theme = {
   palette: detectivePalette,
   scene: detectiveScene,
   buildScene: buildDetectiveScene,
-  characters: detectiveCharacters
+  characters: detectiveCharacters,
+  suggestedLeaderId: 'jane'
 }

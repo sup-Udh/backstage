@@ -26,6 +26,20 @@ const DEFAULT_TEAM_SIZE = 4
 
 const STEPS = ['Workspace', 'World', 'Cast', 'Team lead'] as const
 
+/**
+ * Who the wizard offers as team lead for a cast.
+ *
+ * The theme's suggestion when it is in the chosen cast, and the first person
+ * picked otherwise. Only ever a pre-selected radio button: once the project
+ * exists, `godAgentId` on the project decides who coordinates and nothing
+ * reads the theme again.
+ */
+function suggestLead(themeId: string, cast: string[]): string | null {
+  const suggested = getTheme(themeId).suggestedLeaderId
+  if (suggested && cast.includes(suggested)) return suggested
+  return cast[0] ?? null
+}
+
 export function ProjectSetup() {
   const exitToLanding = useBackstage((s) => s.exitToLanding)
   const showProjects = useBackstage((s) => s.showProjects)
@@ -84,7 +98,7 @@ export function ProjectSetup() {
     const cast = getTheme(id).characters
     const starting = cast.slice(0, DEFAULT_TEAM_SIZE).map((c) => c.id)
     setPicked(starting)
-    setLead(starting[0] ?? null)
+    setLead(suggestLead(id, starting))
   }
 
   const toggleCharacter = (id: string) => {
@@ -95,7 +109,7 @@ export function ProjectSetup() {
       // The lead has to stay in the cast, or the project would open with a
       // coordinator nobody can see.
       setLead((currentLead) =>
-        currentLead && next.includes(currentLead) ? currentLead : (next[0] ?? null)
+        currentLead && next.includes(currentLead) ? currentLead : suggestLead(themeId, next)
       )
       return next
     })
@@ -110,7 +124,7 @@ export function ProjectSetup() {
     if (picked.length > 0) return
     const starting = theme.characters.slice(0, DEFAULT_TEAM_SIZE).map((c) => c.id)
     setPicked(starting)
-    setLead(starting[0] ?? null)
+    setLead(suggestLead(theme.id, starting))
   }
 
   /* -------------------------------------------------------------- gating -- */

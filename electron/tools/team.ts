@@ -26,7 +26,6 @@ import { terminals } from '../terminal/TerminalSessionManager'
  * re-implemented per tool.
  */
 
-/** Both messaging tools share the same permission and safety checks. */
 /**
  * Whether this agent is replying to whoever gave it its current task.
  *
@@ -45,10 +44,19 @@ function isReplyingToSender(fromId: string, toId: string, taskId: string): boole
   return task?.agentId === fromId && task.originAgentId === toId
 }
 
+/**
+ * The permission and safety checks both messaging tools share.
+ *
+ * `mayReply` is off for delegation on purpose. Answering the agent that gave
+ * you work is a reply; handing that work back to them is not, and a worker
+ * that may re-delegate to its own lead is how a task ends up bouncing between
+ * two agents with both of them billing for every round trip.
+ */
 function checkSend(
   fromId: string,
   toId: string,
-  taskId: string
+  taskId: string,
+  mayReply: boolean
 ): { ok: false; error: string } | { ok: true; from: NonNullable<ReturnType<typeof getAgent>>; to: NonNullable<ReturnType<typeof getAgent>> } {
   const from = getAgent(fromId)
   if (!from) return { ok: false, error: 'Internal error: your own configuration is missing.' }
@@ -74,7 +82,7 @@ function checkSend(
   if (
     !from.canTalkTo.includes(to.id) &&
     !isTeamLead(from.id) &&
-    !isReplyingToSender(from.id, to.id, taskId)
+    !(mayReply && isReplyingToSender(from.id, to.id, taskId))
   ) {
     const allowed = from.canTalkTo.length > 0 ? from.canTalkTo.join(', ') : 'nobody'
     return {
@@ -127,7 +135,7 @@ export const delegateTask: AgentTool = {
       return { success: false, error: 'agentId and task are both required.' }
     }
 
-    const check = checkSend(ctx.agentId, targetId, ctx.taskId)
+    const check = checkSend(ctx.agentId, targetId, ctx.taskId, false)
     if (!check.ok) return { success: false, error: check.error }
 
     const settings = getSettings()
@@ -198,7 +206,7 @@ export const messageAgent: AgentTool = {
       return { success: false, error: 'agentId and message are both required.' }
     }
 
-    const check = checkSend(ctx.agentId, targetId, ctx.taskId)
+    const check = checkSend(ctx.agentId, targetId, ctx.taskId, true)
     if (!check.ok) return { success: false, error: check.error }
 
     recordCollaboration({

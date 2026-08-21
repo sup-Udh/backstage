@@ -196,6 +196,23 @@ export interface Theme {
    */
   buildScene: (width: number, height: number) => SceneDef
   characters: CharacterDef[]
+  /**
+   * Which character setup offers as team lead, as a CharacterDef id.
+   *
+   * A suggestion and nothing more. It decides one pre-selected radio button on
+   * the last step of the wizard; from the moment the project exists,
+   * `project.godAgentId` is the only thing that decides who coordinates, and
+   * the user can change it whenever they like.
+   *
+   * It is stated rather than left as "the first of the cast" so that the
+   * default is a decision somebody made about this world, not an accident of
+   * the order the characters happen to be declared in.
+   *
+   * Nothing in the runtime reads this. Orchestration resolves the lead from
+   * the project, never from the theme — which is the rule that keeps the same
+   * team workflow working in every world.
+   */
+  suggestedLeaderId?: string
 }
 
 /** Themes that exist as concepts but are not built yet. */

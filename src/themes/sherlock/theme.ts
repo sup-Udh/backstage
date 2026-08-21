@@ -9,5 +9,6 @@ export const sherlockTheme: Theme = {
   palette: sherlockPalette,
   scene: sherlockScene,
   buildScene: buildSherlockScene,
-  characters: sherlockCharacters
+  characters: sherlockCharacters,
+  suggestedLeaderId: 'holmes'
 }
