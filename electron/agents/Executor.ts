@@ -5,6 +5,7 @@ import { readConfig } from '../credentials/secureStore'
 import { getTool, toolsForCapabilities } from '../tools/registry'
 import { teamTools } from '../tools/team'
 import { isTeamLead } from '../projects/projectStore'
+import { listAgents } from './agentStore'
 import { getWorkspace, getWorkspaceRoot } from '../workspace/WorkspaceManager'
 import { systemPromptFor } from './prompts'
 import { BudgetTracker, budgetFor } from './budget'
@@ -140,6 +141,31 @@ export class Execution {
       parameters: t.inputSchema
     }))
 
+    /*
+     * One line per turn, in the main process console.
+     *
+     * Written because three separate causes of "the lead did not delegate"
+     * were indistinguishable from the outside — it is not the lead, it has no
+     * delegate_task, or it has nobody spawned to hand work to — and each one
+     * produces the same visible outcome: one agent quietly answering
+     * everything. Each is a single fact the runtime knows and was not saying.
+     *
+     * Kept to one line and to facts already on screen elsewhere: no prompt
+     * text, no tool arguments, nothing that could carry a key or a file's
+     * contents.
+     */
+    if (isTeamLead(this.agent.id) || tools.some((t) => TEAM_TOOLS.has(t.name))) {
+      const others = listAgents()
+        .filter((a) => a.id !== this.agent.id)
+        .map((a) => `${a.name}:${a.spawned ? 'spawned' : 'NOT-SPAWNED'}`)
+      console.log(
+        `[backstage] ${this.agent.name} lead=${isTeamLead(this.agent.id) ? 'YES' : 'no'}` +
+          ` delegate_task=${allowed.has('delegate_task') ? 'yes' : 'NO'}` +
+          ` model=${model}` +
+          ` team=[${others.join(' ') || 'nobody else in this project'}]`
+      )
+    }
+
     const turns: Turn[] = [...this.history, { role: 'user', content: this.task.prompt }]
     const system = systemPromptFor(
       this.agent,
@@ -148,7 +174,27 @@ export class Execution {
       // The task, so a delegated agent is told what larger job it is part of.
       this.task
     )
-    const tracker = new BudgetTracker(budgetFor(this.agent.profile))
+    /*
+     * The team lead never runs on the tightest budget.
+     *
+     * A role matching "lead", "manager" or "director" is given the `quick`
+     * profile — 12 steps, 20 tool calls, 90 seconds — on the reasoning that a
+     * coordinator should answer briefly. But the profile is a *budget*, not a
+     * writing style, and the project's lead has strictly the most to do of
+     * anybody: orient in the workspace, check who is available, call
+     * delegate_task once per teammate, and then still do its own part of the
+     * work. Twelve steps does not cover that, and running out does not look
+     * like running out — the runtime asks for a final answer, so it looks like
+     * a lead that chose to do everything itself.
+     *
+     * Raised to at least `normal`, never lowered: an agent explicitly
+     * configured for `deep` keeps it.
+     */
+    const profile =
+      isTeamLead(this.agent.id) && this.agent.profile === 'quick'
+        ? 'normal'
+        : this.agent.profile
+    const tracker = new BudgetTracker(budgetFor(profile))
 
     for (;;) {
       this.checkCancelled()
@@ -296,6 +342,8 @@ export class Execution {
 
         let output: string
         let ok = false
+        /** The tool's own error text, so the user is told why, not just that. */
+        let failure: string | null = null
         try {
           const res = await tool.execute(call.arguments, {
             workspaceRoot: this.workspaceRoot ?? '',
@@ -313,17 +361,30 @@ export class Execution {
             }
           })
           ok = res.success
+          failure = res.success ? null : (res.error ?? 'the tool failed.')
           output = res.success
             ? (res.output ?? '(no output)')
-            : `Error: ${res.error ?? 'the tool failed.'}`
+            : `Error: ${failure}`
         } catch (err) {
-          output = `Error: ${err instanceof Error ? err.message : 'the tool threw.'}`
+          failure = err instanceof Error ? err.message : 'the tool threw.'
+          output = `Error: ${failure}`
         }
 
         this.send(ok ? 'agent.tool.completed' : 'agent.tool.failed', {
           tool: tool.name,
           action,
-          activity: ok ? lower(action) : `${lower(action)} — failed`
+          activity: ok ? lower(action) : `${lower(action)} — failed`,
+          /*
+           * Why it failed, not just that it did.
+           *
+           * The model was always told — the error goes back to it as the tool
+           * result — but the user was not. A refused delegation therefore
+           * rendered as a red "asked Lisbon for help — failed" and nothing
+           * else, so the two things that actually stop a team working, "Lisbon
+           * has not been spawned into the workspace" and "permission denied",
+           * were invisible to the one person who could fix either.
+           */
+          reason: ok ? undefined : (failure ?? undefined)
         })
 
         // The result goes back either way: a failure is information the model

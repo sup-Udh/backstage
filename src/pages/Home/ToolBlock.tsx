@@ -114,6 +114,17 @@ export function ToolBlock({ block, defaultOpen }: Props) {
                 ].join(' ')}
               >
                 {run.action}
+                {/*
+                  The reason, on the line under the call. A failed delegation
+                  used to say only that it failed, which left the two things
+                  that actually stop a team working — an unspawned teammate and
+                  a permission refusal — looking identical and unexplained.
+                */}
+                {run.error && (
+                  <span className="mt-px block font-ui text-[11px] not-italic leading-snug text-rust">
+                    {run.error}
+                  </span>
+                )}
               </span>
             </li>
           ))}

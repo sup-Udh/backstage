@@ -495,7 +495,8 @@ export const useBackstage = create<BackstageState>((set, get) => ({
             ...updated[i],
             status: event.type === 'agent.tool.completed' ? 'ok' : 'failed',
             // The past-tense description reads better once it has happened.
-            action: event.action ?? updated[i].action
+            action: event.action ?? updated[i].action,
+            error: event.type === 'agent.tool.failed' ? event.reason : undefined
           }
           next.agentTools = { ...s.agentTools, [agentId]: updated }
         }

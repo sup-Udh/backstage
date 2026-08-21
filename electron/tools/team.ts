@@ -136,7 +136,13 @@ export const delegateTask: AgentTool = {
     }
 
     const check = checkSend(ctx.agentId, targetId, ctx.taskId, false)
-    if (!check.ok) return { success: false, error: check.error }
+    if (!check.ok) {
+      // A refused hand-off is the single most consequential failure in the
+      // product and used to be visible only to the model. It now reaches the
+      // user twice: in the chat, under the failed call, and here.
+      console.log(`[backstage] delegation REFUSED -> ${targetId}: ${check.error}`)
+      return { success: false, error: check.error }
+    }
 
     const settings = getSettings()
     const depth = ctx.depth + 1

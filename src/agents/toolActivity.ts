@@ -79,6 +79,14 @@ export interface ToolRun {
   action: string
   status: ToolRunStatus
   at: number
+  /**
+   * Why it failed, in the tool's own words.
+   *
+   * Only set on a failure. It is the difference between "asked Lisbon for help
+   * — failed" and "Lisbon has not been spawned into the workspace", which is
+   * the sentence that tells the user what to actually do about it.
+   */
+  error?: string
 }
 
 /**

@@ -17,6 +17,7 @@ import {
 import { getActiveProjectId } from '../projects/projectStore'
 import type { RosterEntry } from '../../src/shared/projects'
 import { roleProfile } from './roleProfiles'
+import { once } from './migrations'
 
 /**
  * The team roster, persisted.
@@ -141,6 +142,7 @@ export function loadAgents(): AgentConfig[] {
       const parsed = JSON.parse(readFileSync(path(), 'utf8'))
       const list = Array.isArray(parsed) ? parsed : []
       agents = list.map(normalise).filter((a): a is AgentConfig => a !== null)
+      grantTeamTalkOnce()
       return agents
     }
   } catch {
@@ -153,6 +155,42 @@ export function loadAgents(): AgentConfig[] {
   }
   agents = []
   return agents
+}
+
+/**
+ * Give every existing agent the team capability, once.
+ *
+ * `agents.talk` used to be granted by a keyword regex over the agent's role
+ * string, so whether a team could collaborate depended on how its theme had
+ * worded its job titles. That was fixed in `roleProfiles.ts` — every seeded
+ * agent now gets it — but seeding only runs when a project is *created*.
+ *
+ * Every project that already existed kept the capabilities written to disk on
+ * the day it was made. So the fix silently applied to new projects only, and
+ * the people most affected by the bug — anyone who had already built a team —
+ * saw exactly no change. Their workers still could not use the team tools, and
+ * their lead only could because being the lead grants it separately at
+ * execution time.
+ *
+ * Granting it is not granting reach: `agents.talk` is unprivileged, spends
+ * nothing, and only allows the team tools to be *used*. Who an agent may
+ * actually contact is still `canTalkTo`, which this does not touch.
+ *
+ * Runs once and is then recorded, so a user who deliberately mutes an agent on
+ * the Agents page stays muted rather than having it handed back next launch.
+ */
+function grantTeamTalkOnce(): void {
+  once('agents.talk-for-existing-rosters', () => {
+    const all = agents ?? []
+    let changed = false
+    for (const agent of all) {
+      if (agent.capabilities.includes('agents.talk')) continue
+      agent.capabilities = [...agent.capabilities, 'agents.talk']
+      agent.updatedAt = Date.now()
+      changed = true
+    }
+    if (changed) persist()
+  })
 }
 
 /** Every agent in every project. Say so by name; the default is scoped. */

@@ -24,11 +24,28 @@ import type { ProviderModel } from '../../../src/shared/providerApi'
 type Tier = 'nano' | 'mini' | 'lite' | 'pro' | 'standard'
 
 const TIER_NOTE: Record<Tier, { suffix: string; description: string; rank: number; defaultable: boolean }> = {
+  /*
+   * Listed first, and deliberately not the automatic default.
+   *
+   * The nano tier is the cheapest thing an account can reach, and picking it
+   * automatically made it the model every agent in every new project ran on.
+   * That is the wrong default for this product specifically: an agent here is
+   * expected to hold a long layered system prompt, choose between seventeen
+   * tools, and — if it is the team lead — read a request, split it, call
+   * delegate_task once per teammate and still do its own part. The nano tier
+   * does not reliably do that, and the failure is not an error message. It is
+   * an agent that answers the whole question itself and looks like delegation
+   * being broken.
+   *
+   * It stays selectable, because for a cheap single-purpose agent it is a
+   * perfectly good choice. It is just not the one to hand somebody who has not
+   * chosen yet.
+   */
   nano: {
     suffix: 'Nano',
-    description: 'Smallest and cheapest.',
+    description: 'Smallest and cheapest. Struggles with tools and delegation.',
     rank: 0,
-    defaultable: true
+    defaultable: false
   },
   mini: {
     suffix: 'Mini',
@@ -131,9 +148,13 @@ export function describeModels(ids: string[]): ProviderModel[] {
 }
 
 /**
- * Choose a sensible default. Deliberately biased towards the cheap end: a
- * development key should not be spending on the largest model just because a
- * user pressed Connect.
+ * Choose a sensible default.
+ *
+ * Still biased towards the cheap end — a development key should not be
+ * spending on the largest model because somebody pressed Connect — but the
+ * cheapest *usable* tier rather than the cheapest tier. `defaultable` is what
+ * draws that line, and the nano tier is deliberately outside it: see the note
+ * above.
  */
 export function pickDefaultModel(models: ProviderModel[]): string | null {
   if (models.length === 0) return null
