@@ -5,8 +5,21 @@
  * and a barista in another, without the agent runtime knowing either exists.
  */
 
-/** Semantic animation states. Deliberately mirrors AgentStatus + locomotion. */
+/**
+ * Semantic animation states.
+ *
+ * Two families, and the split is the whole point. A character who is at their
+ * workstation and a character who is standing in the middle of the room are
+ * doing the same *job* in different *bodies*: one thinks by leaning back in a
+ * chair with a hand at their chin, the other by standing at the board with a
+ * hand at their chin. Collapsing the two is what produced the old behaviour
+ * where an agent's model call sent its body walking across the office.
+ *
+ * `seatedFor` maps one onto the other, so the director decides only whether
+ * somebody is at their desk and never which of fourteen rows to draw.
+ */
 export type CharacterState =
+  /* --- standing --- */
   | 'idle'
   | 'walking'
   | 'working'
@@ -15,6 +28,26 @@ export type CharacterState =
   | 'waiting'
   | 'success'
   | 'error'
+  /* --- at a workstation --- */
+  /** Seated, settled, not currently on anything. */
+  | 'sitting'
+  /** Seated, hands on the keyboard. */
+  | 'sitWorking'
+  /** Seated, hands off the keyboard, reading the screen. */
+  | 'sitReading'
+  /** Seated, leaning back, hand at the chin, looking up. */
+  | 'sitThinking'
+  /** Seated, turned away from the screen towards somebody. */
+  | 'sitTalking'
+  /** Seated, still, blocked on something that is not theirs to finish. */
+  | 'sitWaiting'
+  /** Seated, slumped, looking at what went wrong. */
+  | 'sitError'
+
+/** True for the states that draw a character in a chair. */
+export function isSeated(state: CharacterState): boolean {
+  return state.startsWith('sit')
+}
 
 /** Which way the sprite faces. `side` is mirrored for left/right. */
 export type Facing = 'down' | 'up' | 'left' | 'right'
