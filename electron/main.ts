@@ -18,14 +18,17 @@ function createWindow() {
 
   /*
    * The renderer URL is only set when Vite is serving, so it doubles as the
-   * test for "is this a development run". DevTools opens there and nowhere
-   * else — it used to open unconditionally, which meant a packaged build
-   * greeted every user with an inspector docked over half their office.
+   * test for "is this a development run". DevTools no longer opens on its
+   * own — even in dev it docked an inspector over half the office on every
+   * launch. Set OPEN_DEVTOOLS=1 to get it back for a session, or reach for
+   * the View menu / Ctrl+Shift+I once the window is up.
    */
   const devUrl = process.env.ELECTRON_RENDERER_URL
   if (devUrl) {
     win.loadURL(devUrl)
-    win.webContents.openDevTools()
+    if (process.env.OPEN_DEVTOOLS === '1') {
+      win.webContents.openDevTools()
+    }
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
