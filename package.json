@@ -4,8 +4,10 @@
   "description": "Backstage - give your AI agents a place to work.",
   "main": "./out/main/index.js",
   "scripts": {
+    "predev": "npm run icons",
     "dev": "electron-vite dev",
     "icons": "node scripts/make-icons.mjs",
+    "prebuild": "npm run icons",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",

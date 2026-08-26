@@ -7,6 +7,12 @@ page rather than failing silently.
 
 Budget about 20 minutes. Steps 5–10 (Google Cloud) are the fiddly half.
 
+> **Provider API keys are a separate subject.** Signing in with Google
+> identifies you; it does not give Backstage any AI capability. Connecting
+> OpenAI, Gemini and Claude Code is covered in
+> [USER_PROVIDER_CONFIGURATION.md](./USER_PROVIDER_CONFIGURATION.md), and none
+> of those credentials are stored in Supabase.
+
 **Every value in this document is a placeholder.** Nothing here is a real
 credential, and no redirect URI in this file should be copied literally except
 `http://localhost:8765/auth/callback`, which is Backstage's own and is fixed by
@@ -489,6 +495,23 @@ It also creates:
   first sign-in happened on a flaky connection.
 - **`touch_updated_at()`** + triggers — maintains `updated_at` in the database
   rather than trusting the client.
+- **`delete_own_account()`** — lets an account delete itself, including its
+  `auth.users` row, which the anon key cannot otherwise touch. It takes no
+  arguments and reads `auth.uid()` from the verified JWT, so it can only ever
+  delete its caller. Without it, "Delete account" in Settings still removes all
+  of the user's data but leaves the Supabase login in place, and says so.
+
+### Provider API keys are not in this schema
+
+There is no column for an OpenAI, Gemini or Anthropic key anywhere in the
+migration, and that is deliberate rather than an omission. Provider credentials
+are encrypted with the operating system's own key store on the machine that
+owns them, in a directory derived from the Supabase user id, and never leave
+it. Supabase holds the *account* and the application's metadata; it never holds
+a credential for a third-party service.
+
+Full reasoning in
+[USER_PROVIDER_CONFIGURATION.md](./USER_PROVIDER_CONFIGURATION.md) §5–6.
 
 ### Tables deliberately not created
 
@@ -598,6 +621,10 @@ Then in **Dashboard → SQL Editor**, use the role switcher to run as
 - [ ] Completing Google sign-in returns to Backstage and lands on your projects
 - [ ] Your Google name, avatar and email appear in the account menu
 - [ ] A `profiles` row exists in Supabase for your account
+- [ ] First sign-in offers provider setup; skipping it still opens the app
+- [ ] Settings → Profile can change the display name, and it persists
+- [ ] Settings → AI Providers shows Claude Code's real status
+- [ ] Provider keys connected as one account are invisible to another
 - [ ] Creating a project writes a `projects` row with your `user_id`
 - [ ] Configuring agents writes `agents` rows
 - [ ] Sending an agent a message persists the conversation
