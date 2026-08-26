@@ -1,6 +1,7 @@
 import { useProviders } from '../../providers/useProviders'
 import { useTeam } from '../../stores/teamStore'
 import { PagePlaceholder } from '../shell/PagePlaceholder'
+import { AccountPanel } from './AccountPanel'
 import { ProviderPanel } from './ProviderPanel'
 import { ProjectPanel } from './ProjectPanel'
 import { ThemePanel } from '../Themes/ThemePanel'
@@ -38,8 +39,17 @@ export function Account() {
   return (
     <PagePlaceholder
       title="Settings"
-      lead="This project — its folder, its world and its team — and the AI providers behind them. Keys are encrypted by your operating system and never reach this interface."
+      lead="Your account, this project — its folder, its world and its team — and the AI providers behind them. Keys are encrypted by your operating system and never reach this interface."
     >
+      {/*
+        The account comes first because it is what everything below it belongs
+        to: the project is owned by it, and so is every agent, conversation and
+        case inside the project.
+      */}
+      <AccountPanel />
+
+      <div className="pixel-rule mb-8" />
+
       <ProjectPanel />
 
       {/* The world, which is project configuration rather than a global switch. */}

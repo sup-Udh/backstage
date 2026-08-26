@@ -17,6 +17,27 @@ import type { AgentConfig } from './agents'
 
 export interface Project {
   id: string
+  /**
+   * Who owns this project: the Supabase `auth.users.id` UUID.
+   *
+   * The single ownership key in the whole application. Everything else —
+   * agents, conversations, cases, automations, the world, the roster — is
+   * already reached through a project id, so scoping *this* one field scopes
+   * all of them:
+   *
+   *     auth.users.id → project.userId → project.id → agents, chats, cases
+   *
+   * Deliberately not an email, a display name or a project name. All three
+   * change, and two accounts can share the last two; ownership keyed on any of
+   * them would mean a user renaming themselves either loses their work or
+   * inherits somebody else's.
+   *
+   * The empty string means "owned by nobody", which is what a project written
+   * before accounts existed carries. Such a project is invisible to every
+   * scoped read until it is claimed — the same safe reading `AgentConfig`
+   * gives an unstamped `projectId`.
+   */
+  userId: string
   /** Editable. Defaults to the workspace folder's own name. */
   name: string
   /** Absolute path. The security boundary every local tool resolves against. */

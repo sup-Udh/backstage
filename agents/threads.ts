@@ -1,5 +1,5 @@
 import type { ChatMessage, RuntimeEvent } from './agent.types'
-import { getAgent, groupOf, threadIdFor } from './agentStore'
+import { getAgent, groupOf, listAgents, threadIdFor } from './agentStore'
 import { conversationStore } from './conversationStore'
 import { systemBus } from './EventBus'
 import { makeId } from './persist'
@@ -69,11 +69,32 @@ export function threadFor(agentId: string): ThreadInfo | null {
   }
 }
 
+/**
+ * Whether this thread id names a real group in the open project.
+ *
+ * A thread id is derived from its members, so it is guessable by anyone who
+ * knows a pair of agent ids — and `loadThread` is reachable over IPC with any
+ * string at all. That was harmless while every transcript on the machine
+ * belonged to the same person. With accounts it is not: two users who happen
+ * to point projects at the same folder share a workspace hash, and without
+ * this check one could read the other's group conversation by naming it.
+ *
+ * The roster it checks against is already scoped to the open project, which is
+ * scoped to the signed-in account, so this inherits both filters rather than
+ * restating either.
+ */
+function isKnownThread(threadId: string): boolean {
+  if (!threadId) return false
+  return listAgents().some((agent) => threadFor(agent.id)?.id === threadId)
+}
+
 export function loadThread(threadId: string): ChatMessage[] {
+  if (!isKnownThread(threadId)) return []
   return conversationStore.load(workspaceId(), threadId)
 }
 
 export function clearThread(threadId: string): void {
+  if (!isKnownThread(threadId)) return
   conversationStore.clear(workspaceId(), threadId)
 }
 

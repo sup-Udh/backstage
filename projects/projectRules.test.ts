@@ -3,6 +3,7 @@ import type { Project } from '../src/shared/projects'
 import {
   nameFromPath,
   normaliseProject,
+  ownedBy,
   reseatSlots,
   resolveActiveId
 } from './projectRules'
@@ -39,6 +40,7 @@ function check(name: string, actual: unknown, expected: unknown): void {
 function project(over: Partial<Project> = {}): Project {
   return {
     id: 'p1',
+    userId: 'user-1',
     name: 'e-app',
     workspacePath: resolve('/code/e-app'),
     themeId: 'detective',
@@ -100,6 +102,90 @@ check(
   normaliseProject({ id: 'p1', workspacePath: './e-app' })?.workspacePath,
   resolve('./e-app')
 )
+
+/*
+ * Ownership. A project written before accounts existed has no owner, and the
+ * normaliser must never invent one: reading a record is not the moment to
+ * decide whose it is, and guessing would hand one user's team to whoever next
+ * opens the app on a shared machine.
+ */
+check(
+  'a stored owner survives',
+  normaliseProject({ id: 'p1', workspacePath: resolve('/code/e-app'), userId: 'abc' })
+    ?.userId,
+  'abc'
+)
+
+check(
+  'a record with no owner reads as unowned rather than being dropped',
+  normaliseProject({ id: 'p1', workspacePath: resolve('/code/e-app') })?.userId,
+  ''
+)
+
+check(
+  'a non-string owner is refused rather than coerced',
+  normaliseProject({ id: 'p1', workspacePath: resolve('/code/e-app'), userId: 42 })
+    ?.userId,
+  ''
+)
+
+/* --------------------------------------------------------------- owners -- */
+
+/*
+ * User isolation, tested at the one function that decides it.
+ *
+ * Everything in Backstage is reached through a project: the roster, the cases,
+ * the automations, the threads and the transcripts are all filtered by which
+ * project is open, and which projects exist is filtered by this. So these
+ * checks are not about a list comprehension — they are the difference between
+ * two people sharing a machine having separate work and not.
+ *
+ * The empty-string cases matter most. "Signed out" and "owned by nobody" are
+ * both the empty string, and an equality check that did not special-case it
+ * would make them match — showing every pre-account project to anyone who was
+ * not signed in at all.
+ */
+
+console.log('\nownedBy')
+
+const mine = project({ id: 'p1', userId: 'user-a' })
+const theirs = project({ id: 'p2', userId: 'user-b' })
+const unclaimed = project({ id: 'p3', userId: '' })
+const registry = [mine, theirs, unclaimed]
+
+check(
+  'an account sees its own projects',
+  ownedBy(registry, 'user-a').map((p) => p.id),
+  ['p1']
+)
+
+check(
+  "and never another account's",
+  ownedBy(registry, 'user-b').map((p) => p.id),
+  ['p2']
+)
+
+check(
+  'an account with nothing sees nothing rather than everything',
+  ownedBy(registry, 'user-c'),
+  []
+)
+
+check('signed out sees nothing at all', ownedBy(registry, ''), [])
+
+check(
+  'and in particular does not inherit the unowned project',
+  ownedBy(registry, '').some((p) => p.id === 'p3'),
+  false
+)
+
+check(
+  'an unowned project belongs to nobody, not to everybody',
+  ownedBy(registry, 'user-a').some((p) => p.id === 'p3'),
+  false
+)
+
+check('an empty registry is empty for a real account too', ownedBy([], 'user-a'), [])
 
 /* ------------------------------------------------------------ the name -- */
 

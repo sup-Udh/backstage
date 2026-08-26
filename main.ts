@@ -34,17 +34,43 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
-  // Handlers must exist before any window can call them.
-  registerIpcHandlers()
-  createWindow()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
+/*
+ * One Backstage per machine.
+ *
+ * Two instances would each hold their own Supabase client over the same
+ * encrypted session file, and both would run a refresh timer against the same
+ * refresh token — which rotates on use, so whichever refreshed second would
+ * present a token the server had already retired and be signed out at random.
+ * A second launch raises the existing window instead.
+ */
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const [win] = BrowserWindow.getAllWindows()
+    if (!win) return
+    if (win.isMinimized()) win.restore()
+    win.focus()
   })
-})
+
+  app.whenReady().then(async () => {
+    /*
+     * Handlers must exist before any window can call them — and the stored
+     * session must be resolved before any window can *paint*, which is why
+     * this is awaited. The renderer's first frame then already knows whether
+     * it is showing the workspace or the login page, so neither is ever shown
+     * and then withdrawn.
+     */
+    await registerIpcHandlers()
+    createWindow()
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow()
+      }
+    })
+  })
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

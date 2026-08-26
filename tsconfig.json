@@ -25,5 +25,5 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "agents", "cases", "credentials", "ipc", "projects", "providers", "terminal", "tools", "workspace", "main.ts", "preload.ts", "electron.vite.config.ts"]
+  "include": ["src", "agents", "cases", "credentials", "ipc", "projects", "providers", "supabase", "terminal", "tools", "workspace", "main.ts", "preload.ts", "electron.vite.config.ts"]
 }

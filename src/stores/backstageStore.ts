@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useAuth } from './authStore'
 import { groupForTool, type ToolRun } from '../agents/toolActivity'
 import type {
   AgentRuntimeState,
@@ -36,6 +37,7 @@ import type {
  * page to render.
  *
  *   landing   the shop window
+ *   login     signing in with Google; the gate to everything below it
  *   loading   entering: real initialisation, shown as a walk to the office
  *   projects  which piece of work is this, of the ones already set up
  *   setup     choosing a folder, a world, a cast and a team lead
@@ -45,8 +47,27 @@ import type {
  * and say nothing about it. A project is a folder that agents write into, so
  * silently picking one is the app choosing which repository to edit on the
  * user's behalf — it asks now, every time, even when there is only one answer.
+ *
+ * `landing` and `login` are public. Everything after them is protected, and
+ * `PROTECTED_VIEWS` below is the list `App` enforces — deriving it from the
+ * type rather than restating it in a guard is what stops a sixth view being
+ * added one day and quietly defaulting to public.
  */
-export type AppView = 'landing' | 'loading' | 'projects' | 'setup' | 'app'
+export type AppView = 'landing' | 'login' | 'loading' | 'projects' | 'setup' | 'app'
+
+/**
+ * The views that require an account.
+ *
+ * A project is a folder on disk that agents are given write access to, and
+ * every one of these surfaces either opens one or is inside one. There is no
+ * view here that a signed-out user has any business reaching.
+ */
+export const PROTECTED_VIEWS: readonly AppView[] = [
+  'loading',
+  'projects',
+  'setup',
+  'app'
+]
 
 /**
  * Which surface the command centre is showing.
@@ -198,8 +219,26 @@ interface BackstageState {
    */
   terminalEverOpened: boolean
 
-  /** Get Started: begin entering, which is a real initialisation. */
+  /**
+   * Get Started.
+   *
+   * Sends an authenticated user straight in and everyone else to the login
+   * page. Requirement 14 is explicit that a signed-in user must not be walked
+   * through Google again just because they came back via the landing page.
+   */
   enterApp: () => void
+  /** Show the sign-in page. */
+  showLogin: () => void
+  /**
+   * Tear down everything that belonged to the signed-out account.
+   *
+   * Called when authentication ends, from wherever: the account menu, a
+   * revoked session, an expired refresh token. The main process does the same
+   * on its side — stops executions, closes the project, clears the workspace —
+   * and this is the renderer's half: no transcript, no roster state, no
+   * approval and no terminal buffer survives into the next account's session.
+   */
+  resetForSignOut: () => void
   /** Initialisation finished and there are projects to choose between. */
   showProjects: () => void
   /** Create a project: no projects exist, or the user asked for a new one. */
@@ -282,7 +321,45 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   pendingCommand: null,
   terminalEverOpened: false,
 
-  enterApp: () => set({ view: 'loading' }),
+  enterApp: () =>
+    set({
+      view: useAuth.getState().status === 'authenticated' ? 'loading' : 'login'
+    }),
+  showLogin: () => set({ view: 'login' }),
+
+  resetForSignOut: () =>
+    set({
+      view: 'login',
+      page: 'home',
+      agentMessages: {},
+      agentActivity: {},
+      agentTools: {},
+      streaming: {},
+      sessionLines: {},
+      agentStates: {},
+      collaboration: [],
+      approvals: [],
+      chatTarget: ALL_AGENTS,
+      selectedAgentId: null,
+      threadTarget: null,
+      thread: null,
+      threadMessages: {},
+      tab: 'messages',
+      openFile: null,
+      agentSessions: [],
+      terminalSessions: [],
+      activeTerminalId: null,
+      requestedSessionId: null,
+      pendingCommand: null,
+      /*
+       * Providers are *not* cleared. A connection is a credential on this
+       * machine rather than a property of an account — the same reason the
+       * settings page says so — and forgetting it on sign-out would make the
+       * next person re-enter keys that were never theirs to begin with, and
+       * are still sitting encrypted in the OS keychain either way.
+       */
+    }),
+
   showProjects: () => set({ view: 'projects' }),
   showSetup: () => set({ view: 'setup' }),
   openProject: () => set({ view: 'app', page: 'home' }),

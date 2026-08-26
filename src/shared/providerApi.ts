@@ -33,9 +33,11 @@ import type {
   ProjectPatch,
   ProjectSnapshot
 } from './projects'
+import type { AuthApi } from './auth'
 
 export type * from './agents'
 export type * from './projects'
+export type * from './auth'
 
 export interface ProviderModel {
   id: string
@@ -267,6 +269,16 @@ export interface TextResult {
 
 export interface BackstageApi {
   platform: string
+
+  /**
+   * The account everything else belongs to.
+   *
+   * First in the interface because it is first in the data model: a project is
+   * owned by a user, and every agent, conversation and case is reached through
+   * a project. Nothing below this line answers with anything at all while
+   * `auth.state()` reports `unauthenticated`.
+   */
+  auth: AuthApi
 
   providers: {
     list(): Promise<ProviderDescriptor[]>

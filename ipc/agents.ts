@@ -312,28 +312,49 @@ export function registerAgentHandlers(): void {
 
   /* -------------------------------------------------------------- memory -- */
 
+  /*
+   * A transcript is private memory, so these three handlers do not take the
+   * renderer's word for whose it is.
+   *
+   * The workspace argument is accepted for signature compatibility and then
+   * ignored: the real one is read from `workspaceId()`, which is the open
+   * project's folder. And the agent must resolve through `getAgent`, which is
+   * scoped to the open project — which is in turn scoped to the signed-in
+   * account. So an id belonging to another project, or to another user, reads
+   * as an agent that does not exist and yields an empty conversation.
+   *
+   * Before this, both arguments were passed straight through to a store that
+   * keys files by exactly those two strings. That was harmless while every
+   * transcript on the machine belonged to the same person; with accounts it
+   * would be a private conversation readable by anyone who could guess a
+   * folder path and an agent id, which are neither secret nor hard to guess.
+   */
+  function chatTarget(agentId: unknown): string | null {
+    const id = String(agentId ?? '')
+    return id && getAgent(id) ? id : null
+  }
+
   ipcMain.handle(
     'agents:loadChat',
-    (_e, ws: unknown, agentId: unknown): ChatMessage[] =>
-      conversationStore.load(String(ws ?? ''), String(agentId ?? ''))
+    (_e, _ws: unknown, agentId: unknown): ChatMessage[] => {
+      const id = chatTarget(agentId)
+      return id ? conversationStore.load(workspaceId(), id) : []
+    }
   )
 
   ipcMain.handle(
     'agents:appendChat',
-    (_e, ws: unknown, agentId: unknown, message: unknown): void => {
-      if (message && typeof message === 'object') {
-        conversationStore.append(
-          String(ws ?? ''),
-          String(agentId ?? ''),
-          message as ChatMessage
-        )
-      }
+    (_e, _ws: unknown, agentId: unknown, message: unknown): void => {
+      const id = chatTarget(agentId)
+      if (!id || !message || typeof message !== 'object') return
+      conversationStore.append(workspaceId(), id, message as ChatMessage)
     }
   )
 
-  ipcMain.handle('agents:clearChat', (_e, ws: unknown, agentId: unknown): void =>
-    conversationStore.clear(String(ws ?? ''), String(agentId ?? ''))
-  )
+  ipcMain.handle('agents:clearChat', (_e, _ws: unknown, agentId: unknown): void => {
+    const id = chatTarget(agentId)
+    if (id) conversationStore.clear(workspaceId(), id)
+  })
 
   /* --------------------------------------------------- relationships -- */
 

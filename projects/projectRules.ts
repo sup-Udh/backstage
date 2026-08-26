@@ -42,6 +42,15 @@ export function normaliseProject(raw: unknown): Project | null {
 
   return {
     id,
+    /*
+     * Unowned unless the record says otherwise, and never inferred from
+     * whoever happens to be signed in while the file is read. A project
+     * written before accounts existed genuinely belongs to nobody, and
+     * quietly adopting it would hand one user's team to the next person to
+     * open the app on a shared machine. Claiming it is a deliberate act, and
+     * `claimUnownedProjects` is the only thing that performs it.
+     */
+    userId: typeof p.userId === 'string' ? p.userId.trim() : '',
     name,
     workspacePath,
     themeId: typeof p.themeId === 'string' && p.themeId ? p.themeId : 'detective',
@@ -53,6 +62,36 @@ export function normaliseProject(raw: unknown): Project | null {
     createdAt: Number.isFinite(p.createdAt) ? Number(p.createdAt) : Date.now(),
     updatedAt: Number.isFinite(p.updatedAt) ? Number(p.updatedAt) : Date.now()
   }
+}
+
+/**
+ * The projects one account owns.
+ *
+ * The single predicate the whole application's user isolation rests on.
+ * Everything in Backstage — agents, cases, automations, threads, transcripts —
+ * is reached by first asking which project is open, so filtering projects by
+ * owner filters all of it.
+ *
+ * Pure, and here rather than inline in the store, so it can be tested. This is
+ * the function that decides whether one user can see another's work, and
+ * "probably correct" is not a standard it can be held to.
+ *
+ * Two rules, both deliberate:
+ *
+ *   an empty userId owns nothing      "signed out" must not be a key that
+ *                                     matches anything, and in particular must
+ *                                     not match the unowned records below
+ *   an unowned project is owned by    a project written before accounts
+ *   nobody                            existed belongs to no one until it is
+ *                                     deliberately claimed
+ *
+ * Without the first rule the two would collide: signed out is `''`, an
+ * unclaimed project's owner is `''`, and a naive equality check would show
+ * every pre-account project to anybody who was not signed in.
+ */
+export function ownedBy(projects: Project[], userId: string): Project[] {
+  if (!userId) return []
+  return projects.filter((p) => p.userId === userId)
 }
 
 /**

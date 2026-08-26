@@ -15,6 +15,7 @@ import {
   type LinkResult
 } from './relationships'
 import { getActiveProjectId } from '../projects/projectStore'
+import { mirror } from '../supabase/mirror'
 import type { RosterEntry } from '../src/shared/projects'
 import { roleProfile } from './roleProfiles'
 import { once } from './migrations'
@@ -226,6 +227,17 @@ function persist(): void {
   } catch {
     // Losing the write is survivable; the in-memory list still works.
   }
+
+  /*
+   * Mirror the whole roster rather than the record that changed.
+   *
+   * Every mutator in this file already funnels through `persist`, so hooking
+   * it here is the one place that cannot be forgotten by a mutator added
+   * later — and a roster is tens of records, not thousands. The mirror
+   * debounces and drops anything whose project the signed-in account does not
+   * own, so this is a cheap in-memory hand-off, never a request per keystroke.
+   */
+  mirror.agents(agents ?? [])
 }
 
 export function listAgents(): AgentConfig[] {
@@ -328,6 +340,7 @@ export function deleteAgent(id: string): void {
     }
   }
   persist()
+  mirror.agentsRemoved([id])
 }
 
 /**
@@ -352,6 +365,7 @@ export function removeProjectAgents(projectId: string): AgentConfig[] {
    * could have been pointing at these agents has just been deleted with them.
    */
   persist()
+  mirror.agentsRemoved(doomed.map((a) => a.id))
   return doomed
 }
 

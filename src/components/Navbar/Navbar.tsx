@@ -1,6 +1,7 @@
 import { useBackstage, type PageId } from '../../stores/backstageStore'
 import { useProject, useProjectTheme } from '../../stores/projectStore'
 import { PixelMark } from '../Header/PixelMark'
+import { AccountMenu } from './AccountMenu'
 
 /**
  * The pages inside a project.
@@ -101,27 +102,12 @@ export function Navbar() {
         </nav>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setPage('account')}
-        aria-current={page === 'account' ? 'page' : undefined}
-        className={[
-          'flex items-center gap-2 border-2 px-2.5 py-1.5 transition-colors',
-          page === 'account'
-            ? 'border-ink bg-brand text-ink'
-            : 'border-ink bg-paper text-ink-3 hover:bg-brand-pale hover:text-ink'
-        ].join(' ')}
-      >
-        <span
-          aria-hidden
-          className="grid h-5 w-5 place-items-center border-2 border-ink bg-brand font-pixel text-[10px] font-bold text-ink"
-        >
-          U
-        </span>
-        <span className="font-pixel text-xs font-semibold uppercase tracking-[0.06em]">
-          Connections
-        </span>
-      </button>
+      {/*
+        The account, which used to be a settings shortcut with a hard-coded
+        letter U for an avatar. It now shows who is actually signed in — the
+        Google name and picture — and holds the sign-out.
+      */}
+      <AccountMenu />
     </header>
   )
 }

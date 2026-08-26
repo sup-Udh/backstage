@@ -5,6 +5,8 @@ import { useTeam } from '../../stores/teamStore'
 import { getTheme } from '../../themes'
 import { ThemePreview } from '../../world/ThemePreview'
 import { PixelMark } from '../../components/Header/PixelMark'
+import { Avatar } from '../../components/Auth/Avatar'
+import { useAuth } from '../../stores/authStore'
 import type { Project } from '../../shared/projects'
 
 /**
@@ -37,6 +39,8 @@ export function ProjectPicker() {
   const open = useProject((s) => s.open)
   const remove = useProject((s) => s.remove)
   const refreshTeam = useTeam((s) => s.refresh)
+  const user = useAuth((s) => s.user)
+  const signOut = useAuth((s) => s.signOut)
 
   /** The project being opened, so its own card can say so. */
   const [opening, setOpening] = useState<string | null>(null)
@@ -115,24 +119,59 @@ export function ProjectPicker() {
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={exitToLanding}
-          className="border-2 border-rule px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors hover:border-ink hover:text-ink"
-        >
-          Back
-        </button>
+        {/*
+          Whose projects these are, on the surface that lists them.
+
+          There is no navigation bar here — this screen sits before a project
+          is open — so the account has to be identifiable from the header
+          itself. On a shared machine "which projects am I looking at?" and
+          "who am I signed in as?" are the same question.
+        */}
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-2 border-2 border-ink bg-paper px-2.5 py-1">
+            <Avatar user={user} size={20} />
+            <span className="max-w-[180px] truncate font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+              {user?.email ?? user?.displayName ?? 'Signed in'}
+            </span>
+          </span>
+
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="border-2 border-rule px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors hover:border-rust hover:text-rust focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+          >
+            Log out
+          </button>
+
+          <button
+            type="button"
+            onClick={exitToLanding}
+            className="border-2 border-rule px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors hover:border-ink hover:text-ink focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+          >
+            Back
+          </button>
+        </div>
       </header>
 
       <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
         <div className="mx-auto max-w-[1000px]">
-          <h1 className="font-ui text-3xl font-extrabold uppercase leading-[1.05] tracking-[-0.03em] text-ink">
+          {/*
+            The greeting is built from the authenticated profile — never a
+            hard-coded name, and never the project's. `firstName` falls back
+            through the display name to the email's local part, so an account
+            with no Google name still gets addressed as somebody.
+          */}
+          <p className="font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-brand-shadow">
+            Welcome back{user ? `, ${firstName(user.displayName)}` : ''}
+          </p>
+          <h1 className="mt-1 font-ui text-3xl font-extrabold uppercase leading-[1.05] tracking-[-0.03em] text-ink">
             Which project?
           </h1>
           <p className="mt-3 max-w-[640px] font-ui text-[15px] leading-[1.6] text-ink-3">
-            Each one is a folder, a world and a team of its own. Your agents can
-            only reach the folder of the project you open — nothing outside it is
-            readable, writable or runnable.
+            Each one is a folder, a world and a team of its own, and every one of
+            them belongs to your account alone. Your agents can only reach the
+            folder of the project you open — nothing outside it is readable,
+            writable or runnable.
           </p>
 
           {error && (
@@ -299,4 +338,9 @@ function when(at: number): string {
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
   return days < 30 ? `${days}d ago` : new Date(at).toLocaleDateString()
+}
+
+/** The first word of a display name, for a greeting that is not a full name. */
+function firstName(displayName: string): string {
+  return displayName.trim().split(/\s+/)[0] || displayName
 }

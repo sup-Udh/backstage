@@ -7,10 +7,12 @@ import type {
 import { listAgents, listAllAgents, persistAgents } from '../agents/agentStore'
 import { makeId } from '../agents/persist'
 import { getWorkspaceRoot } from '../workspace/WorkspaceManager'
+import { currentUserId } from '../supabase/authService'
 import {
   adoptProject,
   getActiveProject,
   hasProjects,
+  listAllProjects,
   listProjects,
   setActiveProject
 } from './projectStore'
@@ -48,6 +50,21 @@ export function bootstrapProjects(): ProjectBootstrap {
     return { projects: listProjects(), activeProject: getActiveProject(), legacy: null }
   }
 
+  /*
+   * Pre-account state is a property of the *machine*, not of the account.
+   *
+   * `hasProjects()` above is scoped to whoever is signed in, which is right
+   * for deciding whether to show them their own projects — and wrong for
+   * deciding whether this install predates projects. A second user signing in
+   * on a machine where the first already has projects has no projects of their
+   * own, and would otherwise be offered the orphan agents and workspace folder
+   * left over from before, which are not theirs. So the legacy branch asks
+   * whether *anybody* has a project here.
+   */
+  if (listAllProjects().length > 0) {
+    return { projects: [], activeProject: null, legacy: null }
+  }
+
   const workspacePath = getWorkspaceRoot()
   const orphans = listAllAgents().filter((a) => !a.projectId)
 
@@ -80,7 +97,12 @@ export function bootstrapProjects(): ProjectBootstrap {
  * the alternative is opening ALL AGENTS mode onto nobody.
  */
 export function adoptLegacy(input: LegacyAdoption): ProjectSnapshot | null {
-  if (hasProjects()) return null
+  /*
+   * Machine-wide, matching the branch above. `hasProjects()` alone would let a
+   * second account adopt the first account's leftover agents simply by having
+   * none of its own.
+   */
+  if (hasProjects() || listAllProjects().length > 0) return null
 
   // The folder that was already open is the project's workspace. Without one
   // there is nothing to adopt *into*, and the wizard is the right path instead.
@@ -90,6 +112,10 @@ export function adoptLegacy(input: LegacyAdoption): ProjectSnapshot | null {
   const now = Date.now()
   const project: Project = {
     id: makeId('proj'),
+    // The account doing the adopting. Pre-project state belongs to whoever is
+    // signed in when it is folded into a project — there is nobody else it
+    // could belong to, and `adoptLegacy` is unreachable while signed out.
+    userId: currentUserId(),
     name: input.name.trim() || nameFromPath(workspacePath),
     workspacePath,
     themeId: input.themeId,

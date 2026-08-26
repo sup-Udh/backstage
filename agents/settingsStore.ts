@@ -1,5 +1,6 @@
 import type { OrchestrationSettings } from './agent.types'
 import { readJson, writeJson } from './persist'
+import { mirror } from '../supabase/mirror'
 
 /**
  * Orchestration settings.
@@ -79,5 +80,11 @@ export function updateSettings(
     )
   }
   writeJson(FILE, cached)
+  /*
+   * Account-level rather than project-level: these are the orchestration
+   * limits, which govern how much a run may spend and how far it may chain.
+   * They follow the person, not the piece of work.
+   */
+  mirror.settings({ ...cached })
   return cached
 }

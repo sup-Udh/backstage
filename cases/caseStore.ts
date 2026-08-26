@@ -1,6 +1,7 @@
 import type { Case } from '../src/shared/projects'
 import { makeId, readJson, writeJson } from '../agents/persist'
 import { getActiveProjectId } from '../projects/projectStore'
+import { mirror } from '../supabase/mirror'
 
 /**
  * Cases, persisted and project-scoped.
@@ -58,6 +59,12 @@ function load(): Case[] {
 
 function persist(): void {
   writeJson(FILE, cases ?? [])
+  /*
+   * Mirrored from the one place every mutator already goes through, for the
+   * same reason the roster is: a hook per mutator is a hook a later mutator
+   * forgets. The mirror drops anything whose project the account does not own.
+   */
+  mirror.cases(cases ?? [])
 }
 
 /** The open project's cases, newest first. */
@@ -121,6 +128,7 @@ export function deleteCase(id: string): void {
   const all = load()
   all.splice(all.indexOf(target), 1)
   persist()
+  mirror.caseRemoved(id)
 }
 
 /**
@@ -137,8 +145,10 @@ export function removeProjectCases(projectId: string): number {
   if (kept.length === all.length) return 0
 
   const removed = all.length - kept.length
+  const doomed = all.filter((c) => c.projectId === projectId)
   cases = kept
   persist()
+  for (const c of doomed) mirror.caseRemoved(c.id)
   return removed
 }
 

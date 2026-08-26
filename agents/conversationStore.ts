@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path'
 import type { ChatMessage } from './agent.types'
 import type { Turn } from '../providers/provider.types'
+import { mirror } from '../supabase/mirror'
 
 /**
  * Per-agent conversation memory.
@@ -56,6 +57,15 @@ export class ConversationStore {
         JSON.stringify(trimmed, null, 2),
         'utf8'
       )
+      /*
+       * The cloud copy of this transcript.
+       *
+       * Handed over as (workspace, agent) because that is the only identity
+       * this store has — it is deliberately ignorant of projects. Resolving
+       * the workspace path to an owned project, and refusing if it is not one,
+       * is the mirror's job.
+       */
+      mirror.conversation(workspaceId, agentId, trimmed)
     } catch {
       // Losing the write is survivable; the session still has the messages.
     }
@@ -84,6 +94,7 @@ export class ConversationStore {
     try {
       const path = this.path(workspaceId, agentId)
       if (existsSync(path)) rmSync(path)
+      mirror.conversationRemoved(workspaceId, agentId)
     } catch {
       // A transcript that cannot be removed is not worth failing a delete over.
     }

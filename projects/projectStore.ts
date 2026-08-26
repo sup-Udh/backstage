@@ -1,8 +1,16 @@
 import { resolve } from 'node:path'
 import type { Project, ProjectPatch } from '../src/shared/projects'
 import { makeId, readJson, writeJson } from '../agents/persist'
+import { once } from '../agents/migrations'
 import { setWorkspace } from '../workspace/WorkspaceManager'
-import { nameFromPath, normaliseProject, resolveActiveId } from './projectRules'
+import { currentUserId } from '../supabase/authService'
+import { mirror } from '../supabase/mirror'
+import {
+  nameFromPath,
+  normaliseProject,
+  ownedBy,
+  resolveActiveId
+} from './projectRules'
 
 export { nameFromPath } from './projectRules'
 
@@ -20,6 +28,31 @@ export { nameFromPath } from './projectRules'
  * roster, but that composition happens in the IPC layer, which can see both
  * stores — putting it here would make projectStore and agentStore import each
  * other, and each one is reached from the other's normalisation path.
+ *
+ * ---------------------------------------------------------------------------
+ *
+ * This file is also where user isolation is enforced, and it is worth being
+ * precise about why it is enough.
+ *
+ * Nothing in Backstage is global except credentials and the spend limits.
+ * Agents, cases, automations, threads and transcripts are every one of them
+ * reached by first asking "which project is open?" — `getActiveProjectId()` —
+ * and filtering on the answer. Adding an owner to the project record and
+ * teaching `owned()` to hide everyone else's therefore scopes the entire
+ * application through a single predicate, rather than by adding a `userId`
+ * column to six stores and hoping every future read remembers to check it.
+ *
+ * The two functions that matter are `owned()` and `getActiveProjectId()`. A
+ * project belonging to another account is reported as not existing rather than
+ * as refused — the same answer `getAgent` gives for an agent in another
+ * project, and for the same reason: there is no interface anywhere in the app
+ * for a project you cannot open, so a distinct "exists but is not yours"
+ * result would only invite callers to handle a case that must stay
+ * unreachable.
+ *
+ * None of this replaces row level security. This is the guard on the local
+ * cache; the database enforces the same rule again, on its own, against a
+ * client it does not trust. Either alone would be a mistake.
  */
 
 const FILE = 'projects.json'
@@ -52,22 +85,56 @@ function persist(): void {
 
 /* ------------------------------------------------------------- reading -- */
 
+/**
+ * The signed-in account's projects, and only those.
+ *
+ * The single filter the rest of the application's isolation rests on. When
+ * nobody is signed in, `currentUserId()` is the empty string and this is
+ * empty — so a logged-out main process answers every scoped read with nothing,
+ * whatever the renderer asks for. That is deliberate defence in depth: the
+ * route guard in `App.tsx` stops the *interface* appearing, and this stops the
+ * *data* being served even if something got past it.
+ */
+function owned(): Project[] {
+  return ownedBy(load().projects, currentUserId())
+}
+
 export function listProjects(): Project[] {
-  return load().projects
+  return owned()
 }
 
 export function hasProjects(): boolean {
-  return load().projects.length > 0
+  return owned().length > 0
 }
 
 export function getProject(id: string): Project | undefined {
-  return load().projects.find((p) => p.id === id)
+  return owned().find((p) => p.id === id)
 }
 
+/**
+ * Every project on disk, across every account.
+ *
+ * Internal, and exported for exactly two callers that genuinely have to see
+ * past the filter: the claim migration below, and the cloud mirror, which
+ * reconciles records it is about to stamp. Everything else goes through
+ * `owned()` — the same discipline `listAllAgents` is held to.
+ */
+export function listAllProjects(): Project[] {
+  return load().projects
+}
+
+/**
+ * The open project, if it belongs to the signed-in account.
+ *
+ * The ownership re-check is not redundant with `setActiveProject`. The active
+ * id is persisted, so the project opened by one account is still named in
+ * `projects.json` when a different account signs in on the same machine — and
+ * without this, every scoped read would happily answer against it.
+ */
 export function getActiveProject(): Project | null {
-  const { activeProjectId, projects } = load()
+  const { activeProjectId } = load()
   if (!activeProjectId) return null
-  return projects.find((p) => p.id === activeProjectId) ?? null
+  return owned().find((p) => p.id === activeProjectId) ?? null
 }
 
 /**
@@ -76,7 +143,8 @@ export function getActiveProject(): Project | null {
  * Used to stamp and filter child records. Returning a string rather than
  * `null` is deliberate: an agent stamped with `''` belongs to no project and
  * is therefore invisible everywhere, which is the correct outcome for a record
- * written while nothing was open.
+ * written while nothing was open — and now also the correct outcome for one
+ * written while nobody was signed in.
  */
 export function getActiveProjectId(): string {
   return getActiveProject()?.id ?? ''
@@ -93,13 +161,31 @@ export function getActiveProjectId(): string {
  */
 export function setActiveProject(id: string): Project | null {
   const s = load()
-  const project = s.projects.find((p) => p.id === id)
+  // `owned`, not `s.projects`: opening is the moment a workspace folder is
+  // handed to a team, and it must never be another account's folder.
+  const project = owned().find((p) => p.id === id)
   if (!project) return null
 
   s.activeProjectId = project.id
   persist()
   setWorkspace(project.workspacePath)
   return project
+}
+
+/**
+ * Close whatever is open, without choosing anything in its place.
+ *
+ * Called on sign-out. Leaving the active id pointing at the previous account's
+ * project would keep the workspace — the boundary every file and terminal tool
+ * resolves against — aimed at a folder that the person now sitting at the
+ * machine has not been given.
+ */
+export function closeActiveProject(): void {
+  const s = load()
+  if (!s.activeProjectId) return
+  s.activeProjectId = null
+  persist()
+  setWorkspace(null)
 }
 
 export function createProject(input: {
@@ -112,8 +198,18 @@ export function createProject(input: {
   const workspacePath = resolve(input.workspacePath)
   const now = Date.now()
 
+  /*
+   * Refuse rather than write an unowned project. A project with no owner is
+   * invisible to every read in the application, so creating one would present
+   * as the wizard succeeding and the project simply never appearing — the
+   * worst kind of failure to debug.
+   */
+  const userId = currentUserId()
+  if (!userId) throw new Error('Sign in before creating a project.')
+
   const project: Project = {
     id: makeId('proj'),
+    userId,
     name: input.name.trim() || nameFromPath(workspacePath),
     workspacePath,
     themeId: input.themeId,
@@ -126,6 +222,7 @@ export function createProject(input: {
 
   s.projects.push(project)
   persist()
+  mirror.project(project)
   return project
 }
 
@@ -150,6 +247,10 @@ export function createProject(input: {
  */
 export function deleteProject(id: string): boolean {
   const s = load()
+  // Scoped: a project belonging to another account is not deletable through
+  // any path, including a guessed id arriving over IPC.
+  if (!getProject(id)) return false
+
   const index = s.projects.findIndex((p) => p.id === id)
   if (index === -1) return false
 
@@ -159,6 +260,7 @@ export function deleteProject(id: string): boolean {
     setWorkspace(null)
   }
   persist()
+  mirror.projectRemoved(id)
   return true
 }
 
@@ -198,6 +300,7 @@ export function updateProject(id: string, patch: ProjectPatch): Project | null {
 
   project.updatedAt = Date.now()
   persist()
+  mirror.project(project)
   return project
 }
 
@@ -210,9 +313,59 @@ export function updateProject(id: string, patch: ProjectPatch): Project | null {
  */
 export function adoptProject(project: Project, makeActive: boolean): Project {
   const s = load()
+  // Stamped here rather than trusted from the caller: `bootstrap` assembles
+  // this record out of pre-account state, which by definition names no owner.
+  project.userId = project.userId || currentUserId()
   s.projects.push(project)
   if (makeActive) s.activeProjectId = project.id
   persist()
   if (makeActive) setWorkspace(project.workspacePath)
+  mirror.project(project)
   return project
+}
+
+/**
+ * Hand pre-account projects to the first person who signs in on this machine.
+ *
+ * Backstage stored projects before it had accounts, so an existing install has
+ * work on disk that belongs to nobody — and an unowned project is invisible to
+ * every read in this file. Doing nothing would present to that user as their
+ * entire workspace having been deleted by an update.
+ *
+ * The rules, which are the whole of the safety argument:
+ *
+ *   - it runs once per machine, recorded in the migration ledger, so the
+ *     *second* account to sign in inherits nothing;
+ *   - it only ever touches records with no owner, so a project already
+ *     belonging to somebody cannot be reassigned by it;
+ *   - nothing is deleted, moved or rewritten beyond the owner field.
+ *
+ * A machine genuinely shared by two people from the start is the case this
+ * cannot get right on its own, and it resolves it the conservative way: the
+ * first signer keeps the legacy data, and the second starts empty rather than
+ * being shown someone else's team.
+ */
+export function claimUnownedProjects(): number {
+  const userId = currentUserId()
+  if (!userId) return 0
+
+  let claimed = 0
+  once('projects.claim-pre-account-projects', () => {
+    const s = load()
+    const now = Date.now()
+    for (const project of s.projects) {
+      if (project.userId) continue
+      project.userId = userId
+      project.updatedAt = now
+      claimed++
+    }
+    if (claimed > 0) {
+      persist()
+      console.log(
+        `[auth] claimed ${claimed} pre-account project(s) for the first signed-in user.`
+      )
+    }
+  })
+
+  return claimed
 }

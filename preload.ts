@@ -2,12 +2,14 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AgentSession,
   ApprovalRequest,
+  AuthState,
   BackstageApi,
   FileChange,
   ProviderStatus,
   RunTaskParams,
   RuntimeEvent,
   SessionLine,
+  SyncState,
   TerminalSession
 } from './src/shared/providerApi'
 
@@ -34,6 +36,28 @@ function subscribe<T>(channel: string, handler: (payload: T) => void): () => voi
  */
 const api: BackstageApi = {
   platform: process.platform,
+
+  /*
+   * The account.
+   *
+   * Note what is absent: there is no way through here to obtain a session, an
+   * access token or a Supabase client. The renderer can ask who is signed in
+   * and ask for that to change; the credential that proves it stays in the
+   * main process, encrypted at rest, exactly as the provider API keys do.
+   */
+  auth: {
+    state: () => ipcRenderer.invoke('auth:state'),
+    signInWithGoogle: () => ipcRenderer.invoke('auth:signInWithGoogle'),
+    cancelSignIn: () => ipcRenderer.invoke('auth:cancelSignIn'),
+    signOut: () => ipcRenderer.invoke('auth:signOut'),
+    onChanged: (handler) => subscribe<AuthState>('auth:changed', handler),
+
+    sync: {
+      state: () => ipcRenderer.invoke('auth:syncState'),
+      now: () => ipcRenderer.invoke('auth:syncNow'),
+      onChanged: (handler) => subscribe<SyncState>('auth:syncChanged', handler)
+    }
+  },
 
   providers: {
     list: () => ipcRenderer.invoke('providers:list'),
