@@ -15,14 +15,28 @@
  */
 
 /**
- * The first `x.y` or `x.y.z` in the text, with an optional pre-release tail.
+ * The first version-shaped token in the text.
  *
- * Permissive about what surrounds it, because the CLI has printed the bare
- * number, `claude, version 1.2.3`, and a banner with the number buried in it at
- * different points in its life. Strict about the number itself: two components
- * minimum, so a bare `2` or an exit code cannot pass.
+ * Read left to right, the parts are:
+ *
+ *   (?<![\d.])   not in the middle of a longer number. Without this, `1.2.3`
+ *                could be entered at `2.3` and report a version that is a
+ *                suffix of the real one.
+ *   v?           the optional `v` in `v1.2.3`. This is why the pattern cannot
+ *                simply start with `\b`: there is no word boundary between
+ *                `v` and `0`, so `\b` skipped the `0` entirely and `v0.9.14`
+ *                was read as `9.14` — a wrong version, confidently displayed.
+ *                A test caught that; nothing else would have.
+ *   \d+\.\d+     two components minimum. This is the whole defence against
+ *                error messages: a bare `127` or `42` is an exit code or a
+ *                line number and must never be mistaken for a version.
+ *   (?:\.\d+)?   the optional patch component.
+ *   (?:-…)?      a semver pre-release tail, hyphen-introduced so it cannot be
+ *                confused with the patch component.
+ *   (?![\d.])    and nothing numeric may follow, so a longer number is not
+ *                silently truncated to a version.
  */
-const VERSION = /\b(\d+\.\d+(?:\.\d+)?(?:[-.][0-9A-Za-z.]+)?)\b/
+const VERSION = /(?<![\d.])v?(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z][0-9A-Za-z.]*)?)(?![\d.])/
 
 export function parseClaudeVersion(text: string): string | null {
   if (!text) return null
