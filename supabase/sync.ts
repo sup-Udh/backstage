@@ -41,6 +41,24 @@ import {
 
 /** How long to wait for more changes before sending a batch. */
 const FLUSH_MS = 1200
+/**
+ * The ceiling on retry backoff.
+ *
+ * A failing push is retried, because the common causes are transient — a
+ * dropped connection, a laptop lid, an expired access token about to be
+ * refreshed. But some are not: an unapplied migration means every table is
+ * missing and *will stay missing* until somebody runs the SQL, and the first
+ * version of this file retried that every 1.2 seconds indefinitely. That is a
+ * request per second per user against Supabase for as long as the app is open,
+ * for a fault that no amount of retrying can fix, with a line of log for each
+ * one burying anything useful.
+ *
+ * So the interval doubles on each consecutive failure up to five minutes. A
+ * genuinely transient fault still recovers within seconds; a structural one
+ * settles into a heartbeat that costs nothing and stays visible in the
+ * account panel.
+ */
+const MAX_BACKOFF_MS = 5 * 60 * 1000
 /** Transcript rows per conversation. Matches the local store's own cap. */
 const MAX_MESSAGES = 400
 
@@ -51,6 +69,10 @@ const queue = new Map<string, Job>()
 
 let timer: NodeJS.Timeout | null = null
 let flushing = false
+/** Consecutive failed flushes, which drives the backoff. */
+let failureStreak = 0
+/** The last error reported, so an unchanging fault is logged once, not hourly. */
+let loggedError: string | null = null
 
 let state: SyncState = {
   enabled: false,
@@ -104,9 +126,24 @@ function enqueue(key: string, job: Job): void {
   schedule()
 }
 
+/** How long to wait before the next attempt, given how badly it is going. */
+function backoffMs(): number {
+  if (failureStreak === 0) return FLUSH_MS
+  return Math.min(FLUSH_MS * 2 ** failureStreak, MAX_BACKOFF_MS)
+}
+
+/**
+ * Arm the next flush.
+ *
+ * A new local change does *not* reset an active backoff. It is tempting to let
+ * it — the user just did something, so surely try now — but the thing that is
+ * failing is the connection or the schema, not the payload, and a user typing
+ * in the roster editor would otherwise drive the retry rate straight back to
+ * one per second.
+ */
 function schedule(): void {
   if (timer) clearTimeout(timer)
-  timer = setTimeout(() => void flush(), FLUSH_MS)
+  timer = setTimeout(() => void flush(), backoffMs())
 }
 
 /**
@@ -144,7 +181,15 @@ export async function flush(): Promise<SyncState> {
     } catch (err) {
       failed++
       lastError = err instanceof Error ? err.message : String(err)
-      console.error(`[sync] "${key}" failed:`, lastError)
+      /*
+       * Logged once per distinct fault rather than once per attempt. The same
+       * message repeating every few seconds is not more information — it is
+       * the same information, hiding everything else in the console.
+       */
+      if (lastError !== loggedError) {
+        loggedError = lastError
+        console.error(`[sync] "${key}" failed:`, lastError)
+      }
       /*
        * Put it back, unless something newer for the same record has since
        * been queued — that newer job already describes the correct final
@@ -155,14 +200,33 @@ export async function flush(): Promise<SyncState> {
   }
 
   flushing = false
+
+  if (failed === batch.length && batch.length > 0) {
+    failureStreak++
+  } else {
+    // Any progress at all clears the streak: whatever was wrong is now at
+    // least partly right, and the next fault deserves a fast first retry.
+    failureStreak = 0
+    loggedError = null
+  }
+
   setState({
     enabled: true,
     lastError: failed ? lastError : null,
     lastSyncedAt: failed === batch.length ? state.lastSyncedAt : Date.now()
   })
 
-  // Anything that failed is now queued again; give it another go, later.
-  if (queue.size > 0) schedule()
+  // Anything that failed is now queued again; give it another go, later —
+  // "later" getting longer each time it keeps failing.
+  if (queue.size > 0) {
+    if (failureStreak > 0) {
+      console.warn(
+        `[sync] ${queue.size} change(s) still pending; next retry in ` +
+          `${Math.round(backoffMs() / 1000)}s.`
+      )
+    }
+    schedule()
+  }
 
   return getSyncState()
 }
@@ -505,13 +569,30 @@ export function initSync(): void {
  */
 export function onSignedIn(): void {
   queue.clear()
+  failureStreak = 0
+  loggedError = null
   setState({ enabled: true, lastError: null, pending: 0 })
   void pullAll()
+}
+
+/**
+ * Clear the backoff so the next attempt happens immediately.
+ *
+ * For the account panel's "Sync now" only. A person pressing that button has
+ * usually just fixed the thing that was broken — applied the migration,
+ * reconnected — and making them wait out a five-minute backoff to find out
+ * would be the interface disbelieving them.
+ */
+export function resetBackoff(): void {
+  failureStreak = 0
+  loggedError = null
 }
 
 /** Sign-out: forget everything outstanding. */
 export function onSignedOut(): void {
   queue.clear()
+  failureStreak = 0
+  loggedError = null
   if (timer) {
     clearTimeout(timer)
     timer = null

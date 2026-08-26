@@ -516,6 +516,57 @@ create trigger on_auth_user_created
 
 
 -- ===========================================================================
+-- ACCOUNT DELETION
+-- ===========================================================================
+--
+-- Lets an account delete itself.
+--
+-- The application deletes the user's *rows* directly — RLS permits that, and
+-- the foreign keys cascade — but the `auth.users` row is in a schema the anon
+-- key cannot touch. Without this function, "delete account" can only ever mean
+-- "delete my data and leave the login behind", which is not what the words say.
+--
+-- `security definer` is required to reach `auth.users` at all. The safety of
+-- that rests on two things, and both matter:
+--
+--   1. it takes no arguments. There is no id to pass, so there is no id to
+--      tamper with — it can only ever delete the caller;
+--   2. it reads `auth.uid()` from the verified JWT, and refuses when there
+--      isn't one, so an unauthenticated caller does nothing.
+--
+-- The `search_path` is pinned for the usual reason: a `security definer`
+-- function that resolves names through a caller-controlled search path is a
+-- privilege-escalation bug.
+
+create or replace function public.delete_own_account()
+returns void
+language plpgsql
+security definer
+set search_path = public, auth, pg_temp
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'delete_own_account requires an authenticated caller';
+  end if;
+
+  -- Everything else cascades from auth.users via `on delete cascade`, but the
+  -- rows are removed explicitly first so the outcome does not depend on the
+  -- cascade being configured correctly on every table.
+  delete from public.projects      where user_id = uid;
+  delete from public.user_settings where user_id = uid;
+  delete from public.profiles      where id      = uid;
+
+  delete from auth.users where id = uid;
+end;
+$$;
+
+revoke all on function public.delete_own_account() from public;
+grant execute on function public.delete_own_account() to authenticated;
+
+
+-- ===========================================================================
 -- updated_at
 -- ===========================================================================
 -- Maintained by the database as well as sent by the client, so a row's

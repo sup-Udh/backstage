@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { registerProviderHandlers, primeProviders } from './providers'
+import { registerProviderHandlers } from './providers'
 import { registerWorkspaceHandlers } from './workspace'
 import { registerAgentHandlers, disposeAgentHandlers } from './agents'
 import { registerTerminalHandlers } from './terminal'
@@ -61,9 +61,15 @@ export async function registerIpcHandlers(): Promise<void> {
   // Watch the open project so changes made by external CLI agents are seen.
   fileWatcher.sync()
 
-  // Re-verify stored keys in the background so the UI shows the right state
-  // on launch without blocking the window.
-  void primeProviders()
+  /*
+   * Provider keys are *not* primed here any more.
+   *
+   * They belong to an account now, so there is nothing to verify until one is
+   * signed in — and `initAuthState` above already primes them as part of
+   * handling a restored session. Priming here as well would run the same
+   * network checks twice on every launch and, worse, would race the sign-in
+   * prime over the same two caches.
+   */
 
   /*
    * A PTY outlives its window unless it is killed explicitly, which would

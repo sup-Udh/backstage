@@ -3,10 +3,10 @@ import { useAuth } from '../../stores/authStore'
 import { useBackstage } from '../../stores/backstageStore'
 import { useWorldEngine } from '../../world/useWorldEngine'
 import { showcaseRuntime } from '../../agents/showcase'
-import { defaultThemeId } from '../../themes'
 import { PixelMark } from '../../components/Header/PixelMark'
 import { GoogleButton } from '../../components/Auth/GoogleButton'
 import { LoginWorld } from './LoginWorld'
+import { useRotatingWorld } from './useRotatingWorld'
 
 /**
  * The way in.
@@ -42,19 +42,16 @@ export function Login() {
   const exitToLanding = useBackstage((s) => s.exitToLanding)
 
   /*
-   * The default world, not a project's.
+   * A world of its own, cycling through all of them.
    *
-   * Nobody is signed in, so there is no project, no roster and no chosen
-   * theme — and reaching for one would be the login page reading state that
-   * belongs to an account it has not identified yet. The default world's cast
-   * is the same one the user just watched on the landing page, which is the
-   * point: they are walking further into the same building.
+   * Never a project's. Nobody is signed in, so there is no project, no roster
+   * and no chosen theme — reaching for one would be the login page reading
+   * state belonging to an account it has not identified yet. Instead it shows
+   * every world Backstage ships, five seconds each, which is the honest thing
+   * for a screen whose job is to say what is on the other side of the door.
    */
-  const { theme, engine } = useWorldEngine(
-    defaultThemeId,
-    EVERYONE,
-    showcaseRuntime
-  )
+  const { themeId, switching } = useRotatingWorld()
+  const { theme, engine } = useWorldEngine(themeId, EVERYONE, showcaseRuntime)
 
   // Only for the count in the caption; the canvas itself is driven by the
   // engine and re-renders nothing.
@@ -111,7 +108,21 @@ export function Login() {
         >
           <LoginWorld engine={engine} />
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t-[3px] border-ink-3 bg-ink px-3 py-2">
+          {/*
+            The dissolve. Stepped opacity rather than a smooth fade, so the
+            swap reads as a pixel wipe rather than as a CSS transition — the
+            same treatment `World` gives a theme change in the workspace.
+          */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-20 bg-ink"
+            style={{
+              opacity: switching ? 1 : 0,
+              transition: `opacity ${switching ? 200 : 260}ms steps(5, end)`
+            }}
+          />
+
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t-[3px] border-ink-3 bg-ink px-3 py-2">
             <span className="border-2 border-brand-shadow bg-brand px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
               {theme.name}
             </span>

@@ -2,12 +2,22 @@ import { BrowserWindow, ipcMain } from 'electron'
 import type { AuthState, SyncState } from '../src/shared/auth'
 import {
   cancelSignIn,
+  currentUserId,
+  deleteAccount,
   getAuthState,
   initAuth,
   onAuthChanged,
   signInWithGoogle,
-  signOut
+  signOut,
+  updateDisplayName
 } from '../supabase/authService'
+import {
+  completeOnboarding,
+  forgetUserPrefs,
+  needsOnboarding,
+  recordAccountSeen
+} from '../supabase/userPrefs'
+import { deleteAllCredentials } from '../credentials/secureStore'
 import {
   flush,
   getSyncState,
@@ -15,9 +25,12 @@ import {
   onSignedIn,
   onSignedOut,
   onSyncChanged,
-  pullAll
+  pullAll,
+  resetBackoff
 } from '../supabase/sync'
 import { claimUnownedProjects, closeActiveProject } from '../projects/projectStore'
+import { claimUnownedCredentials } from '../credentials/secureStore'
+import { primeProviders, refreshProviderStatus } from './providers'
 import { agentRegistry } from '../agents/AgentRegistry'
 import { orchestrator } from '../agents/AgentOrchestrator'
 import { fileWatcher } from '../workspace/FileWatcher'
@@ -57,8 +70,34 @@ let previousStatus: AuthState['status'] = 'initialising'
  *      signed in.
  */
 function handleSignedIn(): void {
+  /*
+   * Record the account first. `claimUnownedCredentials` counts how many
+   * accounts this machine has seen in order to decide whether adopting a
+   * pre-account API key is safe, and it has to be counting a set that
+   * includes the person signing in right now.
+   */
+  recordAccountSeen()
+
   const claimed = claimUnownedProjects()
+  /*
+   * Pre-account provider keys, moved into this account's directory — once per
+   * machine, for the first signer only. See `claimUnownedCredentials` for why
+   * that is the right compromise between "the developer keeps their key" and
+   * "nobody inherits somebody else's".
+   */
+  claimUnownedCredentials()
   if (claimed > 0) agentRegistry.refreshAll()
+
+  /*
+   * Re-verify keys for *this* account.
+   *
+   * Provider state is per-user now, so the statuses the renderer is holding
+   * belong to whoever was signed in before — which, on a fresh launch, is
+   * nobody. Priming here is what makes the connections page correct on the
+   * frame after sign-in instead of showing every provider as disconnected
+   * until something else happened to refresh it.
+   */
+  void primeProviders()
   onSignedIn()
 }
 
@@ -102,6 +141,16 @@ function handleSignedOut(): void {
   fileWatcher.sync()
   onSignedOut()
   agentRegistry.refreshAll()
+  /*
+   * Push empty provider state to every window.
+   *
+   * `secureStore` is keyed on the signed-in user, so with nobody signed in
+   * every provider already reads as having no key — but the renderer is
+   * holding the previous account's statuses, including their masked key hint.
+   * Four characters of somebody else's API key is not a disaster, and it is
+   * still their data sitting on screen under the next person's session.
+   */
+  refreshProviderStatus()
 }
 
 export function registerAuthHandlers(): void {
@@ -112,8 +161,47 @@ export function registerAuthHandlers(): void {
   ipcMain.handle('auth:cancelSignIn', (): AuthState => cancelSignIn())
   ipcMain.handle('auth:signOut', (): Promise<AuthState> => signOut())
 
+  /*
+   * Provider onboarding.
+   *
+   * A question rather than a stored view state, so the renderer cannot decide
+   * on its own that somebody has been onboarded — the answer lives beside the
+   * account it belongs to.
+   */
+  ipcMain.handle('auth:onboardingNeeded', (): boolean => needsOnboarding())
+  ipcMain.handle('auth:completeOnboarding', (): void => completeOnboarding())
+
+  ipcMain.handle('auth:updateProfile', (_e, name: unknown) =>
+    updateDisplayName(String(name ?? ''))
+  )
+
+  /**
+   * Delete the account.
+   *
+   * The confirmation happens in the interface; by the time this is called the
+   * decision has been made. Local artefacts are removed *after* the remote
+   * delete succeeds — reversing that would destroy the credentials needed to
+   * authenticate the delete request itself.
+   */
+  ipcMain.handle('auth:deleteAccount', async () => {
+    const userId = currentUserId()
+    const result = await deleteAccount()
+    if (!result.ok) return result
+
+    // Local traces of the account: its encrypted provider keys and its
+    // preferences. The projects on disk go with the sign-out teardown.
+    deleteAllCredentials()
+    if (userId) forgetUserPrefs(userId)
+
+    await signOut()
+    return result
+  })
+
   ipcMain.handle('auth:syncState', (): SyncState => getSyncState())
   ipcMain.handle('auth:syncNow', async (): Promise<SyncState> => {
+    // Pressing the button means "try now", so any accumulated backoff from
+    // earlier failures is dropped rather than waited out.
+    resetBackoff()
     await flush()
     await pullAll()
     return getSyncState()

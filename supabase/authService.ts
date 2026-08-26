@@ -370,6 +370,115 @@ export async function signInWithGoogle(): Promise<AuthState> {
   return getAuthState()
 }
 
+/* --------------------------------------------------------------- profile -- */
+
+/**
+ * Change the display name.
+ *
+ * Written to two places on purpose: Supabase Auth's own user metadata, which
+ * is what `toAuthUser` reads on the next session restore, and the `profiles`
+ * row, which is what the application queries. Writing only the profile row
+ * would mean the name reverting the next time the app restarted and rebuilt
+ * the user from the session.
+ *
+ * Only the display name. Email and provider identity belong to Google and
+ * Supabase Auth — requirement 12 is explicit — and there is deliberately no
+ * code path here that attempts to change either.
+ */
+export async function updateDisplayName(
+  name: string
+): Promise<{ ok: boolean; error?: string }> {
+  const client = supabase()
+  if (!client || !state.user) return { ok: false, error: 'Not signed in.' }
+
+  const trimmed = name.trim().slice(0, 80)
+  if (!trimmed) return { ok: false, error: 'A display name cannot be empty.' }
+
+  try {
+    const { error } = await client.auth.updateUser({ data: { full_name: trimmed } })
+    if (error) throw error
+
+    const user = { ...state.user, displayName: trimmed }
+    setState({ user })
+    await syncProfile(user)
+
+    return { ok: true }
+  } catch (err) {
+    console.error('[auth] could not update the display name:', err)
+    return { ok: false, error: "That name couldn't be saved. Try again." }
+  }
+}
+
+/**
+ * Delete the account's data, and the account itself where the database allows.
+ *
+ * Two halves, and it is worth being precise about which is guaranteed:
+ *
+ *   the data     every row the user owns. RLS lets an account delete its own
+ *                rows, so this always works, and the foreign keys cascade —
+ *                deleting the projects takes the agents, conversations,
+ *                messages and cases with them.
+ *   the identity the `auth.users` row. A client holding only the anon key
+ *                cannot delete that; it needs a `security definer` function in
+ *                the database. The migration ships one (`delete_own_account`),
+ *                but an installation that has not applied it yet will not have
+ *                it — so a missing function is reported as a partial result
+ *                rather than as a failure, because the user's *data* really
+ *                has gone either way.
+ *
+ * The caller is responsible for the confirmation step. This function does not
+ * ask.
+ */
+export async function deleteAccount(): Promise<{
+  ok: boolean
+  identityRemoved: boolean
+  error?: string
+}> {
+  const client = supabase()
+  const userId = currentUserId()
+  if (!client || !userId) {
+    return { ok: false, identityRemoved: false, error: 'Not signed in.' }
+  }
+
+  try {
+    /*
+     * Projects first: everything else cascades from them. `user_settings` and
+     * `profiles` are keyed on the user directly, so they are named separately.
+     */
+    for (const table of ['projects', 'user_settings']) {
+      const { error } = await client.from(table).delete().eq('user_id', userId)
+      if (error) throw new Error(`${table}: ${error.message}`)
+    }
+    const { error: profileError } = await client
+      .from('profiles')
+      .delete()
+      .eq('id', userId)
+    if (profileError) throw new Error(`profiles: ${profileError.message}`)
+
+    // The identity, if the database has been given the function to do it.
+    let identityRemoved = false
+    const { error: rpcError } = await client.rpc('delete_own_account')
+    if (rpcError) {
+      console.warn(
+        '[auth] delete_own_account is unavailable, so the Supabase login ' +
+          'itself remains. All account data was removed. Apply the latest ' +
+          `migration to enable it. (${rpcError.message})`
+      )
+    } else {
+      identityRemoved = true
+    }
+
+    return { ok: true, identityRemoved }
+  } catch (err) {
+    console.error('[auth] account deletion failed:', err)
+    return {
+      ok: false,
+      identityRemoved: false,
+      error: "Your account couldn't be deleted. Nothing was changed."
+    }
+  }
+}
+
 /** Abandon a sign-in that is still waiting on the browser. */
 export function cancelSignIn(): AuthState {
   cancelCallback()

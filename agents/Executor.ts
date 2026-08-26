@@ -1,6 +1,6 @@
 import type { AgentConfig, AgentTask, RuntimeEventType } from './agent.types'
 import type { Turn } from '../providers/provider.types'
-import { getProvider, getProviderDefinition } from '../providers/registry'
+import { resolveProvider, getProviderDefinition } from '../providers/registry'
 import { readConfig } from '../credentials/secureStore'
 import { getTool, toolsForCapabilities } from '../tools/registry'
 import { teamTools } from '../tools/team'
@@ -97,11 +97,15 @@ export class Execution {
   /** Run to completion. Returns the agent's final prose. */
   async run(): Promise<string> {
     const def = getProviderDefinition(this.agent.providerId)
-    const provider = getProvider(this.agent.providerId)
+    /*
+     * Resolved per run, never cached. The credential belongs to whoever is
+     * signed in *now* — so an execution queued before a sign-out cannot go out
+     * on the previous account's key, and the message tells the user which of
+     * the three things to fix rather than a generic "not connected".
+     */
+    const { provider, message } = resolveProvider(this.agent.providerId)
     if (!def || !provider) {
-      throw new Error(
-        `${this.agent.providerId} is not connected. Add its API key in Connections.`
-      )
+      throw new Error(message ?? `${this.agent.providerId} is not connected.`)
     }
 
     const model = this.agent.modelId ?? readConfig(this.agent.providerId).selectedModel
@@ -404,7 +408,7 @@ export class Execution {
    * what it has gathered.
    */
   private async wrapUp(
-    provider: NonNullable<ReturnType<typeof getProvider>>,
+    provider: NonNullable<ReturnType<typeof resolveProvider>['provider']>,
     def: NonNullable<ReturnType<typeof getProviderDefinition>>,
     model: string,
     system: string,

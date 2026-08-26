@@ -42,6 +42,7 @@ interface Step {
 export function EnteringWorkspace() {
   const showProjects = useBackstage((s) => s.showProjects)
   const showSetup = useBackstage((s) => s.showSetup)
+  const showOnboarding = useBackstage((s) => s.showOnboarding)
   const exitToLanding = useBackstage((s) => s.exitToLanding)
 
   const bootstrap = useProject((s) => s.bootstrap)
@@ -144,14 +145,28 @@ export function EnteringWorkspace() {
       mark(1)
 
       /*
+       * First run for this account, before anything else.
+       *
+       * Asked of the main process rather than inferred from "has no
+       * providers", because those are different questions: a user who
+       * deliberately skipped setup has no providers either, and showing them
+       * this screen on every launch would be the app refusing to accept an
+       * answer it already got.
+       */
+      const needsSetup = (await window.backstage?.auth.onboardingNeeded()) === true
+      if (!live) return
+
+      /*
        * And then the user chooses.
        *
-       * Note what is *not* here any more: opening whatever was last active.
+       * Note what is *not* here: opening whatever was last active.
        * Initialisation finds out what exists; it does not decide which folder
        * a team is about to be given write access to. With nothing to choose
        * between, the wizard is the only honest destination.
        */
-      handOver(known.length > 0 ? showProjects : showSetup)
+      handOver(
+        needsSetup ? showOnboarding : known.length > 0 ? showProjects : showSetup
+      )
     }
 
     void run().catch((err: unknown) => {
@@ -188,7 +203,7 @@ export function EnteringWorkspace() {
       live = false
       window.clearTimeout(cap)
     }
-  }, [bootstrap, adoptLegacy, showProjects, showSetup])
+  }, [bootstrap, adoptLegacy, showProjects, showSetup, showOnboarding])
 
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center bg-cream px-6">

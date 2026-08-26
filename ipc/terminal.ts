@@ -2,6 +2,7 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { terminals } from '../terminal/TerminalSessionManager'
 import { agentSessions } from '../terminal/AgentSessionManager'
 import { sessionTranscripts } from '../terminal/sessionTranscript'
+import { detectClaude } from '../terminal/claudeDetect'
 // Straight from the rules module rather than the store: sessions share the
 // limits but have nothing to do with the persisted roster.
 import { MAX_CONNECTIONS, MAX_GROUP } from '../agents/relationships'
@@ -34,6 +35,17 @@ function broadcast(channel: string, payload: unknown): void {
 }
 
 export function registerTerminalHandlers(): void {
+  /*
+   * Is Claude Code installed?
+   *
+   * Asked before a session is started, so "Start Claude" can refuse with a
+   * real explanation instead of opening a shell that prints
+   * `'claude' is not recognized` and leaving the user to interpret it.
+   */
+  ipcMain.handle('claude:detect', (_e, refresh: unknown) =>
+    detectClaude(refresh === true)
+  )
+
   // Stream PTY output straight through; the renderer feeds it to xterm.
   terminals.on('output', (payload) => broadcast('terminal:output', payload))
   terminals.on('exit', (payload) => broadcast('terminal:exit', payload))

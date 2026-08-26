@@ -5,6 +5,7 @@ import { Landing } from './pages/Landing/Landing'
 import { Login } from './pages/Login/Login'
 import { AuthBoot } from './pages/Loading/AuthBoot'
 import { EnteringWorkspace } from './pages/Loading/EnteringWorkspace'
+import { ProviderOnboarding } from './pages/Onboarding/ProviderOnboarding'
 import { ProjectPicker } from './pages/Setup/ProjectPicker'
 import { ProjectSetup } from './pages/Setup/ProjectSetup'
 import { AppShell } from './app/AppShell'
@@ -81,6 +82,8 @@ export default function App() {
       return <Login />
     case 'loading':
       return <EnteringWorkspace />
+    case 'onboarding':
+      return <ProviderOnboarding />
     case 'projects':
       return <ProjectPicker />
     case 'setup':

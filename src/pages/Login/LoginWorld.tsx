@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { WorldEngine } from '../../world/engine/WorldEngine'
+import { WorldLabelLayer } from '../../world/labels/WorldLabelLayer'
 
 interface Props {
   engine: WorldEngine
@@ -21,6 +22,21 @@ interface Props {
  * `aria-hidden`, `pointer-events-none`, no interaction of any kind. The
  * characters walk, sit at desks, type and think entirely on the engine's own
  * ambient scheduler.
+ *
+ * The name tags *are* reused, though, and that is the point of them. They are
+ * `WorldLabelLayer` — the same component that names characters in the
+ * workspace — so a tag on the login page is the same pixel plate, in the same
+ * face, positioned by the same per-frame callback as everywhere else. It
+ * already does the two things that are hard: it follows a walking character
+ * without lagging a frame behind the canvas, and it hides a label whose
+ * character has left the visible scene.
+ *
+ * The names come from the world, not from here. `WorldEngine` labels a
+ * character with the runtime's name only when that agent sets `useOwnName` —
+ * which the live team does and the showcase does not — so these fall through
+ * to `CharacterDef.name` from whichever theme is currently on screen. Rotating
+ * to The Branch relabels the room to The Branch's cast, with nothing in this
+ * file knowing any of their names.
  *
  * The bounds are this component's own rather than `World`'s, which is what
  * keeps requirement 35 honest: `World` will not go below 420×280, and forcing
@@ -90,6 +106,14 @@ export function LoginWorld({ engine }: Props) {
         aria-hidden
         className="pixelated pointer-events-none block"
       />
+
+      {/*
+        Tags over the canvas. The layer places itself absolutely across this
+        wrapper, so it inherits the frame's bounds and clips with it — a
+        character walking out of the room takes its label with it rather than
+        leaving one floating over the login card.
+      */}
+      <WorldLabelLayer engine={engine} />
     </div>
   )
 }

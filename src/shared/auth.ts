@@ -101,6 +101,40 @@ export interface AuthApi {
   /** Push: session restored, refreshed, signed in or signed out. */
   onChanged(handler: (state: AuthState) => void): () => void
 
+  /**
+   * Whether this account still needs the provider setup screen on this
+   * machine.
+   *
+   * Answered by the main process rather than remembered by the renderer: it is
+   * a fact about an account, and a renderer that decided for itself would
+   * forget on every reload.
+   */
+  onboardingNeeded(): Promise<boolean>
+  /** Onboarding was completed or deliberately skipped. Either counts. */
+  completeOnboarding(): Promise<void>
+
+  /**
+   * Change the display name.
+   *
+   * The only profile field a user may edit. Email and provider identity are
+   * owned by Google and Supabase Auth, and there is no method here for either.
+   */
+  updateProfile(displayName: string): Promise<{ ok: boolean; error?: string }>
+
+  /**
+   * Delete the account and everything it owns.
+   *
+   * Irreversible, and the caller must have confirmed first — this does not
+   * ask. `identityRemoved` is false when the data was deleted but the Supabase
+   * login itself could not be, which happens on an installation whose database
+   * predates the `delete_own_account` function.
+   */
+  deleteAccount(): Promise<{
+    ok: boolean
+    identityRemoved: boolean
+    error?: string
+  }>
+
   sync: {
     state(): Promise<SyncState>
     /** Push anything queued and pull the account's cloud records. */

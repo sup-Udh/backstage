@@ -52,6 +52,12 @@ const api: BackstageApi = {
     signOut: () => ipcRenderer.invoke('auth:signOut'),
     onChanged: (handler) => subscribe<AuthState>('auth:changed', handler),
 
+    onboardingNeeded: () => ipcRenderer.invoke('auth:onboardingNeeded'),
+    completeOnboarding: () => ipcRenderer.invoke('auth:completeOnboarding'),
+    updateProfile: (displayName) =>
+      ipcRenderer.invoke('auth:updateProfile', displayName),
+    deleteAccount: () => ipcRenderer.invoke('auth:deleteAccount'),
+
     sync: {
       state: () => ipcRenderer.invoke('auth:syncState'),
       now: () => ipcRenderer.invoke('auth:syncNow'),
@@ -232,6 +238,15 @@ const api: BackstageApi = {
 
   commands: {
     list: () => ipcRenderer.invoke('commands:list')
+  },
+
+  /*
+   * Detection, and nothing else. The renderer cannot ask the main process to
+   * run a command — it can ask whether Claude Code exists, and the answer is
+   * one of three strings.
+   */
+  claude: {
+    detect: (refresh?: boolean) => ipcRenderer.invoke('claude:detect', refresh === true)
   }
 }
 

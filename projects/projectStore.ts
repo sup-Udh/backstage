@@ -352,11 +352,20 @@ export function claimUnownedProjects(): number {
   let claimed = 0
   once('projects.claim-pre-account-projects', () => {
     const s = load()
-    const now = Date.now()
     for (const project of s.projects) {
       if (project.userId) continue
       project.userId = userId
-      project.updatedAt = now
+      /*
+       * `updatedAt` is deliberately left alone.
+       *
+       * It means "when did somebody last work on this", and the picker sorts
+       * on it so the project you were in the middle of is the one at the
+       * front. Claiming is a migration, not work: stamping the current time
+       * would flatten every project in an existing install to the same
+       * instant and throw that ordering away — which shows up as a list that
+       * has forgotten what you were doing, on the very first launch after
+       * signing in.
+       */
       claimed++
     }
     if (claimed > 0) {

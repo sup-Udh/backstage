@@ -1,24 +1,50 @@
+import { useState } from 'react'
 import { useProviders } from '../../providers/useProviders'
 import { useTeam } from '../../stores/teamStore'
-import { PagePlaceholder } from '../shell/PagePlaceholder'
+import { ClaudeCard } from '../../claude/ClaudeCard'
 import { AccountPanel } from './AccountPanel'
+import { DangerZone } from './DangerZone'
+import { ProfileSection } from './ProfileSection'
+import { ProjectsSection } from './ProjectsSection'
 import { ProviderPanel } from './ProviderPanel'
-import { ProjectPanel } from './ProjectPanel'
-import { ThemePanel } from '../Themes/ThemePanel'
+import { RosterSection } from './RosterSection'
 
 /**
- * Settings: this project, and the providers behind it.
+ * Settings.
  *
- * The split matters. Everything above the rule belongs to *this* project — its
- * name, folder, world, cast and team lead — and changes nothing about any
- * other. Provider connections below it are genuinely global, because a key is
- * a credential on this machine rather than a property of a project; which
- * agents use it is still decided per project, by each agent.
+ * Five sections behind one nav, rather than the single scrolling column this
+ * page used to be. That column had the account, the project, the world and
+ * every provider stacked on it, and finding the thing you came for meant
+ * scrolling past four things you did not.
  *
- * No key ever comes back out. The renderer learns two things: whether one
- * exists, and its last four characters.
+ * The split follows what each thing *belongs to*, which is also the data
+ * model:
+ *
+ *   Profile       the account          — you
+ *   AI Providers  the account          — your credentials, on this machine
+ *   Agents        the open project     — this project's team
+ *   Projects      the account, and     — everything you own, plus the settings
+ *                 the open project       of the one you are in
+ *   Account       the account          — sync, sign out, deletion
+ *
+ * Nothing here can show another user's anything, and not because this file is
+ * careful: every read it makes is already scoped in the main process, through
+ * the open project, through the signed-in account.
  */
+
+type SectionId = 'profile' | 'providers' | 'agents' | 'projects' | 'account'
+
+const SECTIONS: { id: SectionId; label: string }[] = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'providers', label: 'AI Providers' },
+  { id: 'agents', label: 'Agents' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'account', label: 'Account' }
+]
+
 export function Account() {
+  const [section, setSection] = useState<SectionId>('profile')
+
   const {
     descriptors,
     statuses,
@@ -37,54 +63,105 @@ export function Account() {
     agents.filter((a) => a.providerId === providerId).length
 
   return (
-    <PagePlaceholder
-      title="Settings"
-      lead="Your account, this project — its folder, its world and its team — and the AI providers behind them. Keys are encrypted by your operating system and never reach this interface."
-    >
-      {/*
-        The account comes first because it is what everything below it belongs
-        to: the project is owned by it, and so is every agent, conversation and
-        case inside the project.
-      */}
-      <AccountPanel />
+    <div className="min-h-0 flex-1 overflow-y-auto bg-cream px-6 py-8 sm:px-8">
+      <div className="mx-auto max-w-[1100px]">
+        <h1 className="font-ui text-4xl font-extrabold uppercase leading-[1.02] tracking-[-0.04em] text-ink">
+          Settings
+        </h1>
 
-      <div className="pixel-rule mb-8" />
+        {/*
+          The nav is a horizontal strip rather than a sidebar. Backstage runs
+          in a window a user may make narrow, and a sidebar is the first thing
+          to break when they do — this wraps instead of overflowing, and costs
+          no horizontal space on a small window.
+        */}
+        <nav
+          aria-label="Settings sections"
+          className="mt-6 flex flex-wrap gap-1 border-b-[3px] border-ink"
+        >
+          {SECTIONS.map((item) => {
+            const active = item.id === section
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-current={active ? 'page' : undefined}
+                onClick={() => setSection(item.id)}
+                className={[
+                  'relative px-3 py-2 font-ui text-sm font-semibold transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep',
+                  active ? 'text-ink' : 'text-ink-3 hover:text-ink'
+                ].join(' ')}
+              >
+                {item.label}
+                <span
+                  aria-hidden
+                  className={`absolute inset-x-2 -bottom-[3px] h-[3px] ${
+                    active ? 'bg-brand' : 'bg-transparent'
+                  }`}
+                />
+              </button>
+            )
+          })}
+        </nav>
 
-      <ProjectPanel />
+        <div className="mt-8 pb-4">
+          {section === 'profile' && <ProfileSection />}
 
-      {/* The world, which is project configuration rather than a global switch. */}
-      <div className="mb-10 mt-10">
-        <ThemePanel />
+          {section === 'providers' && (
+            <section>
+              <h2 className="mb-2 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
+                AI Providers
+              </h2>
+              <p className="mb-4 max-w-[620px] font-ui text-[13px] leading-snug text-ink-3">
+                Your agents run on your own provider accounts. Keys are
+                encrypted by your operating system, stored on this machine under
+                your Backstage account, and never shown back to you in full —
+                not even to you.
+              </p>
+
+              {/*
+                Said plainly, because it is the thing a user on a shared
+                machine most needs to know and would otherwise have to infer.
+              */}
+              <p className="mb-6 max-w-[620px] border-2 border-rule bg-paper px-3 py-2 font-ui text-[12px] leading-snug text-ink-3">
+                These credentials belong to your account alone. Another person
+                signing into Backstage on this computer gets their own, and
+                neither of you can use the other&rsquo;s.
+              </p>
+
+              <div className="flex flex-col gap-6">
+                {descriptors.map((descriptor) => (
+                  <ProviderPanel
+                    key={descriptor.id}
+                    descriptor={descriptor}
+                    provider={statuses.find((s) => s.id === descriptor.id)}
+                    result={results[descriptor.id]}
+                    agentCount={usedBy(descriptor.id)}
+                    busy={busy}
+                    onConnect={connect}
+                    onTest={test}
+                    onDisconnect={disconnect}
+                    onSelectModel={selectModel}
+                  />
+                ))}
+
+                <ClaudeCard />
+              </div>
+            </section>
+          )}
+
+          {section === 'agents' && <RosterSection />}
+          {section === 'projects' && <ProjectsSection />}
+
+          {section === 'account' && (
+            <div className="flex flex-col gap-10">
+              <AccountPanel />
+              <DangerZone />
+            </div>
+          )}
+        </div>
       </div>
-
-      <div className="pixel-rule mb-8" />
-
-      {/* Providers, rendered from the registry rather than a hard-coded list. */}
-      <h2 className="mb-2 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
-        AI Providers
-      </h2>
-      <p className="mb-4 max-w-[640px] font-ui text-[13px] leading-snug text-ink-3">
-        Connections are shared across every project on this machine, but which
-        agents use them is not: each agent picks its own provider and model, so
-        connecting more than one lets a team run on several at once.
-      </p>
-
-      <div className="flex flex-col gap-6">
-        {descriptors.map((descriptor) => (
-          <ProviderPanel
-            key={descriptor.id}
-            descriptor={descriptor}
-            provider={statuses.find((s) => s.id === descriptor.id)}
-            result={results[descriptor.id]}
-            agentCount={usedBy(descriptor.id)}
-            busy={busy}
-            onConnect={connect}
-            onTest={test}
-            onDisconnect={disconnect}
-            onSelectModel={selectModel}
-          />
-        ))}
-      </div>
-    </PagePlaceholder>
+    </div>
   )
 }

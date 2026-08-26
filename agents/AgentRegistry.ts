@@ -284,7 +284,9 @@ export function validateAgent(agentId: string): AgentValidation {
   if (!def) {
     problems.push(`Unknown provider "${agent.providerId}".`)
   } else if (!hasApiKey(agent.providerId)) {
-    problems.push(`${def.name} is not connected. Add its API key in Connections.`)
+    problems.push(
+      `${def.name} is not connected. Add your API key in Settings → AI Providers.`
+    )
   } else {
     const model = agent.modelId ?? readConfig(agent.providerId).selectedModel
     if (!model) problems.push(`No model is selected for ${def.name}.`)

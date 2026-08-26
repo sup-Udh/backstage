@@ -5,6 +5,8 @@ import '@xterm/xterm/css/xterm.css'
 import type { AgentSession, SessionAgent, TerminalSession } from '../shared/providerApi'
 import { useBackstage } from '../stores/backstageStore'
 import { ActivityRail } from './ActivityRail'
+import { CLAUDE_COPY, CLAUDE_INSTALL_URL } from '../claude/useClaude'
+import type { ClaudeDetection } from '../shared/providerApi'
 
 /**
  * The session surface.
@@ -138,6 +140,14 @@ export function TerminalPanel() {
 
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  /**
+   * Set when Claude Code was asked for and cannot run.
+   *
+   * The detection itself, not a boolean, because the notice has to say which
+   * of the two problems it is — missing, or present but broken — and those
+   * need different words and different advice.
+   */
+  const [claudeProblem, setClaudeProblem] = useState<ClaudeDetection | null>(null)
 
   const sessions = useBackstage((s) => s.terminalSessions)
   const agentSessions = useBackstage((s) => s.agentSessions)
@@ -278,6 +288,29 @@ export function TerminalPanel() {
     async (command: string) => {
       setStarting(true)
       try {
+        /*
+         * Ask before opening a shell to type into.
+         *
+         * Without this the failure mode is genuinely confusing: a terminal
+         * appears, the command runs, the shell prints
+         * `'claude' is not recognized as an internal or external command`,
+         * and the user has to work out from that whether Backstage is broken,
+         * their PATH is broken, or Claude Code was never installed. Those need
+         * different actions, and only the last one is common.
+         *
+         * The check is only for the CLI agents Backstage offers a button for.
+         * A command the user types themselves goes straight through, because
+         * intercepting arbitrary input would mean Backstage deciding which of
+         * their programs exist.
+         */
+        if (command === 'claude') {
+          const detection = await window.backstage?.claude.detect()
+          if (detection && detection.state !== 'available') {
+            setClaudeProblem(detection)
+            return
+          }
+        }
+
         const id = (await create()) ?? null
         if (!id) return
         // A beat for the shell to come up and start reading stdin.
@@ -480,6 +513,70 @@ export function TerminalPanel() {
         <p className="shrink-0 border-b-2 border-rule bg-brand-pale px-3 py-1.5 font-ui text-xs text-ink">
           {error}
         </p>
+      )}
+
+      {/*
+        Claude Code was asked for and is not usable.
+
+        Deliberately a Backstage notice rather than a shell error: it says what
+        Backstage did, what it wanted, and what is missing — which is the whole
+        of requirement 20. The two states get different words, because
+        "reinstall it" is wrong advice for a CLI that is already installed.
+      */}
+      {claudeProblem && (
+        <div
+          role="alert"
+          className="shrink-0 border-b-[3px] border-ink bg-brand-pale px-4 py-3"
+        >
+          <p className="font-pixel text-[11px] font-bold uppercase tracking-[0.08em] text-rust">
+            {claudeProblem.state === 'not_installed'
+              ? 'Claude Code not found'
+              : "Claude Code won't start"}
+          </p>
+
+          <p className="mt-1 max-w-[52ch] font-ui text-[13px] leading-snug text-ink">
+            {claudeProblem.state === 'not_installed' ? (
+              <>
+                Backstage tried to start a Claude Code session, but Claude Code
+                doesn&rsquo;t appear to be installed on this computer. Install
+                it and try again — nothing else needs configuring.
+              </>
+            ) : (
+              <>
+                Backstage found Claude Code on this computer, but it
+                wouldn&rsquo;t run. It is installed, so reinstalling is probably
+                not the fix — check that it works from your own terminal.
+              </>
+            )}
+          </p>
+
+          {claudeProblem.path && (
+            <p className="mt-1 break-all font-mono text-[10px] text-ink-3">
+              {claudeProblem.path}
+            </p>
+          )}
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <a
+              href={CLAUDE_INSTALL_URL}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="border-2 border-ink bg-paper px-2.5 py-1 font-pixel text-[10px] font-bold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-brand-lite focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+            >
+              View setup
+            </a>
+            <button
+              type="button"
+              onClick={() => setClaudeProblem(null)}
+              className="border-2 border-rule px-2.5 py-1 font-pixel text-[10px] font-bold uppercase tracking-[0.06em] text-ink-3 transition-colors hover:border-ink hover:text-ink focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+            >
+              Close
+            </button>
+            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+              {CLAUDE_COPY[claudeProblem.state].label}
+            </span>
+          </div>
+        </div>
       )}
 
       {/* The empty state, which offers the two things worth doing. */}

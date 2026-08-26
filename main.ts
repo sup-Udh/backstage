@@ -1,13 +1,27 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { registerIpcHandlers } from './ipc'
+import { appIconPath, applyAppIdentity } from './appIcon'
 
 function createWindow() {
+  const icon = appIconPath()
+
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1000,
     minHeight: 700,
+
+    /*
+     * Backstage's own icon rather than Electron's default.
+     *
+     * Only set when the asset was actually found: passing `undefined` keeps
+     * Electron's default, whereas passing a path that does not exist gets the
+     * same result while looking like it worked. macOS ignores this entirely
+     * and reads the .app bundle instead, which is why `appIconPath` returns
+     * null there.
+     */
+    ...(icon ? { icon } : {}),
 
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -54,6 +68,10 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(async () => {
+    // The name and the Windows AppUserModelID, before any window exists —
+    // the taskbar reads them when the first one is created.
+    applyAppIdentity()
+
     /*
      * Handlers must exist before any window can call them — and the stored
      * session must be resolved before any window can *paint*, which is why

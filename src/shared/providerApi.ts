@@ -208,6 +208,33 @@ export interface OkResult {
   error?: string
 }
 
+/* ----------------------------------------------------------- claude ------ */
+
+/**
+ * Whether Claude Code is usable on this machine.
+ *
+ * Three states rather than a boolean, because "not installed" and "installed
+ * but will not run" need different words in front of the user: one is an
+ * install step, the other is a broken environment, and telling somebody to
+ * reinstall a CLI that is already on their PATH wastes their afternoon.
+ *
+ * `running` and `stopped` are deliberately *not* here. Those describe a
+ * session, and sessions already have `AgentSessionStatus`. Detection describes
+ * the machine.
+ */
+export type ClaudeState = 'available' | 'not_installed' | 'failed_to_start'
+
+export interface ClaudeDetection {
+  state: ClaudeState
+  /** Where it resolved on PATH, when it did. */
+  path: string | null
+  /** Only ever a version that was actually reported. Never invented. */
+  version: string | null
+  checkedAt: number
+  /** Technical detail for `failed_to_start`, shown in settings. */
+  detail: string | null
+}
+
 /* -------------------------------------------------------- relationships -- */
 
 export interface LinkResult extends OkResult {
@@ -500,6 +527,19 @@ export interface BackstageApi {
 
   commands: {
     list(): Promise<ProjectCommand[]>
+  }
+
+  /**
+   * The local Claude Code CLI.
+   *
+   * Detection only — there is no "run this command" here, and deliberately so.
+   * Starting Claude Code is still the terminal surface writing `claude` into a
+   * real PTY the user can see and interrupt; this just answers whether doing
+   * so is going to work.
+   */
+  claude: {
+    /** Cached answer, or a fresh look when `refresh` is true. */
+    detect(refresh?: boolean): Promise<ClaudeDetection>
   }
 }
 

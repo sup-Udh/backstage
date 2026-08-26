@@ -37,6 +37,10 @@ const lastCheckOk = new Map<string, boolean>()
  * good key reads as disconnected. Pushing the result is what stops the app
  * opening in a state where it refuses to work for no reason the user can see.
  */
+export function refreshProviderStatus(): void {
+  broadcastStatus()
+}
+
 function broadcastStatus(): void {
   const payload = PROVIDERS.map((p) => statusFor(p.id))
   for (const win of BrowserWindow.getAllWindows()) {
@@ -186,8 +190,18 @@ export function registerProviderHandlers(): void {
   )
 }
 
-/** Restore "connected" for providers with a stored key, at startup. */
+/**
+ * Re-verify stored keys and report the result.
+ *
+ * Called at start-up and again on every sign-in. The caches below are
+ * per-application rather than per-account, so they are cleared first: a model
+ * list or an "it worked" flag left over from the previous user would describe
+ * a key this account does not have.
+ */
 export async function primeProviders(): Promise<void> {
+  lastCheckOk.clear()
+  cachedModels.clear()
+
   await Promise.all(
     PROVIDERS.map(async (p) => {
       if (!hasApiKey(p.id)) return

@@ -36,9 +36,10 @@ import type {
  * until a project exists there is no workspace, no roster and no theme for a
  * page to render.
  *
- *   landing   the shop window
- *   login     signing in with Google; the gate to everything below it
- *   loading   entering: real initialisation, shown as a walk to the office
+ *   landing    the shop window
+ *   login      signing in with Google; the gate to everything below it
+ *   loading    entering: real initialisation, shown as a walk to the office
+ *   onboarding first run for an account: connect your AI providers
  *   projects  which piece of work is this, of the ones already set up
  *   setup     choosing a folder, a world, a cast and a team lead
  *   app       inside a project
@@ -53,7 +54,14 @@ import type {
  * type rather than restating it in a guard is what stops a sixth view being
  * added one day and quietly defaulting to public.
  */
-export type AppView = 'landing' | 'login' | 'loading' | 'projects' | 'setup' | 'app'
+export type AppView =
+  | 'landing'
+  | 'login'
+  | 'loading'
+  | 'onboarding'
+  | 'projects'
+  | 'setup'
+  | 'app'
 
 /**
  * The views that require an account.
@@ -64,6 +72,7 @@ export type AppView = 'landing' | 'login' | 'loading' | 'projects' | 'setup' | '
  */
 export const PROTECTED_VIEWS: readonly AppView[] = [
   'loading',
+  'onboarding',
   'projects',
   'setup',
   'app'
@@ -229,6 +238,8 @@ interface BackstageState {
   enterApp: () => void
   /** Show the sign-in page. */
   showLogin: () => void
+  /** First run for this account: offer provider setup. */
+  showOnboarding: () => void
   /**
    * Tear down everything that belonged to the signed-out account.
    *
@@ -326,6 +337,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
       view: useAuth.getState().status === 'authenticated' ? 'loading' : 'login'
     }),
   showLogin: () => set({ view: 'login' }),
+  showOnboarding: () => set({ view: 'onboarding' }),
 
   resetForSignOut: () =>
     set({
