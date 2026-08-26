@@ -600,3 +600,15 @@ begin
   end loop;
 end;
 $$;
+
+ - -   G R A N T   p e r m i s s i o n s   t o   a n o n   a n d   a u t h e n t i c a t e d   r o l e s 
+ g r a n t   u s a g e   o n   s c h e m a   p u b l i c   t o   a n o n ,   a u t h e n t i c a t e d ; 
+ g r a n t   s e l e c t ,   i n s e r t ,   u p d a t e ,   d e l e t e   o n   t a b l e   p u b l i c . p r o f i l e s   t o   a n o n ,   a u t h e n t i c a t e d ; 
+ g r a n t   s e l e c t ,   i n s e r t ,   u p d a t e ,   d e l e t e   o n   t a b l e   p u b l i c . p r o j e c t s   t o   a n o n ,   a u t h e n t i c a t e d ; 
+ g r a n t   s e l e c t ,   i n s e r t ,   u p d a t e ,   d e l e t e   o n   t a b l e   p u b l i c . a g e n t s   t o   a n o n ,   a u t h e n t i c a t e d ; 
+ g r a n t   s e l e c t ,   i n s e r t ,   u p d a t e ,   d e l e t e   o n   t a b l e   p u b l i c . c o n v e r s a t i o n s   t o   a n o n ,   a u t h e n t i c a t e d ; 
+ g r a n t   s e l e c t ,   i n s e r t ,   u p d a t e ,   d e l e t e   o n   t a b l e   p u b l i c . m e s s a g e s   t o   a n o n ,   a u t h e n t i c a t e d ; 
+ g r a n t   s e l e c t ,   i n s e r t ,   u p d a t e ,   d e l e t e   o n   t a b l e   p u b l i c . c a s e s   t o   a n o n ,   a u t h e n t i c a t e d ; 
+ g r a n t   s e l e c t ,   i n s e r t ,   u p d a t e ,   d e l e t e   o n   t a b l e   p u b l i c . u s e r _ s e t t i n g s   t o   a n o n ,   a u t h e n t i c a t e d ; 
+  
+ 

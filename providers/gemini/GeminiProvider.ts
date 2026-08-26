@@ -110,95 +110,126 @@ export class GeminiProvider implements AIProvider {
     const contents: Content[] = []
 
     for (const turn of req.turns) {
+      const role = turn.role === 'assistant' ? 'model' : 'user'
+      let parts: Part[] = []
+
       if (turn.role === 'tool') {
-        contents.push({
-          role: 'user',
-          parts: [
-            {
-              functionResponse: {
-                name: turn.toolName ?? 'tool',
-                response: { result: turn.content ?? '' }
-              }
-            }
-          ]
-        })
-        continue
-      }
-
-      if (turn.role === 'assistant') {
-        const parts: Part[] = []
-        if (turn.content) parts.push({ text: turn.content })
-        for (const call of turn.toolCalls ?? []) {
-          parts.push({ functionCall: { name: call.name, args: call.arguments } })
+        // Attempt to parse tool result as JSON object if possible,
+        // otherwise wrap it in { result: ... }
+        let responsePayload = { result: turn.content ?? '' }
+        try {
+          const parsed = JSON.parse(turn.content ?? '')
+          if (parsed && typeof parsed === 'object') {
+            responsePayload = parsed
+          }
+        } catch {
+          // not json, leave as is
         }
-        if (parts.length) contents.push({ role: 'model', parts })
-        continue
+        
+        parts.push({
+          functionResponse: {
+            name: turn.toolName ?? 'tool',
+            response: responsePayload
+          }
+        })
+      } else if (turn.role === 'assistant') {
+        if (turn.providerData?.geminiParts) {
+          parts = turn.providerData.geminiParts as Part[]
+        } else {
+          if (turn.content) parts.push({ text: turn.content })
+          for (const call of turn.toolCalls ?? []) {
+            parts.push({ functionCall: { name: call.name, args: call.arguments } })
+          }
+        }
+      } else {
+        if (turn.content) parts.push({ text: turn.content })
       }
 
-      if (turn.content) contents.push({ role: 'user', parts: [{ text: turn.content }] })
+      if (parts.length === 0) continue
+
+      const last = contents[contents.length - 1]
+      if (last && last.role === role) {
+        last.parts = last.parts ?? []
+        last.parts.push(...parts)
+      } else {
+        contents.push({ role, parts })
+      }
     }
 
-    const params = {
+    const params: any = {
       model: req.model,
       contents,
       config: {
-        systemInstruction: req.system,
-        tools: [
-          {
-            functionDeclarations: req.tools.map((t) => ({
-              name: t.name,
-              description: t.description,
-              parametersJsonSchema: t.parameters
-            }))
-          }
-        ]
+        systemInstruction: req.system
       }
+    }
+    
+    if (req.tools.length > 0) {
+      params.config.tools = [
+        {
+          functionDeclarations: req.tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            parametersJsonSchema: t.parameters
+          }))
+        }
+      ]
     }
 
     const toolCalls: ToolCall[] = []
     let text = ''
+    const allParts: Part[] = []
 
     if (req.onDelta) {
-      /*
-       * Streaming, assembled by hand.
-       *
-       * Gemini yields whole response chunks rather than text deltas, and each
-       * one may carry prose, a function call, or both. Text is forwarded as
-       * it arrives and concatenated; calls are only collected, never
-       * announced — a tool call is a decision, and half of one is not
-       * something the runtime or the user could act on.
-       */
       const stream = await this.client.models.generateContentStream(params)
       for await (const chunk of stream) {
-        const part = chunk.text ?? ''
-        if (part) {
-          text += part
-          req.onDelta(part)
-        }
-        for (const [i, c] of (chunk.functionCalls ?? []).entries()) {
-          toolCalls.push({
-            id: c.id ?? `gemini_${Date.now()}_${toolCalls.length + i}`,
-            name: c.name ?? '',
-            arguments: (c.args ?? {}) as Record<string, unknown>
-          })
+        const chunkParts = chunk.candidates?.[0]?.content?.parts ?? []
+        allParts.push(...chunkParts)
+        for (const p of chunkParts) {
+          if (p.text) {
+            text += p.text
+            req.onDelta(p.text)
+          } else if (p.functionCall) {
+            toolCalls.push({
+              id: `gemini_${Date.now()}_${toolCalls.length}`,
+              name: p.functionCall.name ?? '',
+              arguments: (p.functionCall.args ?? {}) as Record<string, unknown>
+            })
+          }
         }
       }
     } else {
       const response = await this.client.models.generateContent(params)
-      for (const [i, c] of (response.functionCalls ?? []).entries()) {
-        // Gemini does not issue call ids; the loop only needs them to be unique.
-        toolCalls.push({
-          id: c.id ?? `gemini_${Date.now()}_${i}`,
-          name: c.name ?? '',
-          arguments: (c.args ?? {}) as Record<string, unknown>
-        })
+      const parts = response.candidates?.[0]?.content?.parts ?? []
+      allParts.push(...parts)
+      for (const p of parts) {
+        if (p.text) {
+          text += p.text
+        } else if (p.functionCall) {
+          toolCalls.push({
+            id: `gemini_${Date.now()}_${toolCalls.length}`,
+            name: p.functionCall.name ?? '',
+            arguments: (p.functionCall.args ?? {}) as Record<string, unknown>
+          })
+        }
       }
-      text = response.text ?? ''
+    }
+
+    // Safe development logging as requested
+    console.log(`[gemini] response received. Parts: ${allParts.length}`)
+    for (const [i, p] of allParts.entries()) {
+      if (p.text) console.log(`[gemini] part ${i}: text (${p.text.length} chars)`)
+      if (p.functionCall) console.log(`[gemini] part ${i}: functionCall '${p.functionCall.name}' args keys: ${Object.keys(p.functionCall.args ?? {}).join(', ')}`)
+      if (p.thought) console.log(`[gemini] part ${i}: thought`)
+      if (p.executableCode) console.log(`[gemini] part ${i}: executableCode`)
     }
 
     const trimmed = text.trim()
-    if (toolCalls.length > 0) return { text: trimmed || undefined, toolCalls }
-    return { text: trimmed }
+    return { 
+      text: trimmed || undefined, 
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      providerData: { geminiParts: allParts }
+    }
   }
 }
 

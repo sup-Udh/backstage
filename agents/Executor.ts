@@ -253,7 +253,8 @@ export class Execution {
       turns.push({
         role: 'assistant',
         content: result.text,
-        toolCalls: result.toolCalls
+        toolCalls: result.toolCalls,
+        providerData: result.providerData
       })
 
       if (result.text?.trim()) {

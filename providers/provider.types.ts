@@ -57,6 +57,8 @@ export interface Turn {
   /** On a tool turn: which call this answers. */
   toolCallId?: string
   toolName?: string
+  /** Opaque data specific to the provider, preserved exactly across turns. */
+  providerData?: Record<string, unknown>
 }
 
 export interface GenerateTurnRequest {
@@ -86,6 +88,8 @@ export interface GenerateTurnResult {
   text?: string
   /** Tools the model wants run before it can continue. */
   toolCalls?: ToolCall[]
+  /** Opaque data specific to the provider, to be preserved. */
+  providerData?: Record<string, unknown>
 }
 
 export interface AIProvider {
