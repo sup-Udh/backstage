@@ -1,4 +1,4 @@
-import type { CapabilityId } from '../../src/shared/agents'
+import type { CapabilityId } from '../src/shared/agents'
 
 /**
  * Which capability each tool requires.

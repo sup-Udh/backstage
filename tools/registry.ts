@@ -1,5 +1,5 @@
 import type { AgentTool } from './types'
-import type { CapabilityId } from '../../src/shared/agents'
+import type { CapabilityId } from '../src/shared/agents'
 import { capabilityForTool, mayUseTool } from './toolCapabilities'
 import { reconcile } from './toolNames'
 import { filesystemTools } from './filesystem'

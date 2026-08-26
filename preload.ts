@@ -9,7 +9,7 @@ import type {
   RuntimeEvent,
   SessionLine,
   TerminalSession
-} from '../src/shared/providerApi'
+} from './src/shared/providerApi'
 
 /**
  * Subscribe to a push channel, handing the renderer only the payload — never

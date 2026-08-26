@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import type { ProviderModel } from '../../../src/shared/providerApi'
+import type { ProviderModel } from '../../src/shared/providerApi'
 import type {
   AIProvider,
   GenerateTurnRequest,

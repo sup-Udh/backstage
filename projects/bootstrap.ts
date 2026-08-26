@@ -3,7 +3,7 @@ import type {
   Project,
   ProjectBootstrap,
   ProjectSnapshot
-} from '../../src/shared/projects'
+} from '../src/shared/projects'
 import { listAgents, listAllAgents, persistAgents } from '../agents/agentStore'
 import { makeId } from '../agents/persist'
 import { getWorkspaceRoot } from '../workspace/WorkspaceManager'

@@ -11,7 +11,7 @@ export default defineConfig({
         // runtime rather than bundled into the main chunk.
         external: ['@lydell/node-pty', 'chokidar'],
         input: {
-          index: resolve(__dirname, 'electron/main.ts')
+          index: resolve(__dirname, 'main.ts')
         }
       }
     }
@@ -21,7 +21,7 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'electron/preload.ts')
+          index: resolve(__dirname, 'preload.ts')
         }
       }
     }

@@ -7,8 +7,8 @@ import type {
   ProjectDraft,
   ProjectPatch,
   ProjectSnapshot
-} from '../../src/shared/projects'
-import type { AgentTask } from '../../src/shared/agents'
+} from '../src/shared/projects'
+import type { AgentTask } from '../src/shared/agents'
 import {
   deleteCase,
   getCase,

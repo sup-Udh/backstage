@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { Project, ProjectPatch } from '../../src/shared/projects'
+import type { Project, ProjectPatch } from '../src/shared/projects'
 import { makeId, readJson, writeJson } from '../agents/persist'
 import { setWorkspace } from '../workspace/WorkspaceManager'
 import { nameFromPath, normaliseProject, resolveActiveId } from './projectRules'

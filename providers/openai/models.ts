@@ -1,4 +1,4 @@
-import type { ProviderModel } from '../../../src/shared/providerApi'
+import type { ProviderModel } from '../../src/shared/providerApi'
 
 /**
  * The model catalogue.

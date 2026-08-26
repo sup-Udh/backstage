@@ -1,4 +1,4 @@
-import type { Case } from '../../src/shared/projects'
+import type { Case } from '../src/shared/projects'
 import { makeId, readJson, writeJson } from '../agents/persist'
 import { getActiveProjectId } from '../projects/projectStore'
 

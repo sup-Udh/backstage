@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { WorkspaceInfo } from '../../src/shared/providerApi'
+import type { WorkspaceInfo } from '../src/shared/providerApi'
 import {
   getWorkspace,
   pickWorkspace,

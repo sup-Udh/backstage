@@ -1,7 +1,7 @@
 import type {
   ProviderErrorKind,
   ProviderModel
-} from '../../src/shared/providerApi'
+} from '../src/shared/providerApi'
 
 /**
  * What every AI provider must offer.

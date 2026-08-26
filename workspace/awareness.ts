@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import type { AwarenessSnapshot } from '../../src/shared/agents'
+import type { AwarenessSnapshot } from '../src/shared/agents'
 import { getWorkspace, getWorkspaceRoot } from './WorkspaceManager'
 import { agentRegistry } from '../agents/AgentRegistry'
 import { getAgent, listAgents } from '../agents/agentStore'

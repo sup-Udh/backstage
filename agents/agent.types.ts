@@ -27,9 +27,9 @@ export type {
   Trigger,
   TriggerActionType,
   TriggerEventType
-} from '../../src/shared/agents'
+} from '../src/shared/agents'
 
-export { BUSY_STATUSES } from '../../src/shared/agents'
+export { BUSY_STATUSES } from '../src/shared/agents'
 
 /**
  * How a task got here.
@@ -67,5 +67,5 @@ export interface TaskRequest {
    * team's final answer instead of leaving the user to work out which of five
    * replies it was.
    */
-  part?: import('../../src/shared/agents').MessagePart
+  part?: import('../src/shared/agents').MessagePart
 }

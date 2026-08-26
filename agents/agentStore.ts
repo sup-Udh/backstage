@@ -5,7 +5,7 @@ import type { AgentConfig, ExecutionProfile } from './agent.types'
 import {
   DEFAULT_CAPABILITIES,
   normaliseCapabilities
-} from '../../src/shared/capabilities'
+} from '../src/shared/capabilities'
 import {
   canConnect,
   connectionsOf as graphConnectionsOf,
@@ -15,7 +15,7 @@ import {
   type LinkResult
 } from './relationships'
 import { getActiveProjectId } from '../projects/projectStore'
-import type { RosterEntry } from '../../src/shared/projects'
+import type { RosterEntry } from '../src/shared/projects'
 import { roleProfile } from './roleProfiles'
 import { once } from './migrations'
 

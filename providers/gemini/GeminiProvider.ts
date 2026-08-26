@@ -1,5 +1,5 @@
 import { GoogleGenAI, type Content, type Part } from '@google/genai'
-import type { ProviderModel } from '../../../src/shared/providerApi'
+import type { ProviderModel } from '../../src/shared/providerApi'
 import type {
   AIProvider,
   GenerateTurnRequest,

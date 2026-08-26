@@ -1,5 +1,5 @@
 import type { AgentConfig, CapabilityId } from './agent.types'
-import { CAPABILITIES } from '../../src/shared/capabilities'
+import { CAPABILITIES } from '../src/shared/capabilities'
 
 /**
  * What each withheld capability stops the agent doing, in its own words.

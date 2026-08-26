@@ -1,5 +1,5 @@
 import { basename, resolve } from 'node:path'
-import type { Project } from '../../src/shared/projects'
+import type { Project } from '../src/shared/projects'
 
 /**
  * The rules governing project records.

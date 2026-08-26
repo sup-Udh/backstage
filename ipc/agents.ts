@@ -12,8 +12,8 @@ import type {
   RunTaskAck,
   RunTaskParams,
   Trigger
-} from '../../src/shared/providerApi'
-import { CAPABILITIES } from '../../src/shared/capabilities'
+} from '../src/shared/providerApi'
+import { CAPABILITIES } from '../src/shared/capabilities'
 import {
   connectAgents,
   deleteAgent,

@@ -4,7 +4,7 @@ import type {
   ProviderDescriptor,
   ProviderModel,
   ProviderStatus
-} from '../../src/shared/providerApi'
+} from '../src/shared/providerApi'
 import {
   deleteApiKey,
   hasApiKey,
