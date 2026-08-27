@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useBackstage } from '../../stores/backstageStore'
+import { useAuth } from '../../stores/authStore'
 import { useProject } from '../../stores/projectStore'
 import { getTheme } from '../../themes'
 import { PixelMark } from '../../components/Header/PixelMark'
@@ -43,7 +44,7 @@ export function EnteringWorkspace() {
   const showProjects = useBackstage((s) => s.showProjects)
   const showSetup = useBackstage((s) => s.showSetup)
   const showOnboarding = useBackstage((s) => s.showOnboarding)
-  const exitToLanding = useBackstage((s) => s.exitToLanding)
+  const signOut = useAuth((s) => s.signOut)
 
   const bootstrap = useProject((s) => s.bootstrap)
   const adoptLegacy = useProject((s) => s.adoptLegacy)
@@ -253,12 +254,21 @@ export function EnteringWorkspace() {
         {failed && (
           <div className="mt-6 w-full border-2 border-rust bg-paper px-3 py-2">
             <p className="font-ui text-[13px] leading-snug text-ink">{failed}</p>
+            {/*
+              Signing out, rather than "Back".
+              
+              There is nowhere back to. This screen only renders for a signed
+              in user, and Home now bounces one straight here again — so a
+              Back button would have walked the user in a circle through the
+              very initialisation that had just failed. Ending the session is
+              the one exit that is always available and always works.
+            */}
             <button
               type="button"
-              onClick={exitToLanding}
-              className="mt-2 border-2 border-ink bg-cream px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-brand-pale"
+              onClick={() => void signOut()}
+              className="mt-2 border-2 border-ink bg-cream px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-brand-pale focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
             >
-              Back
+              Log out
             </button>
           </div>
         )}

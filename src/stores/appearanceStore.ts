@@ -42,7 +42,9 @@ const KEY = 'backstage.appearance'
 const QUERY = '(prefers-color-scheme: dark)'
 
 function systemAppearance(): Appearance {
-  return window.matchMedia?.(QUERY).matches ? 'dark' : 'light'
+  // Both `?.`s matter: a host with no `matchMedia` at all, and the optional
+  // call returning undefined rather than a MediaQueryList.
+  return window.matchMedia?.(QUERY)?.matches ? 'dark' : 'light'
 }
 
 function readMode(): AppearanceMode {

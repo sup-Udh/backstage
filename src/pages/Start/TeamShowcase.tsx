@@ -64,15 +64,15 @@ export function TeamShowcase({ theme }: Props) {
             >
               <span
                 aria-hidden
-                className="relative grid h-[54px] w-[46px] shrink-0 place-items-end justify-center overflow-hidden border-2 border-rule bg-brand-pale"
+                className="relative grid h-[64px] w-[48px] shrink-0 place-items-center border-2 border-rule bg-brand-pale"
               >
                 {/* A floorline, so the sprite stands on something. */}
-                <span className="absolute inset-x-0 bottom-0 h-2.5 bg-cream-2" />
+                <span className="absolute inset-x-0 bottom-0 h-2 bg-cream-2" />
                 <CharacterSprite
                   appearance={character.appearance}
                   state={POSES[i % POSES.length]}
-                  scale={3}
-                  className="relative -mb-1"
+                  scale={2}
+                  className="relative"
                 />
               </span>
 

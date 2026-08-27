@@ -50,7 +50,7 @@ export function QuickStart() {
       aria-labelledby="start-heading"
       className="border-y-[3px] border-ink bg-cream-2 px-6 py-14"
     >
-      <div className="mx-auto grid max-w-[1240px] items-start gap-8 lg:grid-cols-[1.5fr_1fr] lg:gap-12">
+      <div className="mx-auto grid max-w-[1240px] items-start gap-8 min-[960px]:grid-cols-[1.5fr_1fr] min-[960px]:gap-10 xl:gap-12">
         {/* ---------------------------------------------------- action -- */}
         <div className="border-[3px] border-ink bg-paper p-6 shadow-[6px_6px_0_0_var(--color-shadow)] sm:p-8">
           <p className="font-pixel text-[11px] font-bold uppercase tracking-[0.12em] text-brand-deep">
@@ -68,9 +68,23 @@ export function QuickStart() {
             in it.
           </p>
 
-          <div className="mt-7 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            <PixelButton onClick={enterApp}>+ Create your first project</PixelButton>
-            <PixelButton variant="ghost" onClick={enterApp}>
+          {/*
+            `flex-wrap` with non-wrapping labels, rather than two equal columns.
+            Sharing the row evenly is what broke these: "Create your first
+            project" is long, and at the width half a card gives it, it folded
+            onto two lines and the primary action became a paragraph with a
+            border. Each button now takes the width its label needs and the
+            second one drops below when there is not room for both.
+          */}
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <PixelButton className="whitespace-nowrap" onClick={enterApp}>
+              + Create your first project
+            </PixelButton>
+            <PixelButton
+              variant="ghost"
+              className="whitespace-nowrap"
+              onClick={enterApp}
+            >
               Open existing project
             </PixelButton>
           </div>

@@ -41,18 +41,10 @@ function suggestLead(themeId: string, cast: string[]): string | null {
 }
 
 export function ProjectSetup() {
-  const exitToLanding = useBackstage((s) => s.exitToLanding)
   const showProjects = useBackstage((s) => s.showProjects)
   const openProject = useBackstage((s) => s.openProject)
   const create = useProject((s) => s.create)
   const refreshTeam = useTeam((s) => s.refresh)
-
-  /*
-   * Where cancelling goes. Back to the list if there is one to go back to,
-   * and out to the landing page only when this is the first project — leaving
-   * by the same door you came in by.
-   */
-  const projects = useProject((s) => s.projects)
 
   /*
    * A folder the app already knows about, from an install that predates
@@ -148,9 +140,21 @@ export function ProjectSetup() {
     setStep((s) => Math.min(STEPS.length - 1, s + 1))
   }
 
+  /*
+   * Cancelling on the first step leaves the wizard for the project list —
+   * even when that list is empty, where it is a header, a sign-out and one
+   * "New project" card.
+   *
+   * It used to leave for Home instead when there were no projects, which
+   * became a loop the moment Home started redirecting signed-in users: the
+   * guard would send them back through initialisation, initialisation would
+   * find no projects, and it would land them on the wizard they had just
+   * cancelled. An empty list is a slightly bare screen; the alternative was a
+   * button that undid itself.
+   */
   const back = () => {
     setError(null)
-    if (step === 0) return projects.length > 0 ? showProjects() : exitToLanding()
+    if (step === 0) return showProjects()
     setStep((s) => s - 1)
   }
 

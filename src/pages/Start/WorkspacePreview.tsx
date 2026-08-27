@@ -98,7 +98,7 @@ export function WorkspacePreview({ theme, engine, switching = false }: Props) {
     <div className="border-[3px] border-ink bg-slate shadow-[6px_6px_0_0_var(--color-brand-shadow)]">
       <div
         ref={wrapRef}
-        className="relative h-[240px] overflow-hidden sm:h-[300px] lg:h-[340px]"
+        className="relative h-[240px] overflow-hidden sm:h-[300px] min-[960px]:h-[320px] xl:h-[340px]"
       >
         <canvas
           ref={canvasRef}

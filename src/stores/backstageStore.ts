@@ -295,9 +295,9 @@ interface BackstageState {
    * Leave the workspace for Home.
    *
    * Only reachable while signed out — the guard sends an authenticated user
-   * straight back to their projects — so it is the login page's Back button
-   * and the walk-in screen's failure exit, and nothing else. Inside the app,
-   * the way out of a project is the project list.
+   * straight back to their projects — so in practice it is the login page's
+   * Back button and nothing else. Inside the app, the way out of a project is
+   * the project list, and the way out of the account is signing out.
    */
   exitToLanding: () => void
   setPage: (page: PageId) => void

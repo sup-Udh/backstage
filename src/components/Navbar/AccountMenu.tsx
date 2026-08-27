@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../stores/authStore'
-import { useBackstage } from '../../stores/backstageStore'
+import { useBackstage, type AccountSection } from '../../stores/backstageStore'
 import { Avatar } from '../Auth/Avatar'
 
 /**
@@ -19,7 +19,7 @@ import { Avatar } from '../Auth/Avatar'
 export function AccountMenu() {
   const user = useAuth((s) => s.user)
   const signOut = useAuth((s) => s.signOut)
-  const setPage = useBackstage((s) => s.setPage)
+  const openAccount = useBackstage((s) => s.openAccount)
   const page = useBackstage((s) => s.page)
 
   const [open, setOpen] = useState(false)
@@ -55,9 +55,19 @@ export function AccountMenu() {
     }
   }, [open])
 
-  const go = (target: 'account') => {
+  /*
+   * Every item here opens the same Settings page, at a different section.
+   *
+   * Deliberately not four pages, and deliberately not four copies of the
+   * settings logic: profile, providers and account deletion already live
+   * together behind one nav, and this menu is a set of shortcuts into it
+   * rather than a second place to configure anything. "API keys" is the one
+   * that earns its line — it is what a user comes looking for, and the
+   * providers panel is where the answer is.
+   */
+  const go = (section: AccountSection) => {
     setOpen(false)
-    setPage(target)
+    openAccount(section)
   }
 
   return (
@@ -108,14 +118,23 @@ export function AccountMenu() {
             </div>
           </div>
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => go('account')}
-            className="block w-full px-3 py-2.5 text-left font-ui text-[13px] font-semibold text-ink transition-colors hover:bg-brand-pale focus-visible:bg-brand-pale focus-visible:outline-none"
-          >
-            Settings
-          </button>
+          {(
+            [
+              { section: 'profile', label: 'Profile' },
+              { section: 'providers', label: 'API keys' },
+              { section: 'account', label: 'Settings' }
+            ] as { section: AccountSection; label: string }[]
+          ).map((item) => (
+            <button
+              key={item.section}
+              type="button"
+              role="menuitem"
+              onClick={() => go(item.section)}
+              className="block w-full px-3 py-2.5 text-left font-ui text-[13px] font-semibold text-ink transition-colors hover:bg-brand-pale focus-visible:bg-brand-pale focus-visible:outline-none"
+            >
+              {item.label}
+            </button>
+          ))}
 
           <div className="pixel-rule mx-3" />
 

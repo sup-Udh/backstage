@@ -2,6 +2,7 @@ import { useBackstage, type PageId } from '../../stores/backstageStore'
 import { useProject, useProjectTheme } from '../../stores/projectStore'
 import { PixelMark } from '../Header/PixelMark'
 import { AccountMenu } from './AccountMenu'
+import { AppearanceToggle } from '../Appearance/AppearanceToggle'
 
 /**
  * The pages inside a project.
@@ -27,17 +28,24 @@ const PAGES: { id: PageId; label: string }[] = [
 export function Navbar() {
   const page = useBackstage((s) => s.page)
   const setPage = useBackstage((s) => s.setPage)
-  const exitToLanding = useBackstage((s) => s.exitToLanding)
+  const showProjects = useBackstage((s) => s.showProjects)
   const project = useProject((s) => s.project)
   const theme = useProjectTheme()
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b-[3px] border-ink bg-cream px-5">
       <div className="flex items-center gap-8">
+        {/*
+          The wordmark goes to the project list, not to Home. Home is for
+          people without an account, and this bar only exists inside one — so
+          the only place "up" can mean is the list of everything you own. It
+          used to lead to Home, which for a signed-in user is now a screen the
+          guard immediately bounces them off.
+        */}
         <button
           type="button"
-          onClick={exitToLanding}
-          title="Back to the landing page"
+          onClick={showProjects}
+          title="Back to your projects"
           className="flex items-center gap-3"
         >
           <PixelMark />
@@ -107,7 +115,10 @@ export function Navbar() {
         letter U for an avatar. It now shows who is actually signed in — the
         Google name and picture — and holds the sign-out.
       */}
-      <AccountMenu />
+      <div className="flex items-center gap-2.5">
+        <AppearanceToggle />
+        <AccountMenu />
+      </div>
     </header>
   )
 }

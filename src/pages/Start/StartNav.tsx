@@ -51,14 +51,9 @@ export function StartNav({ mascot }: Props) {
           */}
           <span
             aria-hidden
-            className="ml-1 hidden h-[26px] items-end overflow-hidden border-2 border-rule bg-brand-pale px-1 sm:flex"
+            className="ml-1 hidden h-[34px] w-[26px] place-items-center border-2 border-rule bg-brand-pale sm:grid"
           >
-            <CharacterSprite
-              appearance={mascot.appearance}
-              state="idle"
-              scale={1}
-              className="translate-y-[3px]"
-            />
+            <CharacterSprite appearance={mascot.appearance} state="idle" scale={1} />
           </span>
         </a>
 

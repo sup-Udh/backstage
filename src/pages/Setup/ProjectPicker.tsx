@@ -6,6 +6,7 @@ import { getTheme } from '../../themes'
 import { ThemePreview } from '../../world/ThemePreview'
 import { PixelMark } from '../../components/Header/PixelMark'
 import { Avatar } from '../../components/Auth/Avatar'
+import { AppearanceToggle } from '../../components/Appearance/AppearanceToggle'
 import { useAuth } from '../../stores/authStore'
 import type { Project } from '../../shared/projects'
 
@@ -33,7 +34,6 @@ import type { Project } from '../../shared/projects'
 export function ProjectPicker() {
   const showSetup = useBackstage((s) => s.showSetup)
   const openProject = useBackstage((s) => s.openProject)
-  const exitToLanding = useBackstage((s) => s.exitToLanding)
 
   const projects = useProject((s) => s.projects)
   const open = useProject((s) => s.open)
@@ -128,6 +128,8 @@ export function ProjectPicker() {
           "who am I signed in as?" are the same question.
         */}
         <div className="flex items-center gap-2">
+          <AppearanceToggle />
+
           <span className="flex items-center gap-2 border-2 border-ink bg-paper px-2.5 py-1">
             <Avatar user={user} size={20} />
             <span className="max-w-[180px] truncate font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
@@ -141,14 +143,6 @@ export function ProjectPicker() {
             className="border-2 border-rule px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors hover:border-rust hover:text-rust focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
           >
             Log out
-          </button>
-
-          <button
-            type="button"
-            onClick={exitToLanding}
-            className="border-2 border-rule px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors hover:border-ink hover:text-ink focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
-          >
-            Back
           </button>
         </div>
       </header>

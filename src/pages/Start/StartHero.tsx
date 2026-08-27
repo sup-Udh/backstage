@@ -26,15 +26,19 @@ interface Props {
  * action that matters. Nothing on this screen is more prominent than
  * "New project", because on a start screen nothing is more important.
  *
- * Below `lg` the columns stack and the copy comes first, so a narrow Electron
- * window opens on the product rather than on the scenery.
+ * The split turns on at 960px rather than at Tailwind's `lg`, and that number
+ * is not arbitrary: the window's own minimum is 1000×700, and `lg` is 1024, so
+ * a user who had merely *not maximised* Backstage was getting the stacked
+ * layout at every size the application can actually be. Below 960 the columns
+ * stack and the copy comes first, so a narrow window opens on the product
+ * rather than on the scenery.
  */
 export function StartHero({ theme, engine, switching }: Props) {
   const enterApp = useBackstage((s) => s.enterApp)
 
   return (
     <section id="top" className="px-6 pb-14 pt-10 sm:pt-14">
-      <div className="mx-auto grid max-w-[1240px] items-start gap-8 lg:grid-cols-[1.5fr_1fr] lg:gap-12">
+      <div className="mx-auto grid max-w-[1240px] items-start gap-8 min-[960px]:grid-cols-[1.5fr_1fr] min-[960px]:items-center min-[960px]:gap-10 xl:gap-12">
         {/* ------------------------------------------------------ copy -- */}
         <div className="rise">
           <p className="inline-flex items-center gap-2 border-2 border-ink bg-paper px-2.5 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3">
@@ -63,10 +67,21 @@ export function StartHero({ theme, engine, switching }: Props) {
             job: it sends an authenticated user into initialisation and
             everybody else to Google, so neither this component nor the button
             it renders has to know which of those is happening.
+
+            They wrap as whole buttons rather than wrapping their labels: at
+            the width this column has in a 1000px window — the narrowest
+            Backstage opens at — a shared row folded "+ New project" onto two
+            lines, and a two-line primary action stops reading as a button.
           */}
-          <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            <PixelButton onClick={enterApp}>+ New project</PixelButton>
-            <PixelButton variant="ghost" onClick={enterApp}>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <PixelButton className="whitespace-nowrap" onClick={enterApp}>
+              + New project
+            </PixelButton>
+            <PixelButton
+              variant="ghost"
+              className="whitespace-nowrap"
+              onClick={enterApp}
+            >
               Open a project
             </PixelButton>
           </div>

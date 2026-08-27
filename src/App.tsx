@@ -15,8 +15,8 @@ import { AppShell } from './app/AppShell'
  * Six surfaces, in the order you meet them.
  *
  * The start screen, signing in, the walk in, choosing which project, creating
- * one, and the project itself. They share one visual language, so moving between them reads
- * as walking between rooms rather than between products.
+ * one, and the project itself. They share one visual language, so moving
+ * between them reads as walking between rooms rather than between products.
  *
  * The middle ones are view states rather than routes because there is nothing
  * to route to yet: until a project is open there is no workspace, no roster and

@@ -5,6 +5,7 @@ import { useWorldEngine } from '../../world/useWorldEngine'
 import { showcaseRuntime } from '../../agents/showcase'
 import { PixelMark } from '../../components/Header/PixelMark'
 import { GoogleButton } from '../../components/Auth/GoogleButton'
+import { AppearanceToggle } from '../../components/Appearance/AppearanceToggle'
 import { LoginWorld } from './LoginWorld'
 import { useRotatingWorld } from './useRotatingWorld'
 
@@ -75,13 +76,17 @@ export function Login() {
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={exitToLanding}
-          className="border-2 border-ink bg-paper px-2.5 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors hover:bg-brand-pale hover:text-ink focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
-        >
-          ← Back
-        </button>
+        <div className="flex items-center gap-2.5">
+          <AppearanceToggle />
+
+          <button
+            type="button"
+            onClick={exitToLanding}
+            className="border-2 border-ink bg-paper px-2.5 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors hover:bg-brand-pale hover:text-ink focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+          >
+            ← Back
+          </button>
+        </div>
       </header>
 
       {/*

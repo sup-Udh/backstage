@@ -26,6 +26,21 @@ interface Props {
  * the first attempt and it was wrong: rows jumping around every few seconds is
  * an arcade scoreboard, and requirement 9 asks for subtle. Fixed rows whose
  * labels change read as people getting on with things.
+ *
+ * ---------------------------------------------------------------------------
+ *
+ * A view is matched to a character by *position*, not by id, and that is worth
+ * a note because the obvious thing does not work. `AgentView.characterId` is
+ * the id of the agent occupying the body — `showcase-2`, or a real agent's
+ * UUID — and never the `CharacterDef.id` its name suggests. Looking a
+ * character up by `c.id` therefore finds nothing, silently, and every row
+ * renders the fallback: a full office reported as three idle people, which is
+ * exactly the interface lying about the one thing it exists to show.
+ *
+ * Position is exact rather than a guess. The engine builds its views from the
+ * cast in cast order, and the cast here is the theme's own list, so `views[i]`
+ * is `theme.characters[i]`. The `?? ` fallbacks below are for the first frame,
+ * before the engine has built any views at all.
  */
 
 /** How many of the cast the relay follows. Enough to show a handover. */
@@ -57,15 +72,16 @@ export function AgentRelay({ theme, engine }: Props) {
         decoration that happens to be true.
       */}
       <ul className="divide-y-2 divide-rule">
-        {cast.map((character) => {
-          const agent = agents.find((a) => a.characterId === character.id)
+        {cast.map((character, i) => {
+          const agent = agents[i]
           const status = agent?.status ?? 'idle'
           return (
             <li key={character.id} className="flex items-center gap-3 px-3 py-2">
               <span
                 aria-hidden
-                className="grid h-8 w-8 shrink-0 place-items-end justify-center overflow-hidden border-2 border-rule bg-brand-pale"
+                className="relative grid h-[50px] w-[36px] shrink-0 place-items-center border-2 border-rule bg-brand-pale"
               >
+                <span className="absolute inset-x-0 bottom-0 h-2 bg-cream-2" />
                 <CharacterSprite
                   appearance={character.appearance}
                   /*
@@ -75,7 +91,7 @@ export function AgentRelay({ theme, engine }: Props) {
                    */
                   state={characterStateForAgent(status)}
                   scale={2}
-                  className="translate-y-[6px]"
+                  className="relative"
                 />
               </span>
 

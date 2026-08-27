@@ -1,6 +1,5 @@
 import type { Theme } from '../../themes/types'
 import type { Op } from '../../world/pixel/ops'
-import { disc } from '../../world/pixel/shapes'
 import { PixelArt } from '../../world/PixelArt'
 
 interface Props {
@@ -57,15 +56,28 @@ const terminalIcon: Op[] = [
   [7, 9, 5, 1, 'brandDeep']
 ]
 
-/** Three sockets on one bus: several providers, one team. */
+/**
+ * Three sources feeding one team.
+ *
+ * Drawn as three keys on a bus rather than as three overlapping discs, which
+ * was the first attempt and read as a desk lamp at 32 pixels across. Anything
+ * circular loses its shape at this size; squares and one-pixel rules survive
+ * it, which is the whole reason the rest of the product is built out of them.
+ */
 const providerIcon: Op[] = [
-  ...disc(4, 4, 2, 'brand'),
-  ...disc(12, 4, 2, 'brandDeep'),
-  ...disc(8, 12, 2, 'sage'),
-  [4, 5, 1, 4, 'ink'],
-  [12, 5, 1, 4, 'ink'],
-  [4, 8, 9, 1, 'ink'],
-  [8, 9, 1, 2, 'ink']
+  [1, 1, 4, 4, 'ink'],
+  [2, 2, 2, 2, 'brand'],
+  [6, 1, 4, 4, 'ink'],
+  [7, 2, 2, 2, 'sage'],
+  [11, 1, 4, 4, 'ink'],
+  [12, 2, 2, 2, 'brandDeep'],
+  [3, 5, 1, 3, 'ink'],
+  [8, 5, 1, 3, 'ink'],
+  [13, 5, 1, 3, 'ink'],
+  [3, 8, 11, 1, 'ink'],
+  [8, 9, 1, 2, 'ink'],
+  [5, 11, 7, 4, 'ink'],
+  [6, 12, 5, 2, 'brandLite']
 ]
 
 const CAPABILITIES = [

@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { useProviders } from '../../providers/useProviders'
+import { useBackstage, type AccountSection } from '../../stores/backstageStore'
 import { useTeam } from '../../stores/teamStore'
 import { ClaudeCard } from '../../claude/ClaudeCard'
 import { AccountPanel } from './AccountPanel'
@@ -32,9 +32,15 @@ import { RosterSection } from './RosterSection'
  * the open project, through the signed-in account.
  */
 
-type SectionId = 'profile' | 'providers' | 'agents' | 'projects' | 'account'
-
-const SECTIONS: { id: SectionId; label: string }[] = [
+/*
+ * The section list, and the section itself, are now separate concerns.
+ *
+ * Which section is open lives in the application store rather than in this
+ * component, because the account menu opens Settings *at* a section — "API
+ * keys" has to land on the providers panel. The labels stay here, beside the
+ * panels they name.
+ */
+const SECTIONS: { id: AccountSection; label: string }[] = [
   { id: 'profile', label: 'Profile' },
   { id: 'providers', label: 'AI Providers' },
   { id: 'agents', label: 'Agents' },
@@ -43,7 +49,8 @@ const SECTIONS: { id: SectionId; label: string }[] = [
 ]
 
 export function Account() {
-  const [section, setSection] = useState<SectionId>('profile')
+  const section = useBackstage((s) => s.accountSection)
+  const setSection = useBackstage((s) => s.setAccountSection)
 
   const {
     descriptors,
