@@ -203,7 +203,7 @@ export function ProjectSetup() {
           <span className="font-pixel text-xl font-bold uppercase tracking-[-0.01em] text-ink">
             Backstage
           </span>
-          <span className="ml-2 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.08em] text-ink">
+          <span className="ml-2 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.08em] text-on-brand">
             New project
           </span>
         </div>
@@ -241,7 +241,7 @@ export function ProjectSetup() {
                 <button
                   type="button"
                   onClick={() => void chooseFolder()}
-                  className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-brand-lite"
+                  className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-brand-lite"
                 >
                   {workspacePath ? 'Choose a different folder' : 'Choose folder'}
                 </button>
@@ -288,7 +288,7 @@ export function ProjectSetup() {
                         'group border-[3px] text-left transition-transform duration-75',
                         active
                           ? 'border-ink bg-paper shadow-[4px_4px_0_0_var(--color-brand-shadow)]'
-                          : 'border-rule bg-paper/70 shadow-[4px_4px_0_0_var(--color-ink)] hover:-translate-x-px hover:-translate-y-px hover:border-ink hover:bg-paper'
+                          : 'border-rule bg-paper/70 shadow-[4px_4px_0_0_var(--color-shadow)] hover:-translate-x-px hover:-translate-y-px hover:border-ink hover:bg-paper'
                       ].join(' ')}
                     >
                       <div className="overflow-hidden border-b-[3px] border-inherit">
@@ -393,7 +393,7 @@ export function ProjectSetup() {
             type="button"
             onClick={() => (last ? void finish() : next())}
             disabled={creating}
-            className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:opacity-50"
+            className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:opacity-50"
           >
             {creating ? 'Creating…' : last ? 'Create project' : 'Continue'}
           </button>

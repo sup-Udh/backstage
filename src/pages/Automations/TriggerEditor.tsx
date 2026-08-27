@@ -118,7 +118,7 @@ export function TriggerEditor({
         e.preventDefault()
         if (problems.length === 0) void onSave(draft)
       }}
-      className="max-w-[680px] border-[3px] border-ink bg-paper p-5 shadow-[4px_4px_0_0_var(--color-ink)]"
+      className="max-w-[680px] border-[3px] border-ink bg-paper p-5 shadow-[4px_4px_0_0_var(--color-shadow)]"
     >
       <h2 className="font-pixel text-lg font-bold uppercase tracking-[0.04em] text-ink">
         {trigger?.id ? 'Edit automation' : 'Create trigger'}
@@ -331,7 +331,7 @@ export function TriggerEditor({
           type="submit"
           disabled={busy !== null || problems.length > 0}
           title={problems.join('\n') || undefined}
-          className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-40"
+          className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-40"
         >
           {trigger?.id ? 'Save automation' : 'Enable trigger'}
         </button>

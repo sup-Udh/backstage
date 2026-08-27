@@ -104,7 +104,7 @@ export function Login() {
         */}
         <section
           aria-hidden
-          className="relative hidden min-h-[320px] flex-1 border-[4px] border-ink bg-ink shadow-[8px_8px_0_0_var(--color-brand-shadow)] lg:block"
+          className="relative hidden min-h-[320px] flex-1 border-[4px] border-ink bg-slate shadow-[8px_8px_0_0_var(--color-brand-shadow)] lg:block"
         >
           <LoginWorld engine={engine} />
 
@@ -115,15 +115,15 @@ export function Login() {
           */}
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 z-20 bg-ink"
+            className="pointer-events-none absolute inset-0 z-20 bg-slate"
             style={{
               opacity: switching ? 1 : 0,
               transition: `opacity ${switching ? 200 : 260}ms steps(5, end)`
             }}
           />
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t-[3px] border-ink-3 bg-ink px-3 py-2">
-            <span className="border-2 border-brand-shadow bg-brand px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t-[3px] border-slate-rule bg-slate px-3 py-2">
+            <span className="border-2 border-brand-shadow bg-brand px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-on-brand">
               {theme.name}
             </span>
             <span className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-dim">
@@ -174,7 +174,7 @@ export function Login() {
                       <button
                         type="button"
                         onClick={() => void cancelSignIn()}
-                        className="mt-2 font-ui text-[12px] font-semibold text-ink underline decoration-brand-deep decoration-2 underline-offset-2 hover:text-brand-shadow focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+                        className="mt-2 font-ui text-[12px] font-semibold text-ink underline decoration-brand-deep decoration-2 underline-offset-2 hover:text-brand-deep focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
                       >
                         Cancel
                       </button>
@@ -204,7 +204,7 @@ export function Login() {
                           dismissError()
                           void signInWithGoogle()
                         }}
-                        className="mt-2.5 border-2 border-ink bg-brand px-3 py-1 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:bg-brand-lite active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-ink)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+                        className="mt-2.5 border-2 border-ink bg-brand px-3 py-1 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:bg-brand-lite active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-shadow)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
                       >
                         Try again
                       </button>

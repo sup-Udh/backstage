@@ -112,7 +112,7 @@ export function ProfileSection() {
             type="button"
             onClick={() => void save()}
             disabled={!dirty || saving || !draft.trim()}
-            className="border-2 border-ink bg-brand px-3 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:bg-brand-lite active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+            className="border-2 border-ink bg-brand px-3 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:bg-brand-lite active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-shadow)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
           >
             {saving ? 'Saving…' : 'Save name'}
           </button>

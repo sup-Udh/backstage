@@ -40,12 +40,12 @@ export function AgentStatus({ agents, className = '' }: Props) {
         <span className="font-mono text-lg font-bold leading-none text-brand">
           {agents.length}
         </span>
-        <span className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-cream-2">
+        <span className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-on-slate-2">
           Agents
         </span>
       </span>
 
-      <span aria-hidden className="h-4 w-px bg-ink-3" />
+      <span aria-hidden className="h-4 w-px bg-slate-rule" />
 
       <ul className="flex items-center gap-4">
         {ROWS.map((row) => {
@@ -59,8 +59,8 @@ export function AgentStatus({ agents, className = '' }: Props) {
               <span aria-hidden className={on ? 'text-brand' : 'text-dim'}>
                 {STATUS_GLYPH[row.status]}
               </span>
-              <span className={on ? 'text-cream' : 'text-dim'}>{n}</span>
-              <span className={on ? 'text-cream-2' : 'text-dim'}>
+              <span className={on ? 'text-on-slate' : 'text-dim'}>{n}</span>
+              <span className={on ? 'text-on-slate-2' : 'text-dim'}>
                 {row.label}
               </span>
             </li>

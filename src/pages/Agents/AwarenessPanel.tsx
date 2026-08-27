@@ -42,7 +42,7 @@ export function AwarenessPanel() {
   const messages = collaboration.slice(-6)
 
   return (
-    <div className="border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-ink)]">
+    <div className="border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-shadow)]">
       <header className="flex items-center justify-between gap-3 border-b-[3px] border-ink px-4 py-2">
         <h3 className="font-pixel text-sm font-bold uppercase tracking-[0.06em] text-ink">
           Awareness

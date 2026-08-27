@@ -404,7 +404,7 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
                 'min-w-0 flex-1 px-1 py-1.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors',
                 i < TABS.length - 1 ? 'border-r-2 border-rule' : '',
                 on
-                  ? 'bg-brand text-ink'
+                  ? 'bg-brand text-on-brand'
                   : 'text-ink-3 hover:bg-brand-pale hover:text-ink'
               ].join(' ')}
             >
@@ -508,7 +508,7 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
             <button
               type="button"
               onClick={() => setPage('account')}
-              className="mt-1.5 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px"
+              className="mt-1.5 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-brand shadow-[2px_2px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-y-px"
             >
               {!anyConnected ? 'Open Connections' : 'Open a folder'}
             </button>

@@ -131,7 +131,7 @@ export function TeamHeader({ workers, onSpawn }: Props) {
           type="button"
           onClick={onSpawn}
           title="Spawn a new agent"
-          className="shrink-0 border-2 border-ink bg-brand px-2 py-1 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-brand-lite"
+          className="shrink-0 border-2 border-ink bg-brand px-2 py-1 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-on-brand shadow-[2px_2px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:bg-brand-lite"
         >
           + Spawn
         </button>

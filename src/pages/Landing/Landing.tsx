@@ -89,7 +89,7 @@ export function Landing() {
         </section>
       </main>
 
-      <footer className="border-t-[3px] border-ink bg-ink px-6 py-8">
+      <footer className="border-t-[3px] border-ink bg-slate px-6 py-8">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-4">
           <p className="font-pixel text-xl font-bold uppercase tracking-[-0.01em] text-brand">
             Backstage

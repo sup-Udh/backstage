@@ -91,7 +91,7 @@ export function Cases() {
           <button
             type="button"
             onClick={() => setPage('home')}
-            className="mt-4 border-2 border-ink bg-brand px-3 py-1.5 font-pixel text-xs font-semibold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px"
+            className="mt-4 border-2 border-ink bg-brand px-3 py-1.5 font-pixel text-xs font-semibold uppercase tracking-[0.06em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px"
           >
             Go to Home
           </button>
@@ -103,7 +103,7 @@ export function Cases() {
               <button
                 type="button"
                 onClick={() => setOpenId(c.id)}
-                className="w-full border-[3px] border-ink bg-paper p-4 text-left shadow-[4px_4px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:shadow-[5px_5px_0_0_var(--color-brand-shadow)]"
+                className="w-full border-[3px] border-ink bg-paper p-4 text-left shadow-[4px_4px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:shadow-[5px_5px_0_0_var(--color-brand-shadow)]"
               >
                 {/*
                   The project is named on every card, quietly. It is the same

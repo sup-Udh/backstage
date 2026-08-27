@@ -97,7 +97,7 @@ export function RosterSection() {
                       <td className="px-3 py-2 align-top font-ui text-[12px] text-ink-3">
                         {agent.role}
                         {isLead && (
-                          <span className="ml-1.5 border border-ink bg-brand px-1 py-px font-pixel text-[9px] font-bold uppercase tracking-[0.06em] text-ink">
+                          <span className="ml-1.5 border border-ink bg-brand px-1 py-px font-pixel text-[9px] font-bold uppercase tracking-[0.06em] text-on-brand">
                             Lead
                           </span>
                         )}
@@ -117,7 +117,7 @@ export function RosterSection() {
                             'inline-flex items-center gap-1 border-2 px-1.5 py-0.5',
                             'font-pixel text-[9px] font-bold uppercase tracking-[0.06em]',
                             agent.spawned
-                              ? 'border-ink bg-brand text-ink'
+                              ? 'border-ink bg-brand text-on-brand'
                               : 'border-rule bg-cream text-ink-3'
                           ].join(' ')}
                         >
@@ -135,7 +135,7 @@ export function RosterSection() {
             <button
               type="button"
               onClick={() => setPage('agents')}
-              className="font-ui text-[12px] font-semibold text-ink underline decoration-brand-deep decoration-2 underline-offset-2 hover:text-brand-shadow focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+              className="font-ui text-[12px] font-semibold text-ink underline decoration-brand-deep decoration-2 underline-offset-2 hover:text-brand-deep focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
             >
               Edit the team on the Agents page →
             </button>

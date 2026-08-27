@@ -48,7 +48,7 @@ export function ThemePanel() {
                 'group border-[3px] border-ink text-left transition-transform duration-75',
                 active
                   ? 'bg-paper shadow-[4px_4px_0_0_var(--color-brand-shadow)]'
-                  : 'bg-paper/70 shadow-[4px_4px_0_0_var(--color-ink)] enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-paper',
+                  : 'bg-paper/70 shadow-[4px_4px_0_0_var(--color-shadow)] enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-paper',
                 switching ? 'opacity-60' : ''
               ].join(' ')}
             >
@@ -66,7 +66,7 @@ export function ThemePanel() {
                   <span
                     className={`shrink-0 border-2 px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] ${
                       active
-                        ? 'border-ink bg-brand text-ink'
+                        ? 'border-ink bg-brand text-on-brand'
                         : 'border-rule text-ink-3 group-hover:border-ink group-hover:text-ink'
                     }`}
                   >

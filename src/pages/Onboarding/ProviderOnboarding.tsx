@@ -86,7 +86,7 @@ export function ProviderOnboarding() {
           <span className="font-pixel text-xl font-bold uppercase tracking-[-0.01em] text-ink">
             Backstage
           </span>
-          <span className="ml-2 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.08em] text-ink">
+          <span className="ml-2 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.08em] text-on-brand">
             Setup
           </span>
         </div>
@@ -103,7 +103,7 @@ export function ProviderOnboarding() {
 
       <main className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
         <div className="mx-auto max-w-[820px]">
-          <p className="font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-brand-shadow">
+          <p className="font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-brand-deep">
             Welcome to Backstage{user ? `, ${firstName(user.displayName)}` : ''}
           </p>
           <h1 className="mt-1 font-ui text-3xl font-extrabold uppercase leading-[1.05] tracking-[-0.03em] text-ink">
@@ -158,7 +158,7 @@ export function ProviderOnboarding() {
               type="button"
               onClick={() => void finish()}
               disabled={leaving}
-              className="border-[3px] border-ink bg-brand px-6 py-2.5 font-pixel text-base font-bold uppercase tracking-[0.04em] text-ink shadow-[4px_4px_0_0_var(--color-ink)] transition-transform duration-75 hover:bg-brand-lite active:translate-x-[3px] active:translate-y-[3px] active:shadow-[1px_1px_0_0_var(--color-ink)] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+              className="border-[3px] border-ink bg-brand px-6 py-2.5 font-pixel text-base font-bold uppercase tracking-[0.04em] text-on-brand shadow-[4px_4px_0_0_var(--color-shadow)] transition-transform duration-75 hover:bg-brand-lite active:translate-x-[3px] active:translate-y-[3px] active:shadow-[1px_1px_0_0_var(--color-shadow)] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
             >
               {leaving ? 'Opening…' : 'Continue'}
             </button>

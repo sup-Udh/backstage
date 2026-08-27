@@ -48,7 +48,7 @@ export function ThemesSection({ activeThemeId, switching, onSelectTheme }: Props
                   'disabled:cursor-default',
                   active
                     ? 'bg-paper shadow-[4px_4px_0_0_var(--color-brand-shadow)]'
-                    : 'bg-paper/70 shadow-[4px_4px_0_0_var(--color-ink)] hover:-translate-x-px hover:-translate-y-px hover:bg-paper'
+                    : 'bg-paper/70 shadow-[4px_4px_0_0_var(--color-shadow)] hover:-translate-x-px hover:-translate-y-px hover:bg-paper'
                 ].join(' ')}
               >
                 <div
@@ -74,7 +74,7 @@ export function ThemesSection({ activeThemeId, switching, onSelectTheme }: Props
                     <span
                       className={`shrink-0 border-2 px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] ${
                         active
-                          ? 'border-ink bg-brand text-ink'
+                          ? 'border-ink bg-brand text-on-brand'
                           : 'border-rule text-ink-3 group-hover:border-ink group-hover:text-ink'
                       }`}
                     >

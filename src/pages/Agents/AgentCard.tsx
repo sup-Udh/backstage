@@ -62,7 +62,7 @@ export function AgentCard({
 
   return (
     <li
-      className={`flex flex-col border-[3px] border-ink shadow-[4px_4px_0_0_var(--color-ink)] ${
+      className={`flex flex-col border-[3px] border-ink shadow-[4px_4px_0_0_var(--color-shadow)] ${
         agent.enabled ? 'bg-paper' : 'bg-paper/50'
       }`}
     >
@@ -75,7 +75,7 @@ export function AgentCard({
         {isLead && (
           <span
             title="Receives ALL AGENTS requests and delegates them"
-            className="absolute left-1.5 top-1.5 flex items-center gap-1 border-2 border-ink bg-brand px-1.5 py-0.5 font-pixel text-[9px] font-bold uppercase tracking-[0.08em] text-ink"
+            className="absolute left-1.5 top-1.5 flex items-center gap-1 border-2 border-ink bg-brand px-1.5 py-0.5 font-pixel text-[9px] font-bold uppercase tracking-[0.08em] text-on-brand"
           >
             <span aria-hidden>★</span> Lead
           </span>
@@ -171,7 +171,7 @@ export function AgentCard({
             <button
               type="button"
               onClick={onStop}
-              className="border-2 border-ink bg-rust px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-transform duration-75 hover:-translate-y-px"
+              className="border-2 border-ink bg-rust px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-slate transition-transform duration-75 hover:-translate-y-px"
             >
               Stop
             </button>
@@ -190,7 +190,7 @@ export function AgentCard({
               onClick={onSpawn}
               disabled={busy !== null || !agent.enabled || blocked}
               title={blocked ? validation?.problems.join('\n') : undefined}
-              className="border-2 border-ink bg-brand px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink transition-transform duration-75 enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-40"
+              className="border-2 border-ink bg-brand px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-brand transition-transform duration-75 enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-40"
             >
               Spawn
             </button>

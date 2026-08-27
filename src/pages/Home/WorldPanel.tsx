@@ -523,7 +523,7 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
 
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 z-30 bg-ink"
+          className="pointer-events-none absolute inset-0 z-30 bg-slate"
           style={{
             opacity: switching ? 1 : 0,
             transition: `opacity ${switching ? 200 : 260}ms steps(5, end)`
@@ -560,7 +560,7 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
             )
             return (
               <div
-                className="absolute z-30 -translate-x-1/2 -translate-y-full border-2 border-ink bg-cream shadow-[3px_3px_0_0_var(--color-ink)]"
+                className="absolute z-30 -translate-x-1/2 -translate-y-full border-2 border-ink bg-cream shadow-[3px_3px_0_0_var(--color-shadow)]"
                 style={{ left: linkMenu.left, top: linkMenu.top - 6 }}
               >
                 {/*
@@ -587,7 +587,7 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
                         void link(linkMenu.a, linkMenu.b, false).then(report)
                         setLinkMenu(null)
                       }}
-                      className="flex-1 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-rust transition-colors hover:bg-rust hover:text-cream"
+                      className="flex-1 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-rust transition-colors hover:bg-rust hover:text-on-slate"
                     >
                       Remove
                     </button>
@@ -615,7 +615,7 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
                 'border-2 px-2 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.08em]',
                 notice?.tone === 'error'
                   ? 'border-rust bg-paper text-rust'
-                  : 'border-ink bg-brand text-ink'
+                  : 'border-ink bg-brand text-on-brand'
               ].join(' ')}
             >
               {notice?.text ?? 'Connecting… drop on a teammate'}

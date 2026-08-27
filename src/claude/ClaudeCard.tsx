@@ -24,7 +24,7 @@ export function ClaudeCard() {
     copy.tone === 'ok'
       ? 'text-sage-dark'
       : copy.tone === 'warn'
-        ? 'text-brand-shadow'
+        ? 'text-brand-deep'
         : 'text-rust'
 
   return (
@@ -107,7 +107,7 @@ export function ClaudeCard() {
             type="button"
             onClick={() => void recheck()}
             disabled={checking}
-            className="border-2 border-ink bg-paper px-3 py-1 font-pixel text-[10px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:bg-brand-pale active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-ink)] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+            className="border-2 border-ink bg-paper px-3 py-1 font-pixel text-[10px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:bg-brand-pale active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-shadow)] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
           >
             {checking ? 'Testing…' : 'Test connection'}
           </button>

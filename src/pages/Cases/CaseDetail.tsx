@@ -180,7 +180,7 @@ function TaskNode({
   return (
     <li>
       <article
-        className="border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-ink)]"
+        className="border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-shadow)]"
         /* Indent by delegation depth, so the hand-offs are visible as a tree. */
         style={{ marginLeft: depth * 20 }}
       >

@@ -42,9 +42,9 @@ export const WorldLabel = forwardRef<HTMLDivElement, Props>(function WorldLabel(
    */
   const surface = name
     ? tone === 'selected'
-      ? 'bg-brand text-ink'
+      ? 'bg-brand text-on-brand'
       : 'bg-paper text-ink'
-    : 'bg-ink'
+    : 'bg-slate'
 
   const label =
     name

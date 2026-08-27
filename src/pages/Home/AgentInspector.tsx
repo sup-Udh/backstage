@@ -96,9 +96,9 @@ export function AgentInspector({
   }
 
   return (
-    <aside className="absolute bottom-4 left-4 z-20 w-[280px] border-[3px] border-brand bg-ink shadow-[4px_4px_0_0_rgba(27,27,42,0.5)]">
-      <header className="flex items-start gap-3 border-b-2 border-ink-3 p-3">
-        <div className="shrink-0 border-2 border-ink-3 bg-ink-2 p-1">
+    <aside className="absolute bottom-4 left-4 z-20 w-[280px] border-[3px] border-brand bg-slate shadow-[4px_4px_0_0_rgba(27,27,42,0.5)]">
+      <header className="flex items-start gap-3 border-b-2 border-slate-rule p-3">
+        <div className="shrink-0 border-2 border-slate-rule bg-slate-2 p-1">
           <CharacterSprite
             appearance={character.appearance}
             state={worker.status === 'idle' ? 'idle' : 'working'}
@@ -120,7 +120,7 @@ export function AgentInspector({
                   setRenaming(false)
                 }
               }}
-              className="w-full border-2 border-brand bg-ink-2 px-1 py-0.5 font-pixel text-sm font-bold uppercase tracking-[0.06em] text-brand outline-none"
+              className="w-full border-2 border-brand bg-slate-2 px-1 py-0.5 font-pixel text-sm font-bold uppercase tracking-[0.06em] text-brand outline-none"
             />
           ) : (
             <p className="flex items-baseline gap-1.5">
@@ -145,7 +145,7 @@ export function AgentInspector({
             </p>
           )}
 
-          <p className="mt-1.5 font-ui text-xs leading-none text-cream-2">
+          <p className="mt-1.5 font-ui text-xs leading-none text-on-slate-2">
             {worker.role}
           </p>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-dim">
@@ -157,7 +157,7 @@ export function AgentInspector({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="shrink-0 font-mono text-xs text-dim transition-colors hover:text-cream"
+          className="shrink-0 font-mono text-xs text-dim transition-colors hover:text-on-slate"
         >
           ✕
         </button>
@@ -174,7 +174,7 @@ export function AgentInspector({
               {STATUS_LABEL[worker.status]}
             </span>
           </p>
-          <p className="mt-1 font-ui text-[12px] leading-snug text-cream">
+          <p className="mt-1 font-ui text-[12px] leading-snug text-on-slate">
             {worker.action ?? worker.task ?? 'Nothing right now.'}
           </p>
           {/*
@@ -212,8 +212,8 @@ export function AgentInspector({
                   className={[
                     'border-2 px-1.5 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors',
                     c.id === character.id
-                      ? 'border-brand bg-brand text-ink'
-                      : 'border-ink-3 bg-ink-2 text-cream hover:border-brand hover:text-brand'
+                      ? 'border-brand bg-brand text-on-brand'
+                      : 'border-slate-rule bg-slate-2 text-on-slate hover:border-brand hover:text-brand'
                   ].join(' ')}
                 >
                   {c.name}
@@ -234,12 +234,12 @@ export function AgentInspector({
                 {connections.map((other) => (
                   <li
                     key={other.id}
-                    className="flex items-center gap-1.5 border-2 border-ink-3 bg-ink-2 px-1.5 py-0.5"
+                    className="flex items-center gap-1.5 border-2 border-slate-rule bg-slate-2 px-1.5 py-0.5"
                   >
                     <span aria-hidden className="font-mono text-[10px] text-brand">
                       ↔
                     </span>
-                    <span className="min-w-0 flex-1 truncate font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-cream">
+                    <span className="min-w-0 flex-1 truncate font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-on-slate">
                       {other.name}
                     </span>
                     <button
@@ -268,7 +268,7 @@ export function AgentInspector({
                   setConnecting(false)
                 }}
                 onBlur={() => setConnecting(false)}
-                className="mt-1 w-full border-2 border-brand bg-ink-2 px-1.5 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-cream outline-none"
+                className="mt-1 w-full border-2 border-brand bg-slate-2 px-1.5 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-on-slate outline-none"
               >
                 <option value="">Connect to…</option>
                 {candidates.map((o) => (
@@ -282,7 +282,7 @@ export function AgentInspector({
                 type="button"
                 onClick={() => setConnecting(true)}
                 disabled={candidates.length === 0}
-                className="mt-1 w-full border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand disabled:text-dim disabled:hover:border-ink-3"
+                className="mt-1 w-full border-2 border-slate-rule bg-slate-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-slate transition-colors hover:border-brand hover:text-brand disabled:text-dim disabled:hover:border-slate-rule"
               >
                 {candidates.length === 0
                   ? 'Nobody to connect to'
@@ -298,7 +298,7 @@ export function AgentInspector({
           <button
             type="button"
             onClick={onOpenChat}
-            className="w-full border-2 border-brand-shadow bg-brand px-2 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
+            className="w-full border-2 border-brand-shadow bg-brand px-2 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-on-brand transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
           >
             Open chat
           </button>
@@ -307,7 +307,7 @@ export function AgentInspector({
             <button
               type="button"
               onClick={onOpenThread}
-              className="w-full border-2 border-ink-3 bg-ink-2 px-2 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand"
+              className="w-full border-2 border-slate-rule bg-slate-2 px-2 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-on-slate transition-colors hover:border-brand hover:text-brand"
             >
               Group chat ({connections.length + 1})
             </button>
@@ -323,7 +323,7 @@ export function AgentInspector({
                   ? 'Interrupt the current turn. The session stays open.'
                   : 'Cancel this execution and clear the queue.'
               }
-              className="flex-1 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-rust hover:text-rust-lite disabled:text-dim disabled:hover:border-ink-3 disabled:hover:text-dim"
+              className="flex-1 border-2 border-slate-rule bg-slate-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-slate transition-colors hover:border-rust hover:text-rust-lite disabled:text-dim disabled:hover:border-slate-rule disabled:hover:text-dim"
             >
               {worker.status === 'stopping' ? 'Stopping…' : 'Stop'}
             </button>
@@ -335,7 +335,7 @@ export function AgentInspector({
                   ? 'Open this agent’s full configuration'
                   : 'Choose which character stands in for this session'
               }
-              className="flex-1 border-2 border-ink-3 bg-ink-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream transition-colors hover:border-brand hover:text-brand"
+              className="flex-1 border-2 border-slate-rule bg-slate-2 px-2 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-slate transition-colors hover:border-brand hover:text-brand"
             >
               Settings
             </button>

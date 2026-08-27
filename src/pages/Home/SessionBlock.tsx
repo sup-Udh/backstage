@@ -31,7 +31,7 @@ export function SessionBlock({ lines, name }: Props) {
   if (isUser) {
     return (
       <div className="flex justify-end">
-        <p className="max-w-[85%] border-2 border-ink bg-brand px-2.5 py-1.5 font-ui text-[12px] leading-[1.5] text-ink">
+        <p className="max-w-[85%] border-2 border-ink bg-brand px-2.5 py-1.5 font-ui text-[12px] leading-[1.5] text-on-brand">
           {lines.map((l) => l.text).join('\n')}
         </p>
       </div>

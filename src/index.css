@@ -27,38 +27,78 @@
  * accent; cream and off-white carry the page; ink does every outline.
  */
 @theme {
+  /* ---------------------------------------------------------------- ink -- */
+  /* Foreground: type, and every outline in the product. */
   --color-ink: #1b1b2a;
   --color-ink-2: #2e2e45;
   --color-ink-3: #4a4a63;
 
+  /* --------------------------------------------------------------- brand -- */
   --color-brand: #ffc94f;
   --color-brand-lite: #ffe29a;
   --color-brand-pale: #fff3d0;
   --color-brand-deep: #e8a128;
   --color-brand-shadow: #c97f1c;
+  /*
+   * Type that sits *on* a solid brand fill.
+   *
+   * Its own token rather than `ink`, because the two only agree in light
+   * mode. Yellow does not invert with the rest of the interface — it is the
+   * accent in both appearances — so in dark mode `ink` becomes warm white
+   * while a button filled with #FFC94F still needs near-black on it.
+   */
+  --color-on-brand: #1b1b2a;
 
+  /* ------------------------------------------------------------ surfaces -- */
   --color-cream: #fff6e4;
   --color-cream-2: #f5e7cc;
   --color-paper: #fffdf5;
   --color-rule: #e3d3b4;
-  /* Muted text on ink surfaces. ink-3 is tuned for cream and goes
-     near-invisible on dark, so dark plates use this instead. */
+
+  /*
+   * The hard offset every raised surface casts.
+   *
+   * Separate from `ink` for the same reason `on-brand` is: a drop shadow is
+   * depth, not type, and depth is dark in both appearances. Inverting it
+   * would put a 4px white step under every card on a dark page.
+   */
+  --color-shadow: #1b1b2a;
+
+  /* ----------------------------------------------------- the dark plates -- */
+  /*
+   * Surfaces that are dark in *both* appearances: the world frame, the
+   * character tooltips, the agent inspector, the office status bars.
+   *
+   * These are not "ink used as a background". A pixel-art room is a lit room
+   * and it is shown through a dark frame at midday as much as at midnight, so
+   * the frame has to be a colour of its own — one that does not flip when the
+   * page around it does. They happen to equal the ink ramp in light mode,
+   * which is what they were before they had names.
+   */
+  --color-slate: #1b1b2a;
+  --color-slate-2: #2e2e45;
+  --color-slate-rule: #4a4a63;
+  /* And the type that sits on them, likewise constant. */
+  --color-on-slate: #fff6e4;
+  --color-on-slate-2: #f5e7cc;
+  /* Muted type on a dark plate. Tuned for slate, never for cream. */
   --color-dim: #7a7a96;
 
+  /* ------------------------------------------------------------- status -- */
   /*
    * Failure and success, taken from the world palettes so a failed task is
    * the same red in the office as it is in the panel.
    *
-   * These were being used by components before they existed as tokens —
-   * `text-rust` appears in a dozen places and resolved to nothing, which is
-   * why every error message has been rendering in the default text colour on
-   * a border that was not there. Both are chosen against cream.
+   * `rust` has to work twice: as type on a page surface and as a fill with
+   * `on-slate` written across it, which is what keeps its dark value from
+   * being lightened as far as legibility alone would want.
    */
   --color-rust: #a8512f;
   --color-rust-lite: #c9683f;
   --color-sage: #5c7a4c;
   --color-sage-dark: #46603a;
 
+  /* --------------------------------------------------------------- type -- */
   /*
    * The three type tiers. Components pick a tier, never a family, so the
    * system can be retuned in one place.
@@ -71,6 +111,69 @@
   --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-pixel: 'Pixelify Sans', ui-monospace, 'Courier New', monospace;
   --font-mono: 'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+}
+
+/*
+ * Dark mode.
+ *
+ * One implementation, and it is this block: every token above is redefined
+ * here and nothing else in the application knows which appearance is on.
+ * A component that reads `bg-paper text-ink border-ink` is already correct in
+ * both, which is why the redesign did not need a second set of classes, a
+ * `dark:` variant on every element, or a second palette in JavaScript.
+ *
+ * `[data-appearance]` is stamped on <html> by `appearanceStore`, before the
+ * first paint, so there is no flash of the wrong appearance on launch.
+ *
+ * Three families deliberately do *not* invert, and each has its own token
+ * above: the brand yellow, the drop shadows, and the dark plates the pixel
+ * world is shown through.
+ */
+:root[data-appearance='dark'] {
+  --color-ink: #f3ede0;
+  --color-ink-2: #d6d0c3;
+  --color-ink-3: #a49fb2;
+
+  --color-brand: #ffc94f;
+  --color-brand-lite: #ffd980;
+  /*
+   * The pale tint changes role rather than value. In light mode it is a wash
+   * of yellow over paper — the hover state of half the controls in the app.
+   * On a dark page the same *role* is a warm-shifted charcoal, so `text-ink`
+   * on it stays legible and hovering still reads as warming up.
+   */
+  --color-brand-pale: #2b2437;
+  --color-brand-deep: #ffb733;
+  --color-brand-shadow: #8a5a14;
+
+  --color-cream: #10101a;
+  --color-cream-2: #191926;
+  --color-paper: #20202f;
+  --color-rule: #33334a;
+
+  --color-shadow: #05050b;
+
+  /* Deeper than the page, so a world frame still reads as a plate on it. */
+  --color-slate: #06060e;
+  --color-slate-2: #16162a;
+  --color-slate-rule: #2e2e46;
+
+  --color-rust: #c2673c;
+  --color-rust-lite: #de8a5e;
+  --color-sage: #7fa06a;
+  --color-sage-dark: #5c7a4c;
+}
+
+/*
+ * Native chrome — form controls, the caret, the default scrollbar a panel
+ * might fall back to — follows the appearance too. Without this the interface
+ * goes dark and the text cursor blinking in a prompt box stays black on it.
+ */
+:root {
+  color-scheme: light;
+}
+:root[data-appearance='dark'] {
+  color-scheme: dark;
 }
 
 html,
@@ -108,10 +211,10 @@ body {
  * reads as a different medium, so every raised surface uses a solid step.
  */
 .pixel-shadow {
-  box-shadow: 4px 4px 0 0 var(--color-ink);
+  box-shadow: 4px 4px 0 0 var(--color-shadow);
 }
 .pixel-shadow-sm {
-  box-shadow: 3px 3px 0 0 var(--color-ink);
+  box-shadow: 3px 3px 0 0 var(--color-shadow);
 }
 .pixel-shadow-brand {
   box-shadow: 4px 4px 0 0 var(--color-brand-shadow);
@@ -175,6 +278,54 @@ body {
 }
 .bob {
   animation: bob 2.4s steps(2, end) infinite;
+}
+
+/*
+ * Page entrance.
+ *
+ * One shared, short rise used by the home screen's sections. Deliberately a
+ * single keyframe rather than a per-section animation library: the brief asks
+ * for calm, and calm is what you get when everything on a page moves the same
+ * small distance over the same short time.
+ */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise {
+  animation: rise 420ms cubic-bezier(0.22, 0.7, 0.3, 1) both;
+}
+
+/*
+ * Reduced motion, honoured centrally.
+ *
+ * Every ambient animation in the product runs through one of these classes,
+ * so switching them off here switches them off everywhere rather than in the
+ * components that happened to remember. Note what is *not* disabled: the
+ * `transition-transform` on buttons, which is a 75ms response to a press
+ * rather than ambient movement, and the world canvas, which stops itself.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .blink,
+  .bob {
+    animation: none;
+  }
+  .rise {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
 }
 
 /*

@@ -114,7 +114,7 @@ export function ProjectPicker() {
           <span className="font-pixel text-xl font-bold uppercase tracking-[-0.01em] text-ink">
             Backstage
           </span>
-          <span className="ml-2 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.08em] text-ink">
+          <span className="ml-2 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.08em] text-on-brand">
             Your projects
           </span>
         </div>
@@ -161,7 +161,7 @@ export function ProjectPicker() {
             through the display name to the email's local part, so an account
             with no Google name still gets addressed as somebody.
           */}
-          <p className="font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-brand-shadow">
+          <p className="font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-brand-deep">
             Welcome back{user ? `, ${firstName(user.displayName)}` : ''}
           </p>
           <h1 className="mt-1 font-ui text-3xl font-extrabold uppercase leading-[1.05] tracking-[-0.03em] text-ink">
@@ -195,7 +195,7 @@ export function ProjectPicker() {
                 */
                 <div
                   key={project.id}
-                  className={`group flex flex-col border-[3px] border-rule bg-paper/70 shadow-[4px_4px_0_0_var(--color-ink)] transition-transform duration-75 focus-within:border-ink hover:border-ink hover:bg-paper ${
+                  className={`group flex flex-col border-[3px] border-rule bg-paper/70 shadow-[4px_4px_0_0_var(--color-shadow)] transition-transform duration-75 focus-within:border-ink hover:border-ink hover:bg-paper ${
                     busyElsewhere ? '' : 'hover:-translate-x-px hover:-translate-y-px'
                   }`}
                 >
@@ -280,7 +280,7 @@ export function ProjectPicker() {
                             type="button"
                             onClick={() => void destroy(project)}
                             disabled={gone}
-                            className="border-2 border-ink bg-rust px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream disabled:opacity-60"
+                            className="border-2 border-ink bg-rust px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-slate disabled:opacity-60"
                           >
                             {gone ? 'Deleting…' : 'Delete'}
                           </button>

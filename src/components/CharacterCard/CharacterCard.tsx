@@ -31,12 +31,12 @@ function poseFor(status: AgentView['status'] | undefined) {
  */
 export function CharacterCard({ character, agent }: Props) {
   return (
-    <article className="border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:shadow-[5px_5px_0_0_var(--color-brand-shadow)]">
+    <article className="border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-x-px hover:-translate-y-px hover:shadow-[5px_5px_0_0_var(--color-brand-shadow)]">
       {/* Sprite plate, on the warm room colour so it sits in its world. */}
       <div className="relative flex h-[132px] items-end justify-center border-b-[3px] border-ink bg-brand-pale">
         {/* Floorline and contact shadow. */}
         <div className="absolute inset-x-0 bottom-0 h-8 bg-cream-2" />
-        <div className="absolute bottom-[26px] h-1.5 w-12 bg-ink/15" />
+        <div className="absolute bottom-[26px] h-1.5 w-12 bg-shadow/15" />
         <CharacterSprite
           appearance={character.appearance}
           state={poseFor(agent?.status)}

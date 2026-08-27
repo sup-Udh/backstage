@@ -88,7 +88,7 @@ export function ProjectsSection() {
                           {p.name}
                         </span>
                         {open && (
-                          <span className="mt-0.5 inline-block border border-ink bg-brand px-1 py-px font-pixel text-[9px] font-bold uppercase tracking-[0.06em] text-ink">
+                          <span className="mt-0.5 inline-block border border-ink bg-brand px-1 py-px font-pixel text-[9px] font-bold uppercase tracking-[0.06em] text-on-brand">
                             Open
                           </span>
                         )}

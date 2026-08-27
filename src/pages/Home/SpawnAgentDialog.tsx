@@ -172,7 +172,7 @@ export function SpawnAgentDialog({ cast, onClose, onSpawned }: Props) {
 
   return (
     <div
-      className="absolute inset-0 z-40 grid place-items-center bg-ink/60 p-4"
+      className="absolute inset-0 z-40 grid place-items-center bg-shadow/60 p-4"
       onClick={onClose}
     >
       <div
@@ -182,14 +182,14 @@ export function SpawnAgentDialog({ cast, onClose, onSpawned }: Props) {
         className="max-h-full w-full max-w-[420px] overflow-y-auto border-[3px] border-ink bg-cream shadow-[6px_6px_0_0_var(--color-brand-shadow)]"
       >
         <header className="flex items-center justify-between border-b-[3px] border-ink bg-brand px-3 py-2">
-          <h2 className="font-pixel text-sm font-bold uppercase tracking-[0.08em] text-ink">
+          <h2 className="font-pixel text-sm font-bold uppercase tracking-[0.08em] text-on-brand">
             Spawn new agent
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="font-mono text-xs text-ink hover:text-ink-3"
+            className="font-mono text-xs text-on-brand transition-opacity hover:opacity-60"
           >
             ✕
           </button>
@@ -207,7 +207,7 @@ export function SpawnAgentDialog({ cast, onClose, onSpawned }: Props) {
                 useBackstage.getState().setPage('account')
                 onClose()
               }}
-              className="mt-3 border-2 border-ink bg-brand px-3 py-1 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)]"
+              className="mt-3 border-2 border-ink bg-brand px-3 py-1 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-on-brand shadow-[2px_2px_0_0_var(--color-shadow)]"
             >
               Open Connections
             </button>
@@ -267,7 +267,7 @@ export function SpawnAgentDialog({ cast, onClose, onSpawned }: Props) {
 
             <Field label="Character">
               <div className="flex items-center gap-2">
-                <div className="shrink-0 border-2 border-ink bg-ink-2 p-1">
+                <div className="shrink-0 border-2 border-ink bg-slate-2 p-1">
                   <CharacterSprite
                     appearance={character.appearance}
                     state="idle"
@@ -286,7 +286,7 @@ export function SpawnAgentDialog({ cast, onClose, onSpawned }: Props) {
                         className={[
                           'border-2 px-1.5 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors',
                           i === slot
-                            ? 'border-ink bg-brand text-ink'
+                            ? 'border-ink bg-brand text-on-brand'
                             : taken
                               ? 'border-rule bg-cream-2 text-ink-3 line-through'
                               : 'border-rule bg-paper text-ink-3 hover:border-ink hover:text-ink'
@@ -315,8 +315,8 @@ export function SpawnAgentDialog({ cast, onClose, onSpawned }: Props) {
                         'border-2 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.04em] transition-colors',
                         on
                           ? c.privileged
-                            ? 'border-rust bg-rust text-cream'
-                            : 'border-ink bg-brand text-ink'
+                            ? 'border-rust bg-rust text-on-slate'
+                            : 'border-ink bg-brand text-on-brand'
                           : 'border-rule bg-paper text-ink-3 hover:border-ink'
                       ].join(' ')}
                     >
@@ -345,7 +345,7 @@ export function SpawnAgentDialog({ cast, onClose, onSpawned }: Props) {
                 type="button"
                 onClick={() => void submit()}
                 disabled={busy || !provider || !modelId}
-                className="flex-[2] border-2 border-ink bg-brand px-3 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite disabled:translate-y-0 disabled:bg-cream-2 disabled:text-ink-3 disabled:shadow-none"
+                className="flex-[2] border-2 border-ink bg-brand px-3 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-on-brand shadow-[2px_2px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite disabled:translate-y-0 disabled:bg-cream-2 disabled:text-ink-3 disabled:shadow-none"
               >
                 {busy ? 'Spawning…' : 'Spawn'}
               </button>

@@ -85,15 +85,15 @@ function Request({ text }: { text: string }) {
 /** The answer the user actually asked for, given the weight to match. */
 function FinalAnswer({ text, name }: { text: string; name: string }) {
   return (
-    <section className="border-[3px] border-ink bg-paper shadow-[3px_3px_0_0_var(--color-ink)]">
+    <section className="border-[3px] border-ink bg-paper shadow-[3px_3px_0_0_var(--color-shadow)]">
       <header className="flex items-baseline gap-2 border-b-[3px] border-ink bg-brand px-2.5 py-1.5">
         <span aria-hidden className="text-[11px]">
           👑
         </span>
-        <span className="font-pixel text-[11px] font-bold uppercase tracking-[0.1em] text-ink">
+        <span className="font-pixel text-[11px] font-bold uppercase tracking-[0.1em] text-on-brand">
           Final team answer
         </span>
-        <span className="ml-auto shrink-0 font-mono text-[9px] uppercase tracking-[0.08em] text-ink">
+        <span className="ml-auto shrink-0 font-mono text-[9px] uppercase tracking-[0.08em] text-on-brand">
           {name}
         </span>
       </header>

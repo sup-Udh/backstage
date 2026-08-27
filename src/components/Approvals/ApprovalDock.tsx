@@ -29,13 +29,13 @@ export function ApprovalDock() {
         {approvals.map((request) => (
           <li
             key={request.id}
-            className="border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-ink)]"
+            className="border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-shadow)]"
           >
             <header className="flex items-baseline justify-between gap-3 border-b-2 border-ink bg-brand px-3 py-1.5">
-              <p className="font-pixel text-[11px] font-bold uppercase tracking-[0.1em] text-ink">
+              <p className="font-pixel text-[11px] font-bold uppercase tracking-[0.1em] text-on-brand">
                 {request.agentName} needs permission
               </p>
-              <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-ink">
+              <p className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-on-brand">
                 {request.tool}
               </p>
             </header>
@@ -52,14 +52,14 @@ export function ApprovalDock() {
                 <button
                   type="button"
                   onClick={() => void answer(request.id, true)}
-                  className="border-[3px] border-ink bg-brand px-4 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
+                  className="border-[3px] border-ink bg-brand px-4 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
                 >
                   Allow
                 </button>
                 <button
                   type="button"
                   onClick={() => void answer(request.id, false)}
-                  className="border-[3px] border-ink bg-cream px-4 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 shadow-[3px_3px_0_0_var(--color-ink)] transition-colors hover:text-ink"
+                  className="border-[3px] border-ink bg-cream px-4 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 shadow-[3px_3px_0_0_var(--color-shadow)] transition-colors hover:text-ink"
                 >
                   Deny
                 </button>

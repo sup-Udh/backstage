@@ -22,7 +22,7 @@ export function CharacterTooltip({ agent, left, top }: Props) {
       className="pointer-events-none absolute z-20"
       style={{ left, top, transform: 'translate(-50%, -100%)' }}
     >
-      <div className="border-[3px] border-brand bg-ink px-3 py-2 shadow-[4px_4px_0_0_rgba(27,27,42,0.45)]">
+      <div className="border-[3px] border-brand bg-slate px-3 py-2 shadow-[4px_4px_0_0_rgba(27,27,42,0.45)]">
         {/* Notched corners, drawn as four cream squares over the border. */}
         <span className="absolute left-0 top-0 h-[3px] w-[3px] bg-brand" />
         <span className="absolute right-0 top-0 h-[3px] w-[3px] bg-brand" />
@@ -32,15 +32,15 @@ export function CharacterTooltip({ agent, left, top }: Props) {
         <p className="font-pixel text-base font-bold uppercase leading-none tracking-[0.06em] text-brand">
           {agent.name}
         </p>
-        <p className="mt-1.5 font-ui text-xs leading-none text-cream-2">
+        <p className="mt-1.5 font-ui text-xs leading-none text-on-slate-2">
           {agent.role}
         </p>
 
-        <div className="my-2 h-px bg-ink-3" />
+        <div className="my-2 h-px bg-slate-rule" />
 
         <p className="font-mono text-[11px] leading-none text-dim">
           <span className="uppercase tracking-[0.08em]">Model</span>{' '}
-          <span className="font-medium text-cream">{agent.model}</span>
+          <span className="font-medium text-on-slate">{agent.model}</span>
         </p>
 
         <p

@@ -72,7 +72,7 @@ export function AccountMenu() {
           'flex items-center gap-2 border-2 px-2.5 py-1.5 transition-colors',
           'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep',
           open || page === 'account'
-            ? 'border-ink bg-brand text-ink'
+            ? 'border-ink bg-brand text-on-brand'
             : 'border-ink bg-paper text-ink-3 hover:bg-brand-pale hover:text-ink'
         ].join(' ')}
       >
@@ -89,7 +89,7 @@ export function AccountMenu() {
         <div
           role="menu"
           aria-label="Account"
-          className="absolute right-0 top-[calc(100%+6px)] z-50 w-[260px] border-[3px] border-ink bg-paper shadow-[5px_5px_0_0_var(--color-ink)]"
+          className="absolute right-0 top-[calc(100%+6px)] z-50 w-[260px] border-[3px] border-ink bg-paper shadow-[5px_5px_0_0_var(--color-shadow)]"
         >
           {/*
             Identity first, and the email is shown in full rather than

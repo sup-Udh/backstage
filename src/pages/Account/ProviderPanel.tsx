@@ -53,7 +53,7 @@ export function ProviderPanel({
   }
 
   return (
-    <article className="max-w-[640px] border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-ink)]">
+    <article className="max-w-[640px] border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-shadow)]">
       <header className="flex items-start justify-between gap-4 border-b-[3px] border-ink px-4 py-3">
         <div>
           <h2 className="font-pixel text-lg font-bold uppercase tracking-[0.04em] text-ink">
@@ -65,7 +65,7 @@ export function ProviderPanel({
         <span
           className={`shrink-0 border-2 px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] ${
             connected
-              ? 'border-ink bg-brand text-ink'
+              ? 'border-ink bg-brand text-on-brand'
               : 'border-rule text-ink-3'
           }`}
         >
@@ -111,7 +111,7 @@ export function ProviderPanel({
             <button
               type="submit"
               disabled={busy !== null || draft.trim().length === 0}
-              className="mt-4 border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-45"
+              className="mt-4 border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-45"
             >
               {busy === `connect:${id}` ? 'Connecting…' : `Connect ${descriptor.name}`}
             </button>
@@ -164,7 +164,7 @@ export function ProviderPanel({
                 type="button"
                 onClick={() => void onTest(id)}
                 disabled={busy !== null}
-                className="border-[3px] border-ink bg-cream px-4 py-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-y-px enabled:hover:bg-brand-pale disabled:opacity-45"
+                className="border-[3px] border-ink bg-cream px-4 py-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 enabled:hover:-translate-y-px enabled:hover:bg-brand-pale disabled:opacity-45"
               >
                 {busy === `test:${id}` ? 'Testing…' : 'Test connection'}
               </button>
@@ -172,7 +172,7 @@ export function ProviderPanel({
                 type="button"
                 onClick={() => void onDisconnect(id)}
                 disabled={busy !== null}
-                className="border-[3px] border-ink bg-cream px-4 py-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 shadow-[3px_3px_0_0_var(--color-ink)] transition-colors hover:text-ink disabled:opacity-45"
+                className="border-[3px] border-ink bg-cream px-4 py-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-3 shadow-[3px_3px_0_0_var(--color-shadow)] transition-colors hover:text-ink disabled:opacity-45"
               >
                 {agentCount > 0 ? `Remove (${agentCount} agents)` : 'Remove'}
               </button>

@@ -168,7 +168,7 @@ export function AgentEditor({
       }}
       className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_268px] lg:items-start"
     >
-      <div className="min-w-0 border-[3px] border-ink bg-paper p-5 shadow-[4px_4px_0_0_var(--color-ink)]">
+      <div className="min-w-0 border-[3px] border-ink bg-paper p-5 shadow-[4px_4px_0_0_var(--color-shadow)]">
         <h2 className="font-pixel text-lg font-bold uppercase tracking-[0.04em] text-ink">
           {agent?.id ? `Configure ${agent.name}` : "Who's joining the team?"}
         </h2>
@@ -369,7 +369,7 @@ export function AgentEditor({
               aria-pressed={!draft.workspace}
               className={`border-2 px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors ${
                 !draft.workspace
-                  ? 'border-ink bg-brand text-ink'
+                  ? 'border-ink bg-brand text-on-brand'
                   : 'border-rule text-ink-3 hover:border-ink hover:text-ink'
               }`}
             >
@@ -382,7 +382,7 @@ export function AgentEditor({
               disabled={!workspaceRoot && !draft.workspace}
               className={`border-2 px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors disabled:opacity-40 ${
                 draft.workspace
-                  ? 'border-ink bg-brand text-ink'
+                  ? 'border-ink bg-brand text-on-brand'
                   : 'border-rule text-ink-3 enabled:hover:border-ink enabled:hover:text-ink'
               }`}
             >
@@ -504,7 +504,7 @@ export function AgentEditor({
                 title={p.blurb}
                 className={`border-2 px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] transition-colors ${
                   draft.profile === p.id
-                    ? 'border-ink bg-brand text-ink'
+                    ? 'border-ink bg-brand text-on-brand'
                     : 'border-rule text-ink-3 hover:border-ink hover:text-ink'
                 }`}
               >
@@ -524,7 +524,7 @@ export function AgentEditor({
             disabled={working || !canSpawn}
             onClick={() => void onSaveAndSpawn(draft)}
             title={canSpawn ? undefined : problems.join('\n')}
-            className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-40"
+            className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-40"
           >
             {agent?.spawned ? 'Save' : 'Spawn agent'}
           </button>
@@ -532,7 +532,7 @@ export function AgentEditor({
           <button
             type="submit"
             disabled={working || !canSave}
-            className="border-[3px] border-ink bg-cream px-4 py-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-colors enabled:hover:bg-brand-pale disabled:opacity-40"
+            className="border-[3px] border-ink bg-cream px-4 py-2 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-shadow)] transition-colors enabled:hover:bg-brand-pale disabled:opacity-40"
           >
             Save without spawning
           </button>
@@ -562,7 +562,7 @@ export function AgentEditor({
                   <button
                     type="button"
                     onClick={() => void onDelete(agent.id as string)}
-                    className="border-2 border-ink bg-rust px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-cream"
+                    className="border-2 border-ink bg-rust px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-slate"
                   >
                     Delete
                   </button>
@@ -590,8 +590,8 @@ export function AgentEditor({
 
       {/* ------------------------------------------------------- preview -- */}
       <aside className="lg:sticky lg:top-4">
-        <div className="border-[3px] border-brand bg-ink shadow-[4px_4px_0_0_rgba(27,27,42,0.5)]">
-          <div className="flex justify-center border-b-2 border-ink-3 bg-ink-2 py-4">
+        <div className="border-[3px] border-brand bg-slate shadow-[4px_4px_0_0_rgba(27,27,42,0.5)]">
+          <div className="flex justify-center border-b-2 border-slate-rule bg-slate-2 py-4">
             <CharacterSprite
               appearance={character.appearance}
               state="idle"
@@ -602,7 +602,7 @@ export function AgentEditor({
             <p className="font-pixel text-base font-bold uppercase leading-none tracking-[0.06em] text-brand">
               {draft.displayName || draft.name || 'Unnamed'}
             </p>
-            <p className="mt-1.5 font-ui text-xs leading-none text-cream-2">
+            <p className="mt-1.5 font-ui text-xs leading-none text-on-slate-2">
               {draft.role || 'No role yet'}
             </p>
             <p className="mt-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-dim">
@@ -620,7 +620,7 @@ export function AgentEditor({
 
         {/* Exactly what stands between this draft and a working agent. */}
         {problems.length > 0 && (
-          <div className="mt-3 border-[3px] border-ink bg-paper p-3 shadow-[4px_4px_0_0_var(--color-ink)]">
+          <div className="mt-3 border-[3px] border-ink bg-paper p-3 shadow-[4px_4px_0_0_var(--color-shadow)]">
             <p className="font-pixel text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-3">
               Before spawning
             </p>

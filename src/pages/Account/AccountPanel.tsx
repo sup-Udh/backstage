@@ -57,7 +57,7 @@ export function AccountPanel() {
                 setBusy(null)
               }
             }}
-            className="border-2 border-ink bg-paper px-3 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-rust shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:bg-brand-pale active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-ink)] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+            className="border-2 border-ink bg-paper px-3 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-rust shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:bg-brand-pale active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-shadow)] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
           >
             {busy === 'out' ? 'Signing out…' : 'Log out'}
           </button>
@@ -111,7 +111,7 @@ export function AccountPanel() {
                 setBusy(null)
               }
             }}
-            className="border-2 border-ink bg-paper px-3 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:bg-brand-pale active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-ink)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
+            className="border-2 border-ink bg-paper px-3 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:bg-brand-pale active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_var(--color-shadow)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep"
           >
             {busy === 'sync' ? 'Syncing…' : 'Sync now'}
           </button>

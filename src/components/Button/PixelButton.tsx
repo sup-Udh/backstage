@@ -31,21 +31,21 @@ export function PixelButton({
   const skin =
     variant === 'primary'
       ? [
-          'bg-brand text-ink border-ink',
+          'bg-brand text-on-brand border-ink',
           'hover:bg-brand-lite',
-          'shadow-[4px_4px_0_0_var(--color-ink)]',
-          'hover:shadow-[5px_5px_0_0_var(--color-ink)]',
+          'shadow-[4px_4px_0_0_var(--color-shadow)]',
+          'hover:shadow-[5px_5px_0_0_var(--color-shadow)]',
           'hover:-translate-x-px hover:-translate-y-px',
-          'active:shadow-[1px_1px_0_0_var(--color-ink)]',
+          'active:shadow-[1px_1px_0_0_var(--color-shadow)]',
           'active:translate-x-[3px] active:translate-y-[3px]'
         ].join(' ')
       : [
           'bg-paper text-ink border-ink',
           'hover:bg-brand-pale',
-          'shadow-[3px_3px_0_0_var(--color-ink)]',
-          'hover:shadow-[4px_4px_0_0_var(--color-ink)]',
+          'shadow-[3px_3px_0_0_var(--color-shadow)]',
+          'hover:shadow-[4px_4px_0_0_var(--color-shadow)]',
           'hover:-translate-x-px hover:-translate-y-px',
-          'active:shadow-[1px_1px_0_0_var(--color-ink)]',
+          'active:shadow-[1px_1px_0_0_var(--color-shadow)]',
           'active:translate-x-[2px] active:translate-y-[2px]'
         ].join(' ')
 

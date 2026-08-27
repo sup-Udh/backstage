@@ -152,7 +152,7 @@ export function World({ theme, engine, switching = false }: Props) {
           would. Keeping the HUD out of the canvas means none of the room -
           the windows, the board, the signage - is ever covered by chrome.
         */}
-        <div className="border-[4px] border-ink bg-ink shadow-[8px_8px_0_0_var(--color-brand-shadow)]">
+        <div className="border-[4px] border-ink bg-slate shadow-[8px_8px_0_0_var(--color-brand-shadow)]">
           <div className="relative block">
             {/*
               No width/height attributes: the backing store is sized in
@@ -180,7 +180,7 @@ export function World({ theme, engine, switching = false }: Props) {
             */}
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 z-30 bg-ink"
+              className="pointer-events-none absolute inset-0 z-30 bg-slate"
               style={{
                 opacity: switching ? 1 : 0,
                 transition: `opacity ${switching ? 200 : 260}ms steps(5, end)`
@@ -196,8 +196,8 @@ export function World({ theme, engine, switching = false }: Props) {
             )}
           </div>
 
-          <div className="flex w-0 min-w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t-[3px] border-ink-3 bg-ink px-3 py-2">
-            <span className="border-2 border-brand-shadow bg-brand px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
+          <div className="flex w-0 min-w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t-[3px] border-slate-rule bg-slate px-3 py-2">
+            <span className="border-2 border-brand-shadow bg-brand px-2 py-0.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-on-brand">
               {theme.name}
             </span>
 

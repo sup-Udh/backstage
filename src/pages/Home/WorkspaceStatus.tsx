@@ -65,7 +65,7 @@ export function WorkspaceStatus({ theme, engine }: Props) {
         : `${connected.length} providers`
 
   return (
-    <footer className="flex shrink-0 items-center gap-4 border-t-[3px] border-ink bg-ink px-4 py-1.5">
+    <footer className="flex shrink-0 items-center gap-4 border-t-[3px] border-ink bg-slate px-4 py-1.5">
       <span className="flex min-w-0 items-baseline gap-2">
         <span className="shrink-0 font-pixel text-[10px] font-semibold uppercase tracking-[0.12em] text-dim">
           Workspace
@@ -83,14 +83,14 @@ export function WorkspaceStatus({ theme, engine }: Props) {
         )}
       </span>
 
-      <span aria-hidden className="h-3 w-px shrink-0 bg-ink-3" />
+      <span aria-hidden className="h-3 w-px shrink-0 bg-slate-rule" />
 
       <span className="flex shrink-0 items-center gap-3 font-mono text-[10px] font-medium uppercase tracking-[0.06em]">
-        <span className="border-2 border-brand-shadow bg-brand px-1.5 font-pixel text-[10px] font-semibold tracking-[0.06em] text-ink">
+        <span className="border-2 border-brand-shadow bg-brand px-1.5 font-pixel text-[10px] font-semibold tracking-[0.06em] text-on-brand">
           {theme.name}
         </span>
         <span className="text-dim">
-          <span className="text-cream-2">{agents.length}</span> agents
+          <span className="text-on-slate-2">{agents.length}</span> agents
         </span>
         <span className="flex items-center gap-1">
           <span aria-hidden className={active > 0 ? 'text-brand' : 'text-dim'}>
@@ -110,7 +110,7 @@ export function WorkspaceStatus({ theme, engine }: Props) {
         <span className="hidden text-dim xl:inline">
           Drag to pan · scroll to zoom · click an agent
         </span>
-        <span aria-hidden className="hidden h-3 w-px bg-ink-3 xl:inline-block" />
+        <span aria-hidden className="hidden h-3 w-px bg-slate-rule xl:inline-block" />
 
         {/*
           The automation switch, where the work is happening.
@@ -131,8 +131,8 @@ export function WorkspaceStatus({ theme, engine }: Props) {
           }
           className={`border-2 px-1.5 font-pixel text-[10px] font-semibold tracking-[0.06em] transition-colors ${
             settings.autoCollaboration
-              ? 'border-brand-shadow bg-brand text-ink'
-              : 'border-ink-3 text-dim hover:border-brand hover:text-brand'
+              ? 'border-brand-shadow bg-brand text-on-brand'
+              : 'border-slate-rule text-dim hover:border-brand hover:text-brand'
           }`}
         >
           {settings.autoCollaboration ? '● Auto on' : '○ Auto off'}
@@ -147,7 +147,7 @@ export function WorkspaceStatus({ theme, engine }: Props) {
             type="button"
             onClick={() => void stopAll()}
             title="Stop every Backstage agent. External CLI sessions are left alone."
-            className="border-2 border-brand-shadow bg-brand px-1.5 font-pixel text-[10px] font-semibold tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
+            className="border-2 border-brand-shadow bg-brand px-1.5 font-pixel text-[10px] font-semibold tracking-[0.06em] text-on-brand transition-colors hover:bg-rust hover:text-on-slate"
           >
             Stop all
           </button>
@@ -156,7 +156,7 @@ export function WorkspaceStatus({ theme, engine }: Props) {
         <button
           type="button"
           onClick={() => setPage('account')}
-          className={connected.length > 0 ? 'text-brand' : 'text-dim hover:text-cream-2'}
+          className={connected.length > 0 ? 'text-brand' : 'text-dim hover:text-on-slate-2'}
         >
           {answering}
         </button>

@@ -143,7 +143,7 @@ export function Agents() {
               ? undefined
               : 'Connect a provider before creating an agent.'
           }
-          className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-40"
+          className="border-[3px] border-ink bg-brand px-5 py-2 font-pixel text-sm font-bold uppercase tracking-[0.04em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite disabled:cursor-default disabled:opacity-40"
         >
           + Create agent
         </button>
@@ -169,14 +169,14 @@ export function Agents() {
           type="button"
           onClick={() => void stopAll()}
           disabled={busyCount === 0}
-          className="ml-auto border-2 border-ink bg-cream px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors enabled:hover:bg-rust enabled:hover:text-cream disabled:opacity-40"
+          className="ml-auto border-2 border-ink bg-cream px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors enabled:hover:bg-rust enabled:hover:text-on-slate disabled:opacity-40"
         >
           Stop all agents
         </button>
       </div>
 
       {!anyConnected && (
-        <div className="mb-6 max-w-[640px] border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-ink)]">
+        <div className="mb-6 max-w-[640px] border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-shadow)]">
           <p className="font-pixel text-sm font-bold uppercase tracking-[0.04em] text-ink">
             No provider connections available
           </p>
@@ -187,7 +187,7 @@ export function Agents() {
           <button
             type="button"
             onClick={() => useBackstage.getState().setPage('account')}
-            className="mt-3 border-2 border-ink bg-brand px-3 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px"
+            className="mt-3 border-2 border-ink bg-brand px-3 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-on-brand shadow-[2px_2px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-y-px"
           >
             Open Connections
           </button>

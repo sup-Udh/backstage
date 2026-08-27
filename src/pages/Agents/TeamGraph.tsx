@@ -30,7 +30,7 @@ export function TeamGraph({ agents, onEdit }: Props) {
   }
 
   return (
-    <div className="border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-ink)]">
+    <div className="border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-shadow)]">
       {senders.length === 0 ? (
         <p className="font-ui text-[13px] leading-[1.6] text-ink-3">
           Nobody can contact anybody yet. Open an agent and choose who it is

@@ -115,7 +115,7 @@ function DockToggle({ open, onClick }: { open: boolean; onClick: () => void }) {
       title={open ? 'Hide the command centre' : 'Show the command centre'}
       className={[
         'z-30 grid h-9 w-7 place-items-center border-2 border-ink bg-cream',
-        'font-pixel text-sm font-bold text-ink shadow-[2px_2px_0_0_var(--color-ink)]',
+        'font-pixel text-sm font-bold text-ink shadow-[2px_2px_0_0_var(--color-shadow)]',
         'transition-transform duration-75 hover:-translate-y-px hover:bg-brand',
         open ? 'absolute -left-4 top-4' : 'absolute right-4 top-4'
       ].join(' ')}

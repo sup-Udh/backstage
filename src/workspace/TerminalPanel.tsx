@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { AgentSession, SessionAgent, TerminalSession } from '../shared/providerApi'
 import { useBackstage } from '../stores/backstageStore'
+import { useAppearance } from '../stores/appearanceStore'
 import { ActivityRail } from './ActivityRail'
 import { CLAUDE_COPY, CLAUDE_INSTALL_URL } from '../claude/useClaude'
 import type { ClaudeDetection } from '../shared/providerApi'
@@ -36,7 +37,7 @@ import type { ClaudeDetection } from '../shared/providerApi'
  * it to emphasise, and left as white it would erase the very lines the tool
  * considers important.
  */
-const THEME = {
+const LIGHT_THEME = {
   background: '#FFFDF5',
   foreground: '#2E2E45',
   cursor: '#E8A128',
@@ -59,6 +60,41 @@ const THEME = {
   brightMagenta: '#95539F',
   brightCyan: '#3D8794',
   brightWhite: '#1B1B2A'
+}
+
+/**
+ * The same palette, remapped for midnight.
+ *
+ * Not the light one inverted, and not xterm's default dark set either. Every
+ * hue keeps its *meaning* — red is still the error red the light theme uses,
+ * two stops brighter — so a CLI's output reads the same way in both
+ * appearances. `brightWhite` is again the one that matters: on paper it had to
+ * be pushed down to near-black, and here it goes back to being the brightest
+ * thing on screen, because that is what a tool means by it.
+ */
+const DARK_THEME = {
+  background: '#0B0B14',
+  foreground: '#D6D0C3',
+  cursor: '#FFB733',
+  cursorAccent: '#0B0B14',
+  selectionBackground: '#FFC94F',
+  selectionForeground: '#14141F',
+  black: '#2E2E46',
+  red: '#E2705A',
+  green: '#8FB86A',
+  yellow: '#E8B44C',
+  blue: '#7BA1DB',
+  magenta: '#C08AD0',
+  cyan: '#6FBFCE',
+  white: '#C9C4B8',
+  brightBlack: '#6E6E8C',
+  brightRed: '#F0917C',
+  brightGreen: '#A9CE86',
+  brightYellow: '#FFD073',
+  brightBlue: '#9BBCEE',
+  brightMagenta: '#D6A6E4',
+  brightCyan: '#8FD8E6',
+  brightWhite: '#FFF6E4'
 }
 
 /** How a CLI names itself in the session header. */
@@ -157,6 +193,7 @@ export function TerminalPanel() {
   const requestSession = useBackstage((s) => s.requestSession)
   const pendingCommand = useBackstage((s) => s.pendingCommand)
   const queueCommand = useBackstage((s) => s.queueCommand)
+  const appearance = useAppearance((s) => s.appearance)
 
   // Keep a ref in step, so the output listener can filter without re-binding.
   useEffect(() => {
@@ -174,7 +211,7 @@ export function TerminalPanel() {
       cursorBlink: true,
       convertEol: false,
       scrollback: 5000,
-      theme: THEME
+      theme: useAppearance.getState().appearance === 'dark' ? DARK_THEME : LIGHT_THEME
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
@@ -194,6 +231,21 @@ export function TerminalPanel() {
       fitRef.current = null
     }
   }, [])
+
+  /*
+   * Repaint on an appearance change.
+   *
+   * The emulator is built once and deliberately lives outside React, so it
+   * cannot be re-rendered into a new palette — the theme has to be pushed into
+   * the instance. Scrollback keeps its colours because xterm stores ANSI
+   * indices rather than resolved values, so output printed an hour ago
+   * recolours with everything else.
+   */
+  useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    term.options.theme = appearance === 'dark' ? DARK_THEME : LIGHT_THEME
+  }, [appearance])
 
   /* Stream output for whichever session is on screen. */
   useEffect(() => {
@@ -420,7 +472,7 @@ export function TerminalPanel() {
                 title={s.cwd}
                 className={`flex shrink-0 items-center gap-1.5 border-2 px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors ${
                   on
-                    ? 'border-ink bg-brand text-ink'
+                    ? 'border-ink bg-brand text-on-brand'
                     : 'border-rule bg-paper text-ink-3 hover:border-ink hover:text-ink'
                 }`}
               >
@@ -651,9 +703,9 @@ function BigButton({
       disabled={disabled}
       className={[
         'border-[3px] border-ink px-3 py-1.5 font-pixel text-[11px] font-semibold uppercase tracking-[0.08em] text-ink',
-        'shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75',
+        'shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75',
         'enabled:hover:-translate-x-px enabled:hover:-translate-y-px',
-        'enabled:active:translate-x-[2px] enabled:active:translate-y-[2px] enabled:active:shadow-[1px_1px_0_0_var(--color-ink)]',
+        'enabled:active:translate-x-[2px] enabled:active:translate-y-[2px] enabled:active:shadow-[1px_1px_0_0_var(--color-shadow)]',
         'disabled:opacity-50',
         primary ? 'bg-brand' : 'bg-paper hover:bg-brand-pale'
       ].join(' ')}

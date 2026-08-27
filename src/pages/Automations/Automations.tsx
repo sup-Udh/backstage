@@ -82,7 +82,7 @@ export function Automations() {
       lead="Rules that let your team react to each other without you in the loop — and the limits that stop them running away with it."
     >
       {/* ---------------------------------------------------- AUTO switch -- */}
-      <section className="mb-8 max-w-[680px] border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-ink)]">
+      <section className="mb-8 max-w-[680px] border-[3px] border-ink bg-paper shadow-[4px_4px_0_0_var(--color-shadow)]">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b-[3px] border-ink px-4 py-3">
           <div>
             <h2 className="font-pixel text-base font-bold uppercase tracking-[0.04em] text-ink">
@@ -101,9 +101,9 @@ export function Automations() {
               void updateSettings({ autoCollaboration: !settings.autoCollaboration })
             }
             aria-pressed={settings.autoCollaboration}
-            className={`shrink-0 border-[3px] border-ink px-4 py-2 font-pixel text-sm font-bold uppercase tracking-[0.06em] shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px ${
+            className={`shrink-0 border-[3px] border-ink px-4 py-2 font-pixel text-sm font-bold uppercase tracking-[0.06em] shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-y-px ${
               settings.autoCollaboration
-                ? 'bg-brand text-ink'
+                ? 'bg-brand text-on-brand'
                 : 'bg-cream text-ink-3'
             }`}
           >
@@ -171,7 +171,7 @@ export function Automations() {
             type="button"
             onClick={() => void stopAll()}
             disabled={busyCount === 0}
-            className="ml-auto shrink-0 border-2 border-ink bg-cream px-3 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors enabled:hover:bg-rust enabled:hover:text-cream disabled:opacity-40"
+            className="ml-auto shrink-0 border-2 border-ink bg-cream px-3 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors enabled:hover:bg-rust enabled:hover:text-on-slate disabled:opacity-40"
           >
             Stop all ({busyCount})
           </button>
@@ -187,7 +187,7 @@ export function Automations() {
           type="button"
           onClick={() => setEditing({})}
           disabled={agents.length === 0}
-          className="border-2 border-ink bg-brand px-3 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 enabled:hover:-translate-y-px disabled:opacity-40"
+          className="border-2 border-ink bg-brand px-3 py-1 font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-on-brand shadow-[2px_2px_0_0_var(--color-shadow)] transition-transform duration-75 enabled:hover:-translate-y-px disabled:opacity-40"
         >
           + Create trigger
         </button>
@@ -207,7 +207,7 @@ export function Automations() {
             return (
               <li
                 key={trigger.id}
-                className={`border-[3px] border-ink shadow-[4px_4px_0_0_var(--color-ink)] ${
+                className={`border-[3px] border-ink shadow-[4px_4px_0_0_var(--color-shadow)] ${
                   trigger.enabled ? 'bg-paper' : 'bg-paper/50'
                 }`}
               >
@@ -306,7 +306,7 @@ export function Automations() {
         <h2 className="mb-3 font-pixel text-sm font-semibold uppercase tracking-[0.1em] text-ink-3">
           Collaboration log
         </h2>
-        <div className="max-w-[760px] border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-ink)]">
+        <div className="max-w-[760px] border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-shadow)]">
           {collaboration.length === 0 ? (
             <p className="font-ui text-[13px] leading-[1.6] text-ink-3">
               Nothing yet. When one agent hands work to another it is recorded

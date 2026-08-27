@@ -104,7 +104,7 @@ export function ChatIdentity({
               type="button"
               onClick={() => onStop(sessionWorker.id)}
               title="Interrupt the current turn. The session stays open."
-              className="shrink-0 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
+              className="shrink-0 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-on-slate"
             >
               Stop
             </button>
@@ -143,7 +143,7 @@ export function ChatIdentity({
         <button
           type="button"
           onClick={() => useBackstage.getState().setPage('agents')}
-          className="mt-1.5 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink shadow-[2px_2px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px"
+          className="mt-1.5 border-2 border-ink bg-brand px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-brand shadow-[2px_2px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-y-px"
         >
           Open Agents
         </button>
@@ -186,7 +186,7 @@ export function ChatIdentity({
               <button
                 type="button"
                 onClick={() => onStop('all')}
-                className="border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
+                className="border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-on-slate"
               >
                 Stop all
               </button>
@@ -258,7 +258,7 @@ export function ChatIdentity({
           <button
             type="button"
             onClick={() => onStop(agent.id)}
-            className="shrink-0 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
+            className="shrink-0 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-on-slate"
           >
             Stop
           </button>

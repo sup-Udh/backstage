@@ -43,8 +43,8 @@ export function ThemeSwitcher({
               'transition-transform duration-75 ease-linear',
               'disabled:cursor-default',
               active
-                ? 'border-ink bg-brand text-ink shadow-[3px_3px_0_0_var(--color-ink)]'
-                : 'border-ink bg-paper text-ink-3 shadow-[2px_2px_0_0_var(--color-ink)] hover:-translate-x-px hover:-translate-y-px hover:bg-brand-pale hover:text-ink'
+                ? 'border-ink bg-brand text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)]'
+                : 'border-ink bg-paper text-ink-3 shadow-[2px_2px_0_0_var(--color-shadow)] hover:-translate-x-px hover:-translate-y-px hover:bg-brand-pale hover:text-ink'
             ].join(' ')}
           >
             <span aria-hidden className={active ? 'text-ink' : 'text-rule'}>

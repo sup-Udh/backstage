@@ -355,7 +355,7 @@ export function MessagesPanel({ cast, workers, onSubmit }: Props) {
               if (message.kind === 'user') {
                 return (
                   <li key={entry.key} className="flex justify-end">
-                    <p className="max-w-[85%] border-2 border-ink bg-brand px-2.5 py-1.5 font-ui text-[12px] leading-[1.5] text-ink">
+                    <p className="max-w-[85%] border-2 border-ink bg-brand px-2.5 py-1.5 font-ui text-[12px] leading-[1.5] text-on-brand">
                       {message.text}
                     </p>
                   </li>
@@ -583,7 +583,7 @@ function Empty({
         <button
           type="button"
           onClick={() => useBackstage.getState().setPage('agents')}
-          className="mt-3 border-[3px] border-ink bg-brand px-4 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-ink shadow-[3px_3px_0_0_var(--color-ink)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
+          className="mt-3 border-[3px] border-ink bg-brand px-4 py-1.5 font-pixel text-[11px] font-bold uppercase tracking-[0.06em] text-on-brand shadow-[3px_3px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-lite"
         >
           Open Agents
         </button>

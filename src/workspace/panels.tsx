@@ -290,7 +290,7 @@ export function GitPanel({ query }: { query: string }) {
             aria-pressed={view === t}
             className={`border-2 px-2 py-0.5 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors ${
               view === t
-                ? 'border-ink bg-brand text-ink'
+                ? 'border-ink bg-brand text-on-brand'
                 : 'border-rule text-ink-3 hover:border-ink hover:text-ink'
             }`}
           >
@@ -503,7 +503,7 @@ export function TasksPanel({
                   <button
                     type="button"
                     onClick={() => void cancel(agent.id)}
-                    className="mt-1.5 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-cream"
+                    className="mt-1.5 border-2 border-ink bg-cream px-2 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-rust hover:text-on-slate"
                   >
                     Stop
                   </button>

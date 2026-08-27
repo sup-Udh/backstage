@@ -51,14 +51,14 @@ export function GoogleButton({ onClick, loading = false, disabled = false }: Pro
         // which disappears entirely against a paper surface.
         'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-deep',
         inert
-          ? 'cursor-not-allowed opacity-70 shadow-[3px_3px_0_0_var(--color-ink)]'
+          ? 'cursor-not-allowed opacity-70 shadow-[3px_3px_0_0_var(--color-shadow)]'
           : [
               'cursor-pointer',
               'hover:bg-brand-pale',
-              'shadow-[4px_4px_0_0_var(--color-ink)]',
-              'hover:shadow-[5px_5px_0_0_var(--color-ink)]',
+              'shadow-[4px_4px_0_0_var(--color-shadow)]',
+              'hover:shadow-[5px_5px_0_0_var(--color-shadow)]',
               'hover:-translate-x-px hover:-translate-y-px',
-              'active:shadow-[1px_1px_0_0_var(--color-ink)]',
+              'active:shadow-[1px_1px_0_0_var(--color-shadow)]',
               'active:translate-x-[3px] active:translate-y-[3px]'
             ].join(' ')
       ].join(' ')}

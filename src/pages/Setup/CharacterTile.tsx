@@ -50,7 +50,7 @@ export function CharacterTile({
         ].join(' ')}
       >
         <div className="absolute inset-x-0 bottom-0 h-6 bg-cream-2" />
-        <div className="absolute bottom-[20px] h-1.5 w-10 bg-ink/15" />
+        <div className="absolute bottom-[20px] h-1.5 w-10 bg-shadow/15" />
         <CharacterSprite
           appearance={character.appearance}
           state="idle"
@@ -68,7 +68,7 @@ export function CharacterTile({
           className={[
             'absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center border-2 font-pixel text-[10px] font-bold',
             selected
-              ? 'border-ink bg-brand text-ink'
+              ? 'border-ink bg-brand text-on-brand'
               : 'border-rule bg-cream text-transparent'
           ].join(' ')}
         >

@@ -84,7 +84,7 @@ export function WorkSection({ theme }: Props) {
         <ol className="mb-16 flex flex-col gap-4 lg:flex-row lg:gap-0">
           {STEPS.map((step, i) => (
             <li key={step.label} className="flex flex-1 items-stretch">
-              <div className="flex-1 border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-ink)]">
+              <div className="flex-1 border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-shadow)]">
                 <PixelArt
                   width={ICON}
                   height={ICON}
@@ -115,7 +115,7 @@ export function WorkSection({ theme }: Props) {
 
         {/* The contrast: what you stop looking at, and what replaces it. */}
         <div className="grid items-stretch gap-6 lg:grid-cols-2">
-          <div className="border-[3px] border-ink bg-ink p-6 shadow-[4px_4px_0_0_var(--color-ink-3)]">
+          <div className="border-[3px] border-ink bg-slate p-6 shadow-[4px_4px_0_0_var(--color-shadow)]">
             <p className="mb-4 font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-dim">
               No more staring at
             </p>

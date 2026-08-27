@@ -54,7 +54,7 @@ export function Avatar({ user, size = 24 }: Props) {
     <span
       aria-hidden
       style={box}
-      className="grid shrink-0 place-items-center border-2 border-ink bg-brand font-pixel font-bold leading-none text-ink"
+      className="grid shrink-0 place-items-center border-2 border-ink bg-brand font-pixel font-bold leading-none text-on-brand"
     >
       {initialsFor(user)}
     </span>

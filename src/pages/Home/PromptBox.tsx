@@ -78,9 +78,9 @@ export function PromptBox({
           'font-pixel text-base font-bold text-ink',
           'transition-transform duration-75 ease-linear',
           'disabled:cursor-default disabled:opacity-40',
-          'enabled:bg-brand enabled:shadow-[3px_3px_0_0_var(--color-ink)]',
+          'enabled:bg-brand enabled:shadow-[3px_3px_0_0_var(--color-shadow)]',
           'enabled:hover:-translate-x-px enabled:hover:-translate-y-px enabled:hover:bg-brand-lite',
-          'enabled:active:translate-x-[2px] enabled:active:translate-y-[2px] enabled:active:shadow-[1px_1px_0_0_var(--color-ink)]',
+          'enabled:active:translate-x-[2px] enabled:active:translate-y-[2px] enabled:active:shadow-[1px_1px_0_0_var(--color-shadow)]',
           'disabled:bg-cream-2'
         ].join(' ')}
       >

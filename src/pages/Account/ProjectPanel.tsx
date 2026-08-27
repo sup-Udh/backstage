@@ -60,7 +60,7 @@ export function ProjectPanel() {
         Project
       </h2>
 
-      <article className="max-w-[640px] border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-ink)]">
+      <article className="max-w-[640px] border-[3px] border-ink bg-paper p-4 shadow-[4px_4px_0_0_var(--color-shadow)]">
         <label className="block">
           <span className="font-pixel text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-3">
             Name
@@ -167,11 +167,19 @@ export function ProjectPanel() {
                 ].join(' ')}
               >
                 <CharacterSprite appearance={character.appearance} scale={2} />
-                <span className="font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] text-ink">
+                <span
+                  className={`font-pixel text-[11px] font-semibold uppercase tracking-[0.06em] ${
+                    on ? 'text-on-brand' : 'text-ink'
+                  }`}
+                >
                   {on && <span aria-hidden>★ </span>}
                   {character.name}
                 </span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                <span
+                  className={`font-mono text-[10px] uppercase tracking-[0.06em] ${
+                    on ? 'text-on-brand/75' : 'text-ink-3'
+                  }`}
+                >
                   {agent.role}
                 </span>
               </button>
