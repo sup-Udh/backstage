@@ -65,11 +65,11 @@ export const terminalRun: AgentTool = {
   },
   describe: (i) => `Ran \`${String(i.command).slice(0, 70)}\``,
 
-  async execute(input): Promise<ToolResult> {
+  async execute(input, ctx): Promise<ToolResult> {
     const command = String(input.command ?? '').trim()
     if (!command) return { success: false, error: 'Empty command.' }
 
-    const root = getWorkspaceRoot()
+    const root = ctx.workspaceRoot || getWorkspaceRoot()
     if (!root) return { success: false, error: 'No workspace folder is open.' }
 
     const refusal = screenCommand(command)

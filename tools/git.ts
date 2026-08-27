@@ -10,8 +10,9 @@ import { truncate, type AgentTool, type ToolResult } from './types'
  * question of injection through the model's parameters.
  */
 
-function git(args: string[], maxChars: number): Promise<ToolResult> {
-  const root = getWorkspaceRoot()
+function git(args: string[], maxChars: number, workspaceRoot?: string | null): Promise<ToolResult> {
+  // Runs in the execution's own workspace, not the globally open one.
+  const root = workspaceRoot || getWorkspaceRoot()
   if (!root) {
     return Promise.resolve({ success: false, error: 'No workspace folder is open.' })
   }
@@ -46,7 +47,7 @@ export const gitStatus: AgentTool = {
     'Show the working tree status of the workspace repository: staged, unstaged and untracked files.',
   inputSchema: { type: 'object', properties: {} },
   describe: () => 'Checked git status',
-  execute: () => git(['status', '--porcelain=v1', '-b'], 8_000)
+  execute: (_input, ctx) => git(['status', '--porcelain=v1', '-b'], 8_000, ctx.workspaceRoot)
 }
 
 export const gitDiff: AgentTool = {
@@ -62,14 +63,14 @@ export const gitDiff: AgentTool = {
     }
   },
   describe: (i) => (i.path ? `Read the diff for ${String(i.path)}` : 'Read the diff'),
-  execute: (input) => {
+  execute: (input, ctx) => {
     const args = ['diff', '--stat', '--patch']
     if (input.staged) args.push('--staged')
     if (typeof input.path === 'string' && input.path.trim()) {
       // `--` stops git treating a path as a revision.
       args.push('--', input.path.trim())
     }
-    return git(args, 16_000)
+    return git(args, 16_000, ctx.workspaceRoot)
   }
 }
 
@@ -85,13 +86,13 @@ export const gitLog: AgentTool = {
     }
   },
   describe: () => 'Read the commit history',
-  execute: (input) => {
+  execute: (input, ctx) => {
     const limit = Math.min(Math.max(Number(input.limit) || 20, 1), 100)
     const args = ['log', `-${limit}`, '--pretty=format:%h %ad %an: %s', '--date=short']
     if (typeof input.path === 'string' && input.path.trim()) {
       args.push('--', input.path.trim())
     }
-    return git(args, 8_000)
+    return git(args, 8_000, ctx.workspaceRoot)
   }
 }
 
@@ -123,7 +124,7 @@ export const gitCommit: AgentTool = {
   },
   requiresApproval: true,
   describe: (i) => `Committed: ${String(i.message ?? '').slice(0, 48)}`,
-  execute: async (input) => {
+  execute: async (input, ctx) => {
     const message = typeof input.message === 'string' ? input.message.trim() : ''
     if (!message) return { success: false, error: 'A commit message is required.' }
 
@@ -132,11 +133,11 @@ export const gitCommit: AgentTool = {
       : []
 
     if (paths.length > 0) {
-      const staged = await git(['add', '--', ...paths], 4_000)
+      const staged = await git(['add', '--', ...paths], 4_000, ctx.workspaceRoot)
       if (!staged.success) return staged
     }
 
-    return git(['commit', '-m', message], 8_000)
+    return git(['commit', '-m', message], 8_000, ctx.workspaceRoot)
   }
 }
 

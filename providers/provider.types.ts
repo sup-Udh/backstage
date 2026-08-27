@@ -57,8 +57,33 @@ export interface Turn {
   /** On a tool turn: which call this answers. */
   toolCallId?: string
   toolName?: string
+  /**
+   * On a tool turn: whether the tool failed.
+   *
+   * Provider-neutral because it is a fact about the tool run, not about any
+   * SDK. Gemini's function-response format has a dedicated `error` key that
+   * means something different to the model than a successful result whose text
+   * happens to begin "Error:", and without this flag the adapter could only
+   * guess by sniffing the string.
+   */
+  isError?: boolean
   /** Opaque data specific to the provider, preserved exactly across turns. */
   providerData?: Record<string, unknown>
+}
+
+/**
+ * Who this request belongs to.
+ *
+ * Carried purely so a provider can label its diagnostics. Two agents running
+ * at once produce interleaved lines in one console, and without an identity on
+ * each line there is no way to tell one agent's tool loop from another's —
+ * which is exactly the confusion that made concurrent runs look like they were
+ * sharing state when they were not.
+ */
+export interface RequestIdentity {
+  agentId: string
+  agentName: string
+  executionId: string
 }
 
 export interface GenerateTurnRequest {
@@ -66,6 +91,8 @@ export interface GenerateTurnRequest {
   system: string
   turns: Turn[]
   tools: ToolSpec[]
+  /** For logging only. Never sent to the provider. */
+  identity?: RequestIdentity
   /**
    * Called with each fragment of prose as it arrives.
    *

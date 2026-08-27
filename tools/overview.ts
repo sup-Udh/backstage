@@ -100,8 +100,9 @@ export const workspaceOverview: AgentTool = {
   inputSchema: { type: 'object', properties: {} },
   describe: () => 'Surveyed the project',
 
-  async execute(): Promise<ToolResult> {
-    const root = getWorkspaceRoot()
+  async execute(_input, ctx): Promise<ToolResult> {
+    // The execution's own root, not whatever folder is globally open.
+    const root = ctx.workspaceRoot || getWorkspaceRoot()
     if (!root) return { success: false, error: 'No workspace folder is open.' }
 
     const parts: string[] = [`Workspace root: ${root}`]
@@ -111,7 +112,7 @@ export const workspaceOverview: AgentTool = {
       try {
         const raw = readFileSync(manifest, 'utf8')
         parts.push(
-          `--- ${toRelative(manifest)} ---\n${truncate(raw, 6_000).text}`
+          `--- ${toRelative(manifest, root)} ---\n${truncate(raw, 6_000).text}`
         )
       } catch {
         // Unreadable manifest is not fatal; the tree still helps.
@@ -124,7 +125,7 @@ export const workspaceOverview: AgentTool = {
     if (readme) {
       try {
         parts.push(
-          `--- ${toRelative(readme)} ---\n${truncate(readFileSync(readme, 'utf8'), 4_000).text}`
+          `--- ${toRelative(readme, root)} ---\n${truncate(readFileSync(readme, 'utf8'), 4_000).text}`
         )
       } catch {
         // Same.

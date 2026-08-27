@@ -6,7 +6,12 @@ import { getTool, toolsForCapabilities } from '../tools/registry'
 import { teamTools } from '../tools/team'
 import { isTeamLead } from '../projects/projectStore'
 import { listAgents } from './agentStore'
-import { getWorkspace, getWorkspaceRoot } from '../workspace/WorkspaceManager'
+import { existsSync } from 'node:fs'
+import {
+  getWorkspace,
+  getWorkspaceRoot,
+  type WorkspaceInfo
+} from '../workspace/WorkspaceManager'
 import { systemPromptFor } from './prompts'
 import { BudgetTracker, budgetFor } from './budget'
 import { systemBus } from './EventBus'
@@ -78,6 +83,17 @@ export class Execution {
 
   private checkCancelled(): void {
     if (this.cancelled) throw new CancelledError()
+  }
+
+  /** This execution's workspace, described the way the prompt wants it. */
+  private workspaceInfo(): WorkspaceInfo {
+    if (this.workspaceRoot === null) return { root: null, name: null, exists: false }
+    if (this.workspaceRoot === getWorkspaceRoot()) return getWorkspace()
+    return {
+      root: this.workspaceRoot,
+      name: this.workspaceRoot.split(/[\/]/).filter(Boolean).pop() ?? this.workspaceRoot,
+      exists: existsSync(this.workspaceRoot)
+    }
   }
 
   private send(type: RuntimeEventType, fields: Record<string, unknown> = {}): void {
@@ -173,7 +189,13 @@ export class Execution {
     const turns: Turn[] = [...this.history, { role: 'user', content: this.task.prompt }]
     const system = systemPromptFor(
       this.agent,
-      getWorkspace(),
+      /*
+       * The workspace this execution is actually pointed at, which is not
+       * necessarily the one the user has open — an agent bound to a folder
+       * works there regardless. Describing the global one here told a bound
+       * agent it was in a project its own tools could not reach.
+       */
+      this.workspaceInfo(),
       tools.map((t) => t.name),
       // The task, so a delegated agent is told what larger job it is part of.
       this.task
@@ -231,6 +253,15 @@ export class Execution {
           system,
           turns,
           tools: specs,
+          /*
+           * Who is asking. Used only to label the provider's own log lines, so
+           * two agents running at once can be told apart in one console.
+           */
+          identity: {
+            agentId: this.agent.id,
+            agentName: this.agent.name,
+            executionId: this.id
+          },
           onDelta: (chunk) => {
             // A cancelled execution stops narrating immediately, even though
             // the request it is attached to cannot be recalled mid-flight.
@@ -275,6 +306,7 @@ export class Execution {
             role: 'tool',
             toolCallId: call.id,
             toolName: call.name,
+            isError: true,
             content: `Error: you do not have a tool named ${call.name}. Available: ${
               tools.map((t) => t.name).join(', ') || 'none'
             }.`
@@ -289,6 +321,7 @@ export class Execution {
             role: 'tool',
             toolCallId: call.id,
             toolName: call.name,
+            isError: true,
             content: `Error: ${repeat}`
           })
           this.send('agent.tool.failed', {
@@ -324,6 +357,7 @@ export class Execution {
               role: 'tool',
               toolCallId: call.id,
               toolName: call.name,
+              isError: true,
               content:
                 'Error: the user did not approve this action. Do not try it again. Continue without it and say what you could not do.'
             })
@@ -398,6 +432,7 @@ export class Execution {
           role: 'tool',
           toolCallId: call.id,
           toolName: call.name,
+          isError: !ok,
           content: output
         })
       }
@@ -422,7 +457,17 @@ export class Execution {
     })
 
     try {
-      const final = await provider.generateTurn({ model, system, turns, tools: [] })
+      const final = await provider.generateTurn({
+        model,
+        system,
+        turns,
+        tools: [],
+        identity: {
+          agentId: this.agent.id,
+          agentName: this.agent.name,
+          executionId: this.id
+        }
+      })
       const text = (final.text ?? '').trim()
       if (text) return text
     } catch (err) {

@@ -65,9 +65,9 @@ export const filesystemList: AgentTool = {
   },
   describe: (i) => `Listed ${i.path === '.' ? 'the project root' : String(i.path)}`,
 
-  async execute(input) {
+  async execute(input, ctx) {
     try {
-      const target = resolveInside(String(input.path ?? '.'))
+      const target = resolveInside(String(input.path ?? '.'), ctx.workspaceRoot)
       if (!existsSync(target)) return fail(`No such path: ${input.path}`)
       if (!statSync(target).isDirectory()) return fail(`Not a directory: ${input.path}`)
 
@@ -108,9 +108,9 @@ export const filesystemRead: AgentTool = {
   },
   describe: (i) => `Read ${String(i.path)}`,
 
-  async execute(input) {
+  async execute(input, ctx) {
     try {
-      const target = resolveInside(String(input.path ?? ''))
+      const target = resolveInside(String(input.path ?? ''), ctx.workspaceRoot)
       if (!existsSync(target)) return fail(`No such file: ${input.path}`)
       const info = statSync(target)
       if (info.isDirectory()) return fail(`${input.path} is a directory. Use filesystem_list.`)
@@ -125,7 +125,7 @@ export const filesystemRead: AgentTool = {
       return {
         success: true,
         output: text,
-        metadata: { path: toRelative(target), truncated }
+        metadata: { path: toRelative(target, ctx.workspaceRoot), truncated }
       }
     } catch (err) {
       return fail(err instanceof Error ? err.message : 'Could not read that file.')
@@ -175,11 +175,11 @@ export const filesystemSearch: AgentTool = {
   },
   describe: (i) => `Searched for "${String(i.query)}"`,
 
-  async execute(input) {
+  async execute(input, ctx) {
     try {
       const query = String(input.query ?? '').trim()
       if (!query) return fail('Empty query.')
-      const base = resolveInside(String(input.path ?? '.'))
+      const base = resolveInside(String(input.path ?? '.'), ctx.workspaceRoot)
       const limit = Math.min(Number(input.maxResults) || 60, 200)
 
       const files: string[] = []
@@ -197,7 +197,7 @@ export const filesystemSearch: AgentTool = {
 
       if (input.filenames) {
         for (const f of files) {
-          const rel = toRelative(f)
+          const rel = toRelative(f, ctx.workspaceRoot)
           if (re.test(rel)) hits.push(rel)
           if (hits.length >= limit) break
         }
@@ -217,7 +217,7 @@ export const filesystemSearch: AgentTool = {
           const lines = content.split('\n')
           for (let i = 0; i < lines.length; i++) {
             if (re.test(lines[i])) {
-              hits.push(`${toRelative(f)}:${i + 1}: ${lines[i].trim().slice(0, 200)}`)
+              hits.push(`${toRelative(f, ctx.workspaceRoot)}:${i + 1}: ${lines[i].trim().slice(0, 200)}`)
               if (hits.length >= limit) break
             }
           }
@@ -257,7 +257,7 @@ export const filesystemCreate: AgentTool = {
 
   async execute(input, ctx) {
     try {
-      const target = resolveInside(String(input.path ?? ''))
+      const target = resolveInside(String(input.path ?? ''), ctx.workspaceRoot)
       const content = String(input.content ?? '')
       if (Buffer.byteLength(content, 'utf8') > MAX_WRITE_BYTES) {
         return fail('That content is too large to write.')
@@ -267,11 +267,11 @@ export const filesystemCreate: AgentTool = {
       mkdirSync(dirname(target), { recursive: true })
       writeFileSync(target, content, 'utf8')
 
-      ctx.onFileChange?.(existed ? 'modified' : 'created', toRelative(target))
+      ctx.onFileChange?.(existed ? 'modified' : 'created', toRelative(target, ctx.workspaceRoot))
       return {
         success: true,
-        output: `${existed ? 'Overwrote' : 'Created'} ${toRelative(target)} (${content.length} chars).`,
-        metadata: { path: toRelative(target) }
+        output: `${existed ? 'Overwrote' : 'Created'} ${toRelative(target, ctx.workspaceRoot)} (${content.length} chars).`,
+        metadata: { path: toRelative(target, ctx.workspaceRoot) }
       }
     } catch (err) {
       return fail(err instanceof Error ? err.message : 'Could not write that file.')
@@ -300,7 +300,7 @@ export const filesystemEdit: AgentTool = {
 
   async execute(input, ctx) {
     try {
-      const target = resolveInside(String(input.path ?? ''))
+      const target = resolveInside(String(input.path ?? ''), ctx.workspaceRoot)
       if (!existsSync(target)) return fail(`No such file: ${input.path}`)
 
       const oldText = String(input.oldText ?? '')
@@ -321,11 +321,11 @@ export const filesystemEdit: AgentTool = {
       }
 
       writeFileSync(target, content.replace(oldText, newText), 'utf8')
-      ctx.onFileChange?.('modified', toRelative(target))
+      ctx.onFileChange?.('modified', toRelative(target, ctx.workspaceRoot))
       return {
         success: true,
-        output: `Edited ${toRelative(target)}.`,
-        metadata: { path: toRelative(target) }
+        output: `Edited ${toRelative(target, ctx.workspaceRoot)}.`,
+        metadata: { path: toRelative(target, ctx.workspaceRoot) }
       }
     } catch (err) {
       return fail(err instanceof Error ? err.message : 'Could not edit that file.')

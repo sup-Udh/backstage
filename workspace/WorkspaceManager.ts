@@ -106,8 +106,26 @@ export class WorkspaceError extends Error {}
  * workspace if and only if the relative path from the root neither starts with
  * `..` nor is absolute.
  */
-export function resolveInside(relPath: string): string {
-  const base = root
+export function resolveInside(relPath: string, workspaceRoot?: string | null): string {
+  /*
+   * The root is a parameter, and the module-level one is only the fallback.
+   *
+   * It used to read the module-level `root` unconditionally, which made the
+   * open folder a piece of global mutable state that every tool resolved
+   * against. Two consequences, both of which presented as an agent reading the
+   * wrong project:
+   *
+   *   - an agent bound to a folder (`agent.workspace`) was resolved correctly
+   *     by the executor, handed to the tool as `ctx.workspaceRoot`, and then
+   *     ignored here — so it read whatever the user happened to have open;
+   *   - two agents running at once on different folders both resolved against
+   *     the single global, and switching the open folder mid-run moved an
+   *     in-flight execution to the new one between one tool call and the next.
+   *
+   * The containment check below is unchanged and still the only one; it now
+   * just runs against the root the caller is actually entitled to.
+   */
+  const base = workspaceRoot ?? root
   if (!base) throw new WorkspaceError('No workspace folder is open.')
 
   const raw = typeof relPath === 'string' ? relPath.trim() : ''
@@ -124,8 +142,9 @@ export function resolveInside(relPath: string): string {
 }
 
 /** Present a path back to the model as workspace-relative. */
-export function toRelative(absPath: string): string {
-  if (!root) return absPath
-  const rel = relative(root, absPath)
+export function toRelative(absPath: string, workspaceRoot?: string | null): string {
+  const base = workspaceRoot ?? root
+  if (!base) return absPath
+  const rel = relative(base, absPath)
   return rel === '' ? '.' : rel.split(sep).join('/')
 }
