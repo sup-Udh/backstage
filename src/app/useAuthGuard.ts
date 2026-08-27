@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAuth } from '../stores/authStore'
-import { useBackstage } from '../stores/backstageStore'
+import { useBackstage, PUBLIC_VIEWS } from '../stores/backstageStore'
 import { useProject } from '../stores/projectStore'
 import { useTeam } from '../stores/teamStore'
 
@@ -8,8 +8,8 @@ import { useTeam } from '../stores/teamStore'
  * Keep the application's view in step with who is signed in.
  *
  * Route protection has two halves and this is the active one. `App` refuses to
- * *render* a protected view without an account, which handles the frame the
- * user is looking at; this handles the transition, so the state behind that
+ * *render* the wrong surface for the current session, which handles the frame
+ * the user is looking at; this handles the transition, so the state behind that
  * frame is torn down rather than left sitting in memory behind a guard.
  *
  * The distinction matters for the back-navigation test in requirement 16. A
@@ -25,16 +25,37 @@ import { useTeam } from '../stores/teamStore'
  */
 export function useAuthGuard(): void {
   const status = useAuth((s) => s.status)
+  /*
+   * The view is a dependency, not just a read.
+   *
+   * Without it this only fired when the session changed, which was enough for
+   * "signing in carries on into the app" and not enough for anything else: an
+   * authenticated user who arrived at Home by any route other than a fresh
+   * launch simply stayed there, because nothing about the session had changed
+   * to wake the effect up. Watching the view is what makes the rule a rule
+   * rather than a one-off redirect.
+   */
+  const view = useBackstage((s) => s.view)
 
   useEffect(() => {
     /*
-     * Signing in from the login page carries straight on into the app, rather
-     * than leaving the user looking at the button they just used. The walk-in
-     * screen is the next step for the same reason it always was: the project
-     * registry still has to be read and a project still has to be chosen.
+     * Signed in, and looking at a surface for people who are not.
+     *
+     * Home explains the product and offers a way in; the login page is that
+     * way in. Neither has anything to say to somebody who already has a
+     * session, so both hand straight over to initialisation, which reads the
+     * project registry and leaves the user at their projects. That is
+     * requirement 18's "launch, splash, projects" and requirement 36's "a
+     * signed-in user who visits Home is redirected", and they are the same
+     * rule seen from two directions.
+     *
+     * `loading` is the destination rather than `projects` because the project
+     * registry has not been read yet. Jumping straight to the picker would
+     * show an empty list to a user who has five projects, for as long as the
+     * disk takes to answer.
      */
     if (status === 'authenticated') {
-      if (useBackstage.getState().view === 'login') {
+      if (PUBLIC_VIEWS.includes(view)) {
         useBackstage.setState({ view: 'loading' })
       }
       return
@@ -42,15 +63,15 @@ export function useAuthGuard(): void {
 
     if (status !== 'unauthenticated') return
 
-    const { view, resetForSignOut } = useBackstage.getState()
+    const { resetForSignOut } = useBackstage.getState()
 
     /*
      * Only act on a *departure* from an authenticated surface. Without this,
-     * a user sitting on the landing page while signed out would be shoved to
-     * the login page on every re-render of this effect — the landing page is
-     * public, and requirement 14 keeps it that way.
+     * a user sitting on Home while signed out would be shoved to the login
+     * page on every re-render of this effect — Home is public, and
+     * requirement 14 keeps it that way.
      */
-    if (view === 'landing' || view === 'login') return
+    if (PUBLIC_VIEWS.includes(view)) return
 
     resetForSignOut()
 
@@ -75,5 +96,5 @@ export function useAuthGuard(): void {
       busy: null,
       loaded: false
     })
-  }, [status])
+  }, [status, view])
 }

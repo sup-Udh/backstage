@@ -1,7 +1,8 @@
-import { useBackstage, PROTECTED_VIEWS } from './stores/backstageStore'
+import { useBackstage, PROTECTED_VIEWS, PUBLIC_VIEWS } from './stores/backstageStore'
 import { useAuth, useAuthBridge } from './stores/authStore'
+import { useAppearanceBridge } from './stores/appearanceStore'
 import { useAuthGuard } from './app/useAuthGuard'
-import { Landing } from './pages/Landing/Landing'
+import { StartScreen } from './pages/Start/StartScreen'
 import { Login } from './pages/Login/Login'
 import { AuthBoot } from './pages/Loading/AuthBoot'
 import { EnteringWorkspace } from './pages/Loading/EnteringWorkspace'
@@ -13,10 +14,9 @@ import { AppShell } from './app/AppShell'
 /**
  * Six surfaces, in the order you meet them.
  *
- * The landing page you arrive at, signing in, the walk in, choosing which
- * project, creating one, and the project itself. They share one visual
- * language, so moving between them reads as walking between rooms rather than
- * between products.
+ * The start screen, signing in, the walk in, choosing which project, creating
+ * one, and the project itself. They share one visual language, so moving between them reads
+ * as walking between rooms rather than between products.
  *
  * The middle ones are view states rather than routes because there is nothing
  * to route to yet: until a project is open there is no workspace, no roster and
@@ -33,6 +33,14 @@ import { AppShell } from './app/AppShell'
  * that reaches `AppShell` while the status is anything but `authenticated`.
  * That is what makes back-navigation to the dashboard after a sign-out land on
  * the login page.
+ *
+ * It promises the same in the other direction, and that half is new. A signed
+ * in user never sees Home or the login page, not even for a frame — which is
+ * the difference between requirement 41 being satisfied and being *nearly*
+ * satisfied. `useAuthGuard` moves the view, but effects run after paint, so a
+ * guard that lived only in the effect would let one frame of Home through on
+ * every launch of an authenticated session. The check below happens during
+ * render, so that frame does not exist.
  *
  * It does not promise that the data is safe, and it must not be relied on for
  * that. There are two layers underneath it that do:
@@ -56,12 +64,14 @@ export default function App() {
   useAuthBridge()
   // And tear the previous account's state down when it does.
   useAuthGuard()
+  // Light or dark, following the desktop unless the user has chosen.
+  useAppearanceBridge()
 
   /*
-   * Nothing renders until it is known who, if anyone, is signed in. Not the
-   * landing page either: `Landing`'s Get Started button behaves differently
-   * for an authenticated user, and showing it a frame early means showing a
-   * button that is about to change what it does.
+   * Nothing renders until it is known who, if anyone, is signed in. Not Home
+   * either: its primary action behaves differently for an authenticated user,
+   * and showing it a frame early means showing a button that is about to
+   * change what it does.
    */
   if (status === 'initialising') return <AuthBoot />
 
@@ -69,16 +79,21 @@ export default function App() {
     return <Login />
   }
 
+  /*
+   * The reverse guard, held for exactly as long as the effect takes to move
+   * the view — a single tick. The startup screen is the honest thing to show
+   * in that tick: the session has resolved and initialisation is what happens
+   * next, so it is not a placeholder standing in for a decision, it is the
+   * decision.
+   */
+  if (status === 'authenticated' && PUBLIC_VIEWS.includes(view)) {
+    return <AuthBoot />
+  }
+
   switch (view) {
     case 'landing':
-      return <Landing />
+      return <StartScreen />
     case 'login':
-      /*
-       * Someone already signed in has no business on the sign-in page —
-       * requirement 14. `useAuthGuard` moves them on the moment the session
-       * resolves, so this only ever renders for a frame, and only for a user
-       * who genuinely has no account yet.
-       */
       return <Login />
     case 'loading':
       return <EnteringWorkspace />
