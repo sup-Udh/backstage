@@ -36,7 +36,7 @@ import type {
  * until a project exists there is no workspace, no roster and no theme for a
  * page to render.
  *
- *   landing    the shop window
+ *   landing    Home: the product's start screen, for people with no account
  *   login      signing in with Google; the gate to everything below it
  *   loading    entering: real initialisation, shown as a walk to the office
  *   onboarding first run for an account: connect your AI providers
@@ -53,6 +53,12 @@ import type {
  * `PROTECTED_VIEWS` below is the list `App` enforces — deriving it from the
  * type rather than restating it in a guard is what stops a sixth view being
  * added one day and quietly defaulting to public.
+ *
+ * The guard runs in both directions. A signed-out user cannot reach a
+ * protected view, and a signed-in one cannot sit on a public one: Home exists
+ * to explain the product and offer a way in, and neither is something to show
+ * somebody who is already inside. Launching with a session goes straight to
+ * their projects, which is the whole of requirements 18 and 41.
  */
 export type AppView =
   | 'landing'
@@ -79,6 +85,17 @@ export const PROTECTED_VIEWS: readonly AppView[] = [
 ]
 
 /**
+ * The views that an account has finished with.
+ *
+ * The complement of `PROTECTED_VIEWS`, and stated as its complement rather
+ * than written out, so the two lists cannot disagree about a view added later.
+ * A signed-in user who reaches one of these is on their way to their projects.
+ */
+export const PUBLIC_VIEWS: readonly AppView[] = (
+  ['landing', 'login', 'loading', 'onboarding', 'projects', 'setup', 'app'] as AppView[]
+).filter((v) => !PROTECTED_VIEWS.includes(v))
+
+/**
  * Which surface the command centre is showing.
  *
  * Always exactly one — the panel is a tool with tabs, not a stack of drawers,
@@ -97,6 +114,22 @@ export type TabId = 'messages' | 'files' | 'git' | 'terminal' | 'tasks' | 'comma
  * settings.
  */
 export type PageId = 'home' | 'cases' | 'agents' | 'automations' | 'account'
+
+/**
+ * Which part of Settings is open.
+ *
+ * Lifted out of `Account`'s own `useState` so the account menu can open the
+ * page *at* a section — "API keys" has to land on the providers panel, not on
+ * the profile with the panel one click away. It stays a single source of
+ * truth rather than a prop chain: `Account` reads and writes this, and nothing
+ * else needs to know the section list exists.
+ */
+export type AccountSection =
+  | 'profile'
+  | 'providers'
+  | 'agents'
+  | 'projects'
+  | 'account'
 
 /** The target that means "everyone who is in the office". */
 export const ALL_AGENTS = 'all'
@@ -127,6 +160,8 @@ const SESSION_LINE_LIMIT = 400
 interface BackstageState {
   view: AppView
   page: PageId
+  /** Which section Settings opens on. */
+  accountSection: AccountSection
 
   /** Private per-agent transcripts. Keyed by agentId. */
   agentMessages: Record<string, ChatMessage[]>
@@ -256,8 +291,19 @@ interface BackstageState {
   showSetup: () => void
   /** A project is open; show it. */
   openProject: () => void
+  /**
+   * Leave the workspace for Home.
+   *
+   * Only reachable while signed out — the guard sends an authenticated user
+   * straight back to their projects — so it is the login page's Back button
+   * and the walk-in screen's failure exit, and nothing else. Inside the app,
+   * the way out of a project is the project list.
+   */
   exitToLanding: () => void
   setPage: (page: PageId) => void
+  /** Open Settings, at a given section. */
+  openAccount: (section?: AccountSection) => void
+  setAccountSection: (section: AccountSection) => void
 
   setProviders: (statuses: ProviderStatus[]) => void
   setChatTarget: (target: string) => void
@@ -306,6 +352,7 @@ export function localId(prefix = 'local'): string {
 export const useBackstage = create<BackstageState>((set, get) => ({
   view: 'landing',
   page: 'home',
+  accountSection: 'profile',
 
   agentMessages: {},
   agentActivity: {},
@@ -343,6 +390,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
     set({
       view: 'login',
       page: 'home',
+      accountSection: 'profile',
       agentMessages: {},
       agentActivity: {},
       agentTools: {},
@@ -377,6 +425,8 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   openProject: () => set({ view: 'app', page: 'home' }),
   exitToLanding: () => set({ view: 'landing' }),
   setPage: (page) => set({ page }),
+  openAccount: (accountSection = 'profile') => set({ page: 'account', accountSection }),
+  setAccountSection: (accountSection) => set({ accountSection }),
 
   setProviders: (providers) => set({ providers }),
 
