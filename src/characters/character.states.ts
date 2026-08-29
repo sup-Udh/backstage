@@ -2,23 +2,6 @@ import type { AgentStatus } from '../agents/agent.types'
 import type { ToolGroup } from '../agents/toolActivity'
 import type { CharacterState } from './character.types'
 
-/**
- * agent state -> character state -> animation.
- *
- * The single mapping from the runtime's lifecycle to something a body can do.
- * Components never decide this for themselves: a chip that invents its own
- * label and a character that invents its own pose are the two halves of the
- * same bug, where the office and the panel disagree about who is working.
- *
- * Locomotion ('walking') is owned by the world, not the agent: an agent is
- * "working" even while its character is still crossing the office to reach a
- * desk. The world overrides the visual state during travel.
- *
- * `seated` is likewise the world's to decide. The runtime knows an agent is
- * thinking; only the office knows whether the body doing the thinking is in a
- * chair. This is what stopped a model call — which happens between every pair
- * of tool calls — from sending somebody walking to the corkboard and back.
- */
 export function characterStateForAgent(
   status: AgentStatus,
   seated = false,
