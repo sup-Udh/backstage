@@ -635,11 +635,10 @@ export function TerminalPanel() {
       {sessions.length === 0 && (
         <div className="flex min-h-0 flex-1 flex-col items-start justify-center gap-3 px-5">
           <p className="font-pixel text-sm font-bold uppercase tracking-[0.08em] text-ink">
-            No active session
+            No active sessions
           </p>
           <p className="max-w-[36ch] font-ui text-[13px] leading-[1.6] text-ink-3">
-            Open a workspace terminal, or start Claude Code in one. Either way it
-            is a real process in your project folder.
+            No active Claude sessions for this project. Open a workspace terminal, or start Claude Code in one.
           </p>
           <div className="flex flex-wrap gap-2">
             <BigButton onClick={() => void create()} disabled={starting}>

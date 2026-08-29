@@ -18,6 +18,7 @@ export type AgentSessionStatus = 'starting' | 'working' | 'waiting' | 'exited' |
 
 export interface AgentSession {
   id: string
+  projectId: string | null
   /** Which CLI is running. */
   provider: SessionAgent
   terminalSessionId: string
@@ -89,13 +90,16 @@ class AgentSessions extends EventEmitter {
   constructor() {
     super()
 
-    terminals.on('agent', ({ id, agent, cwd }) => {
+    terminals.on('agent', ({ id, projectId, agent, cwd }) => {
       const kind: string = agent ?? 'cli'
-      const n = (this.counts.get(kind) ?? 0) + 1
-      this.counts.set(kind, n)
+      // Project-scoped counting
+      const countKey = projectId ? `${projectId}:${kind}` : kind
+      const n = (this.counts.get(countKey) ?? 0) + 1
+      this.counts.set(countKey, n)
 
       const session: AgentSession = {
         id: `session-${id}`,
+        projectId: projectId || null,
         provider: agent,
         terminalSessionId: id,
         cwd,

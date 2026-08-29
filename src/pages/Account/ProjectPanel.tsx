@@ -98,7 +98,7 @@ export function ProjectPanel() {
       </h3>
       <p className="mb-4 max-w-[640px] font-ui text-[13px] leading-snug text-ink-3">
         Who exists in this project. Only these characters appear anywhere —
-        in the office, the roster, your conversations or the case list.
+        in the office, the roster, your conversations or your tasks.
       </p>
 
       <div className="flex flex-wrap gap-2">

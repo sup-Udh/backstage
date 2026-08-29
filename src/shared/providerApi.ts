@@ -141,6 +141,7 @@ export type SessionAgent = 'claude' | 'codex' | 'gemini' | null
 
 export interface TerminalSession {
   id: string
+  projectId: string
   title: string
   cwd: string
   shell: string
@@ -162,6 +163,7 @@ export type AgentSessionStatus =
 /** A real external CLI session, e.g. Claude Code running in a PTY. */
 export interface AgentSession {
   id: string
+  projectId: string | null
   provider: SessionAgent
   terminalSessionId: string
   cwd: string

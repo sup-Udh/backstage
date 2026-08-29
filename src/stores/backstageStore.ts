@@ -113,7 +113,7 @@ export type TabId = 'messages' | 'files' | 'git' | 'terminal' | 'tasks' | 'comma
  * Changing it afterwards lives in Account, beside the rest of the project's
  * settings.
  */
-export type PageId = 'home' | 'cases' | 'agents' | 'automations' | 'account'
+export type PageId = 'home' | 'agents' | 'automations' | 'account'
 
 /**
  * Which part of Settings is open.
@@ -285,6 +285,10 @@ interface BackstageState {
    * approval and no terminal buffer survives into the next account's session.
    */
   resetForSignOut: () => void
+  /**
+   * Tear down transient state when switching projects.
+   */
+  resetForProjectSwitch: () => void
   /** Initialisation finished and there are projects to choose between. */
   showProjects: () => void
   /** Create a project: no projects exist, or the user asked for a new one. */
@@ -418,6 +422,30 @@ export const useBackstage = create<BackstageState>((set, get) => ({
        * next person re-enter keys that were never theirs to begin with, and
        * are still sitting encrypted in the OS keychain either way.
        */
+    }),
+
+  resetForProjectSwitch: () =>
+    set({
+      agentMessages: {},
+      agentActivity: {},
+      agentTools: {},
+      streaming: {},
+      sessionLines: {},
+      agentStates: {},
+      collaboration: [],
+      approvals: [],
+      chatTarget: ALL_AGENTS,
+      selectedAgentId: null,
+      threadTarget: null,
+      thread: null,
+      threadMessages: {},
+      tab: 'messages',
+      openFile: null,
+      agentSessions: [],
+      terminalSessions: [],
+      activeTerminalId: null,
+      requestedSessionId: null,
+      pendingCommand: null,
     }),
 
   showProjects: () => set({ view: 'projects' }),

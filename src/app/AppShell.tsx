@@ -3,14 +3,12 @@ import { useTeamSync } from '../agents/useTeamSync'
 import { Navbar } from '../components/Navbar/Navbar'
 import { ApprovalDock } from '../components/Approvals/ApprovalDock'
 import { Home } from '../pages/Home/Home'
-import { Cases } from '../pages/Cases/Cases'
 import { Agents } from '../pages/Agents/Agents'
 import { Automations } from '../pages/Automations/Automations'
 import { Account } from '../pages/Account/Account'
 
 const PAGES = {
   home: Home,
-  cases: Cases,
   agents: Agents,
   automations: Automations,
   account: Account

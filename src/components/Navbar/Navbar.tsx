@@ -13,9 +13,9 @@ import { AppearanceToggle } from '../Appearance/AppearanceToggle'
  * whole model exists to close. Changing it later lives in Account, beside the
  * rest of the project's settings.
  */
-const PAGES: { id: PageId; label: string }[] = [
+const PAGES: { id: PageId | 'projects'; label: string }[] = [
   { id: 'home', label: 'Home' },
-  { id: 'cases', label: 'Cases' },
+  { id: 'projects', label: 'Projects' },
   { id: 'agents', label: 'Agents' },
   { id: 'automations', label: 'Automations' }
 ]
@@ -58,7 +58,7 @@ export function Navbar() {
           Which project, and which world it happens in.
 
           Permanently on screen rather than tucked into settings: every page
-          below this bar shows only one project's agents, cases and
+          below this bar shows only one project's agents, tasks and
           conversations, and the user has to be able to tell at a glance which
           one that is. It doubles as the way into the project's own settings.
         */}
@@ -83,13 +83,20 @@ export function Navbar() {
 
         <nav className="flex items-center gap-1">
           {PAGES.map((item) => {
-            const active = item.id === page
+            const isProjects = item.id === 'projects'
+            const active = !isProjects && item.id === page
             return (
               <button
                 key={item.id}
                 type="button"
                 aria-current={active ? 'page' : undefined}
-                onClick={() => setPage(item.id)}
+                onClick={() => {
+                  if (isProjects) {
+                    showProjects()
+                  } else {
+                    setPage(item.id as PageId)
+                  }
+                }}
                 className={[
                   'relative px-3 py-2 font-ui text-sm font-semibold transition-colors',
                   active ? 'text-ink' : 'text-ink-3 hover:text-ink'

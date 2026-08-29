@@ -99,6 +99,8 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
 
   open: async (projectId) => {
+    const { useBackstage } = await import('./backstageStore')
+    useBackstage.getState().resetForProjectSwitch()
     const snapshot = await window.backstage.projects.open(projectId)
     if (!snapshot) return null
     set({ project: snapshot.project })

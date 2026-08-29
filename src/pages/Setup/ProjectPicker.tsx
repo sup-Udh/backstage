@@ -49,12 +49,32 @@ export function ProjectPicker() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  /** Nothing else may be started while a card is opening or being deleted. */
-  const busyElsewhere = opening !== null || deleting !== null
+  const activeProject = useProject((s) => s.project)
+  const agentSessions = useBackstage((s) => s.agentSessions)
+  const [stopping, setStopping] = useState<string | null>(null)
+
+  /** Nothing else may be started while a card is opening, deleting, or confirming stop. */
+  const busyElsewhere = opening !== null || deleting !== null || stopping !== null
+
+  const hasRunningSessions = (projectId: string) => {
+    return agentSessions.some(
+      (s) => s.projectId === projectId && s.status !== 'exited' && s.status !== 'error'
+    )
+  }
 
   const enter = async (project: Project) => {
+    if (activeProject && project.id !== activeProject.id && hasRunningSessions(activeProject.id)) {
+      setStopping(project.id)
+      return
+    }
+    
+    await proceedEnter(project)
+  }
+  
+  const proceedEnter = async (project: Project) => {
     setOpening(project.id)
     setConfirming(null)
+    setStopping(null)
     setError(null)
     try {
       const opened = await open(project.id)
@@ -62,9 +82,6 @@ export function ProjectPicker() {
         setError(`${project.name} could not be opened. Its folder may have moved.`)
         return
       }
-      // The roster is project-scoped, so it has to be reloaded before the world
-      // tries to render it — otherwise the office opens with the last
-      // project's team still in it for a frame.
       await refreshTeam()
       openProject()
     } catch (err) {
@@ -245,10 +262,42 @@ export function ProjectPicker() {
                     that sits a few pixels from "open".
                   */}
                   <div className="border-t-[3px] border-rule px-4 py-2.5 transition-colors group-focus-within:border-ink group-hover:border-ink">
-                    {asking ? (
+                    {stopping === project.id ? (
+                      <div>
+                        <p className="font-ui text-[12px] font-bold text-brand-deep uppercase tracking-wider mb-1">Switch Project?</p>
+                        <p className="font-ui text-[12px] leading-snug text-ink">
+                          {activeProject?.name} still has active local sessions running.
+                        </p>
+                        <p className="mt-1 font-ui text-[12px] leading-snug text-ink-3">
+                          Switching projects will stop them.
+                        </p>
+                        <div className="mt-2.5 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setStopping(null)
+                            }}
+                            className="border-2 border-rule px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-3 transition-colors enabled:hover:border-ink enabled:hover:text-ink"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void proceedEnter(project)
+                            }}
+                            className="border-2 border-ink bg-brand px-2.5 py-1 font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-on-brand"
+                          >
+                            Stop & Switch
+                          </button>
+                        </div>
+                      </div>
+                    ) : asking ? (
                       <div>
                         <p className="font-ui text-[12px] leading-snug text-ink">
-                          Delete {project.name}? Its agents, automations, cases and
+                          Delete {project.name}? Its agents, automations, tasks and
                           conversations go with it.
                         </p>
                         {/*

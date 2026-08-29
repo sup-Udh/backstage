@@ -1,6 +1,7 @@
 import * as pty from '@lydell/node-pty'
 import { EventEmitter } from 'node:events'
 import { getWorkspaceRoot } from '../workspace/WorkspaceManager'
+import { getActiveProjectId } from '../projects/projectStore'
 
 /**
  * Real PTY sessions, owned by the main process.
@@ -23,6 +24,7 @@ export type SessionAgent = 'claude' | 'codex' | 'gemini' | null
 
 export interface TerminalSession {
   id: string
+  projectId: string | null
   title: string
   cwd: string
   shell: string
@@ -109,6 +111,7 @@ class TerminalSessions extends EventEmitter {
 
     const meta: TerminalSession = {
       id,
+      projectId: getActiveProjectId() || null,
       title: options.title ?? `shell ${this.seq}`,
       cwd,
       shell,
@@ -193,7 +196,7 @@ class TerminalSessions extends EventEmitter {
     if (agent) {
       live.meta.agent = agent
       live.meta.title = agent
-      this.emit('agent', { id: live.meta.id, agent, cwd: live.meta.cwd, command })
+      this.emit('agent', { id: live.meta.id, projectId: live.meta.projectId, agent, cwd: live.meta.cwd, command })
     }
     this.emit('command', { id: live.meta.id, command, agent })
     this.emit('changed', this.list())
@@ -221,8 +224,16 @@ class TerminalSessions extends EventEmitter {
 
   /** Close every session. Called when the app quits so no PTY is orphaned. */
   disposeAll(): void {
-    for (const id of [...this.sessions.keys()]) this.kill(id)
-    this.sessions.clear()
+    for (const id of [...this.sessions.keys()]) this.remove(id)
+  }
+
+  /** Close sessions belonging to a specific project. */
+  closeForProject(projectId: string): void {
+    for (const [id, live] of this.sessions.entries()) {
+      if (live.meta.projectId === projectId) {
+        this.remove(id)
+      }
+    }
   }
 
   remove(id: string): void {

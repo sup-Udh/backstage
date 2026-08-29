@@ -28,7 +28,7 @@ import {
   updateProject
 } from '../projects/projectStore'
 import { adoptLegacy, bootstrapProjects } from '../projects/bootstrap'
-import { listAgents, removeProjectAgents, seedRoster } from '../agents/agentStore'
+import { listAgents, listAllAgents, removeProjectAgents, seedRoster } from '../agents/agentStore'
 /*
  * The rules module directly, not the store's wrappers: those resolve against
  * the *open* project's roster, and this deletes a project that is not open.
@@ -41,6 +41,9 @@ import { forgetAgent, removeProjectTriggers } from '../agents/triggerStore'
 import { pickFolder } from '../workspace/WorkspaceManager'
 import { PROVIDERS } from '../providers/registry'
 import { statusFor } from './providers'
+import { terminals } from '../terminal/TerminalSessionManager'
+import { agentSessions } from '../terminal/AgentSessionManager'
+import { sessionTranscripts } from '../terminal/sessionTranscript'
 
 /**
  * The project surface.
@@ -110,8 +113,26 @@ export function registerProjectsHandlers(): void {
   ipcMain.handle(
     'projects:open',
     (_e, projectId: unknown): ProjectSnapshot | null => {
+      const prevActive = getActiveProject()
       const project = setActiveProject(String(projectId ?? ''))
       if (!project) return null
+
+      if (prevActive && prevActive.id !== project.id) {
+        // Stop any running API tasks for the old project
+        const prevAgents = listAllAgents().filter(a => a.projectId === prevActive.id)
+        for (const a of prevAgents) orchestrator.cancel(a.id)
+
+        // Stop terminals
+        const prevTerminals = terminals.list().filter(t => t.projectId === prevActive.id)
+        for (const t of prevTerminals) {
+          for (const s of agentSessions.list()) {
+            if (s.terminalSessionId === t.id) sessionTranscripts.forget(s.id)
+          }
+          agentSessions.forgetTerminal(t.id)
+          terminals.remove(t.id)
+        }
+      }
+
       return { project, agents: listAgents() }
     }
   )

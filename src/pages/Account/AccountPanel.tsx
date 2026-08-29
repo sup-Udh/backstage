@@ -28,7 +28,7 @@ export function AccountPanel() {
         Your account
       </h2>
       <p className="mb-4 max-w-[640px] font-ui text-[13px] leading-snug text-ink-3">
-        Everything in Backstage — every project, agent, conversation and case —
+        Everything in Backstage — every project, agent, conversation and task —
         belongs to this account and is invisible to any other.
       </p>
 
@@ -71,7 +71,7 @@ export function AccountPanel() {
             </p>
             <p className="mt-1 font-ui text-[13px] leading-snug text-ink-3">
               {sync.enabled
-                ? 'Your project metadata, agent configuration, conversations and cases are backed up to your account as you work.'
+                ? 'Your project metadata, agent configuration, conversations and tasks are backed up to your account as you work.'
                 : 'Not connected. Backstage is running entirely from this machine.'}
             </p>
 
@@ -130,7 +130,7 @@ export function AccountPanel() {
               </dt>
               <dd className="font-ui text-[12px] leading-snug text-ink-3">
                 Project names and settings, agent configuration, chat history,
-                cases, orchestration limits.
+                tasks, orchestration limits.
               </dd>
             </div>
 
