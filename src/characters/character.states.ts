@@ -28,11 +28,7 @@ export function characterStateForAgent(
     case 'queued':
       return seated ? 'sitWaiting' : 'waiting'
     case 'stopping':
-      /*
-       * Still winding down, so still at the desk — but no longer typing. The
-       * pose has to differ from `working`, or clicking Stop would appear to
-       * have done nothing until the execution finally unwound.
-       */
+
       return seated ? 'sitWaiting' : 'waiting'
     case 'success':
       // Celebrated in the chair if that is where the work happened. Standing
