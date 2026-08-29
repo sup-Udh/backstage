@@ -3,6 +3,47 @@ import { join } from 'node:path'
 import { registerIpcHandlers } from './ipc'
 import { appIconPath, applyAppIdentity } from './appIcon'
 
+/**
+ * The end-to-end automation endpoint.
+ *
+ * Backstage has no way to be driven by a test. Every surface it has is a
+ * rendered one, so "does spawning an agent work" can only be answered by a
+ * person clicking it — which is why the delegation regression that shipped
+ * (ALL AGENTS silently broadcasting instead of routing to the lead) was
+ * invisible to `npm test` and stayed that way. This opens the standard
+ * Chrome DevTools Protocol against the renderer so a harness can drive the
+ * real preload bridge, the real IPC handlers and the real stores.
+ *
+ * Three gates, all of which must pass, because a debugging port is remote
+ * code execution against whatever the signed-in user can reach:
+ *
+ *   1. Never in a packaged build. `app.isPackaged` is the only check here
+ *      that cannot be faked by an environment variable.
+ *   2. Only when Vite is serving the renderer. `ELECTRON_RENDERER_URL` is
+ *      set by electron-vite for a dev run and by nothing else.
+ *   3. Only on explicit opt-in. Off unless BACKSTAGE_AUTOMATION_PORT names
+ *      a port, so an ordinary `npm run dev` is unchanged.
+ *
+ * Bound to 127.0.0.1 explicitly rather than relying on Chromium's default,
+ * so the endpoint cannot be reached from another machine even if the default
+ * changes. Must run before `app.whenReady()`: command-line switches are read
+ * when the browser process initialises and appending one afterwards is
+ * silently ignored.
+ */
+function enableAutomationEndpoint(): void {
+  const port = process.env.BACKSTAGE_AUTOMATION_PORT
+  if (!port) return
+  if (app.isPackaged) return
+  if (!process.env.ELECTRON_RENDERER_URL) return
+  if (!/^\d+$/.test(port)) return
+
+  app.commandLine.appendSwitch('remote-debugging-port', port)
+  app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1')
+  console.log(`[backstage] automation endpoint on 127.0.0.1:${port} (dev only)`)
+}
+
+enableAutomationEndpoint()
+
 function createWindow() {
   const icon = appIconPath()
 

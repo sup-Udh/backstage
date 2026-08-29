@@ -179,6 +179,14 @@ in parallel. Do not delegate what it would be faster to do yourself, do not
 hand the same thing to two agents, and never delegate the entire request
 untouched — that is not coordination, it is forwarding.
 
+Match the work to what each teammate can actually do, not to what their job
+title sounds like. The roster below says who can create and edit files, who can
+only read them, and who can run commands. Work that ends in a changed file must
+go to somebody who can write one — routing it by role to an agent that can only
+read produces a plan and no product. If exactly one teammate can write, that is
+who implements, whatever their title is; if nobody can, say so plainly in your
+first sentence and name what you would have written.
+
 delegate_task does not wait. It returns as soon as the work is handed over, and
 your teammate's findings are not a tool result you can read — so do not sit in a
 loop waiting for them and do not invent what they will say. Hand the parts out,
@@ -369,7 +377,8 @@ export function teamRoster(leadId: string): string {
     const doing = state.action ? ` — currently ${state.action}` : ''
     const queued = state.queued > 0 ? `, ${state.queued} queued` : ''
     lines.push(
-      `  ${agent.name} (${agent.id}), ${agent.role}: ${presence}${doing}${queued} — delegate_task`
+      `  ${agent.name} (${agent.id}), ${agent.role}: ${presence}${doing}${queued}` +
+        ` — can ${abilities(agent)} — delegate_task`
     )
   }
 
@@ -380,4 +389,32 @@ export function teamRoster(leadId: string): string {
   }
 
   return lines.length > 0 ? lines.join('\n') : '  You are the only worker in this project.'
+}
+
+/**
+ * What a teammate can actually do, in the words the lead has to reason with.
+ *
+ * The roster used to be names, roles and status only, and a lead handed "build
+ * a landing page" split it by job title: the Operations agent got the file
+ * layout, the Assistant got "draft the code", and the one agent in the project
+ * holding `files.write` was given an inventory to take. Nobody wrote a file.
+ * Every hand-off was defensible from the roster it was given and every one of
+ * them was unactionable, because a job title does not say who has permission
+ * to type.
+ *
+ * So capability is stated next to the role. It is the difference between "who
+ * sounds right for this" and "who can carry it out", and only the second one
+ * finishes the work.
+ */
+function abilities(agent: AgentConfig): string {
+  const caps = new Set(agent.capabilities)
+  const can: string[] = []
+
+  if (caps.has('files.write')) can.push('create and edit files')
+  else if (caps.has('files.read')) can.push('read files only — cannot write any')
+  if (caps.has('terminal.execute')) can.push('run commands')
+  if (caps.has('git.commit')) can.push('commit')
+  if (caps.has('web.search')) can.push('search the web')
+
+  return can.length > 0 ? can.join(', ') : 'answer from its own knowledge only'
 }
