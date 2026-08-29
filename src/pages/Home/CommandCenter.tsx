@@ -9,6 +9,7 @@ import {
   type TabId
 } from '../../stores/backstageStore'
 import { recipientsFor, spawnedAgents, useTeam } from '../../stores/teamStore'
+import { useProject } from '../../stores/projectStore'
 import { PromptBox } from './PromptBox'
 import { TeamHeader } from './TeamHeader'
 import { ChatIdentity } from './ChatIdentity'
@@ -83,6 +84,8 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
   const agents = useTeam((s) => s.agents)
   const cancel = useTeam((s) => s.cancel)
   const refreshTasks = useTeam((s) => s.refreshTasks)
+  /* Who coordinates, from the project. Never inferred from a name or a role. */
+  const leadId = useProject((s) => s.project?.godAgentId ?? null)
 
   const { workspace, anyConnected } = useProviders()
 
@@ -291,24 +294,43 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
     }
 
     const at = Date.now()
-    pushToMany(
-      recipients.map((a) => a.id),
-      (agentId) => ({ id: localId('user'), kind: 'user', agentId, text, at })
-    )
+    /*
+     * Whose conversation this line belongs to.
+     *
+     * A whole-team request goes to the lead, who splits it up — so the user's
+     * words belong in the lead's transcript, not copied into four. Sending the
+     * explicit id list instead of ALL AGENTS is what used to defeat that: the
+     * main process reads an array as "these specific agents, each on their
+     * own", which is a broadcast however it got there.
+     *
+     * The lead is still resolved here rather than assumed, because there may
+     * not be one that can work — a project with no lead, or one whose lead was
+     * never spawned, falls back to reaching everyone and this has to say so
+     * locally before the answer comes back.
+     */
+    const teamLead = isBroadcast ? recipients.find((a) => a.id === leadId) : undefined
+    const addressed = teamLead ? [teamLead.id] : recipients.map((a) => a.id)
 
-    const runTarget = isBroadcast ? recipients.map(w => w.id) : target
+    pushToMany(addressed, (agentId) => ({
+      id: localId('user'),
+      kind: 'user',
+      agentId,
+      text,
+      at
+    }))
+
+    const runTarget = isBroadcast ? ALL_AGENTS : target
     void window.backstage.agents.run({ prompt: text, target: runTarget }).then((ack) => {
       if (!ack.accepted) {
-        pushToMany(
-          recipients.map((a) => a.id),
-          (agentId) => ({
-            id: localId('sys'),
-            kind: 'system',
-            agentId,
-            text: ack.error ?? 'Could not start that task.',
-            at: Date.now()
-          })
-        )
+        // Reported where the request was put, so the failure is not sitting in
+        // four transcripts the question never went into.
+        pushToMany(addressed, (agentId) => ({
+          id: localId('sys'),
+          kind: 'system',
+          agentId,
+          text: ack.error ?? 'Could not start that task.',
+          at: Date.now()
+        }))
         return
       }
       // Some of a broadcast can be refused while the rest runs; say which.

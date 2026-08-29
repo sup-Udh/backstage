@@ -32,6 +32,7 @@ import {
 } from '../agents/threads'
 import { agentRegistry, validateAgent } from '../agents/AgentRegistry'
 import { orchestrator, wasRejected } from '../agents/AgentOrchestrator'
+import { godAgent } from '../agents/GodAgent'
 import { initTriggerEngine } from '../agents/TriggerEngine'
 import { systemBus } from '../agents/EventBus'
 import { conversationStore } from '../agents/conversationStore'
@@ -188,34 +189,55 @@ export function registerAgentHandlers(): void {
     // Keep git fresh so the awareness block in the prompt is not stale.
     void refreshGit()
 
+    const supplied = (params?.history ?? []).slice(-HISTORY_LIMIT)
+    const asTurns = supplied.map((t) => ({ role: t.role, content: t.content }))
+
     /*
-     * Talking to the whole team reaches the whole team.
+     * Talking to the whole team goes to the team lead.
      *
-     * This used to route to one agent — the project's team lead — who was
-     * asked to split the request up and hand the parts out with
-     * delegate_task. Every gate on that path was verified working: the lead
-     * was correctly configured, held the tool, and had three spawned
-     * teammates to give work to. It simply did not call it. The model read a
-     * prompt telling it to delegate, had the tool in its list, and answered
-     * the whole request itself anyway — which is not something the runtime
-     * can fix, because nothing was failing.
+     * This was a broadcast for a while — every spawned agent answering the
+     * same question independently — because a lead that was asked to delegate
+     * sometimes just answered everything itself, and one agent silently doing
+     * all the work looked identical to delegation being broken.
      *
-     * The result was worse than the broadcast it replaced: one agent silently
-     * doing everything while three sat idle, and no way for the user to tell
-     * that was what had happened.
+     * The broadcast solved the wrong half of that. Four agents each reading
+     * the same README and each writing their own essay is not a team either:
+     * it is the same work four times, billed four times, and the user is left
+     * to reconcile four answers to one question.
      *
-     * So the request goes to every spawned agent again, each answering
-     * independently in its own session. Delegation is untouched as a
-     * *capability* — `delegate_task`, `agent_message` and the connections the
-     * user draws all work exactly as before, and an agent that decides to
-     * hand work to a teammate still can. What has been removed is the
-     * assumption that one agent will reliably do so on the user's behalf.
+     * So it routes to the lead again, and the reliability problem is
+     * addressed where it actually lives — in the prompt (`godAgentRules` is
+     * back in the lead's system message, with the roster it refers to) and in
+     * the account of the run the user sees (`TeamRunView`, which shows who was
+     * given what and what came back, so a lead that quietly answered alone is
+     * visible rather than indistinguishable).
      *
-     * `GodAgent` is deliberately left intact rather than deleted. Nothing
-     * calls `run()` now; restoring this is re-adding the branch, and it is
-     * worth re-testing whenever the models in use get better at multi-step
-     * tool use.
+     * `GodAgent` handles the rest: it holds the request open until everything
+     * the lead handed out has come back, then asks the lead for one final
+     * answer. Workers report into their own sessions as before; nothing there
+     * changed, it is just no longer the thing the user reads.
+     *
+     * The fallback is the old behaviour, and it matters: a project with no
+     * lead, or whose lead was deleted or never spawned, must still answer
+     * "talk to everyone" somehow rather than refuse over a setting the user
+     * may not know exists.
      */
+    const wantsTeam = !params?.target || params.target === 'all'
+    if (wantsTeam && godAgent.lead()) {
+      const run = godAgent.run(prompt, 'user', asTurns.length > 0 ? asTurns : undefined)
+      if ('error' in run) return { accepted: false, error: run.error }
+
+      conversationStore.append(workspaceId(), run.leadId, {
+        id: makeId('msg'),
+        kind: 'user',
+        agentId: run.leadId,
+        text: prompt,
+        at: Date.now(),
+        taskId: run.taskId
+      })
+
+      return { accepted: true, taskIds: [run.taskId], agentIds: [run.leadId] }
+    }
 
     const targets = recipients(params?.target)
     if (targets.length === 0) {
@@ -233,8 +255,6 @@ export function registerAgentHandlers(): void {
      * task starts. Broadcasting to three agents genuinely puts the question in
      * three separate conversations rather than one shared log.
      */
-    const supplied = (params?.history ?? []).slice(-HISTORY_LIMIT)
-
     const accepted: string[] = []
     const agentIds: string[] = []
     const rejected: { agentId: string; error: string }[] = []
@@ -256,10 +276,7 @@ export function registerAgentHandlers(): void {
         origin: 'user',
         correlationId,
         depth: 0,
-        history:
-          supplied.length > 0
-            ? supplied.map((t) => ({ role: t.role, content: t.content }))
-            : undefined
+        history: asTurns.length > 0 ? asTurns : undefined
       })
 
       if (wasRejected(result)) {

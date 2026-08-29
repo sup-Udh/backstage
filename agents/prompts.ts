@@ -161,14 +161,6 @@ pass along a finding. You do not direct them and they do not direct you.`)
  * and a prompt that only described coordination produced an agent that
  * delegated everything and answered nothing itself.
  */
-/*
- * Exported, though nothing calls it today.
- *
- * It is the coordination prompt, kept intact for whenever ALL AGENTS routes
- * to a lead again — see the note at its call site in `systemPromptFor`.
- * Exporting is what lets it survive `noUnusedLocals` without a suppression
- * comment that would read as an oversight rather than a decision.
- */
 export function godAgentRules(team: string): string {
   return `You are the team lead for this project. When the user addresses the
 whole team, the request comes to you.
@@ -187,9 +179,17 @@ in parallel. Do not delegate what it would be faster to do yourself, do not
 hand the same thing to two agents, and never delegate the entire request
 untouched — that is not coordination, it is forwarding.
 
-Your teammates report back in their own sessions rather than as tool results,
-so do not wait on them. Finish your own part, state what is still outstanding
-and who has it, and give the user the best answer you can now.
+delegate_task does not wait. It returns as soon as the work is handed over, and
+your teammate's findings are not a tool result you can read — so do not sit in a
+loop waiting for them and do not invent what they will say. Hand the parts out,
+finish your own, and end this turn saying what you took and who has the rest.
+
+You are asked twice. Once everyone you handed work to has reported, you get a
+second turn with all of their findings in front of you, and that is where the
+user's real answer gets written. This turn is the plan and your own part of the
+work; the next one is the answer. The user only ever reads what you write — your
+teammates' replies do not reach them — so nothing is lost by handing work out,
+and nothing reaches them unless you carry it.
 
 If the roster below shows nobody who can take work — everyone unspawned or
 disabled — then do the whole thing yourself, but say so in your first sentence
@@ -327,20 +327,21 @@ ${agent.instructions.trim()}`
      */
     mission ?? teamRules(agent, canDelegate, isLead),
     /*
-     * The coordination block is deliberately not included any more.
+     * The coordination block, for the lead only.
      *
-     * It opened with "when the user addresses the whole team, the request
-     * comes to you", and that stopped being true when ALL AGENTS went back to
-     * reaching every agent directly. Leaving it in would tell one agent it
-     * owned every whole-team request while the other three were answering the
-     * same request independently — which is the "Jane takes over everything"
-     * behaviour, now stated in the prompt as fact.
+     * It opens with "when the user addresses the whole team, the request comes
+     * to you", which is true again: ALL AGENTS routes here rather than
+     * broadcasting. It is what `teamRules` refers to when it tells the lead
+     * "the roster below" — without it that sentence pointed at nothing, which
+     * is its own reason to keep the two together.
      *
-     * `godAgentRules` and `teamRoster` are kept for whenever the routing is
-     * restored; putting this line back is all that is needed. The lead keeps
-     * its permissions in the meantime — it may still reach anyone in the
-     * project — it is simply no longer told it is the team's front door.
+     * Not added on a mission. A lead handed work by somebody else is a worker
+     * on that task, and telling it mid-mission that it owns every whole-team
+     * request is how a delegated part turns back into the whole job.
      */
+    ...(isLead && canDelegate && !mission
+      ? ['', '--- coordinating this team ---', godAgentRules(teamRoster(agent.id))]
+      : []),
     ...(group ? ['', '--- your group ---', group] : []),
     '',
     '--- what is happening right now ---',

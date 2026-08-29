@@ -7,6 +7,7 @@ import type {
 } from '../../shared/providerApi'
 import { StatusChip } from '../../components/AgentStatus/StatusChip'
 import { useBackstage } from '../../stores/backstageStore'
+import { useProject } from '../../stores/projectStore'
 import { findWorker, type Worker } from '../../agents/workers'
 
 interface Props {
@@ -52,6 +53,13 @@ export function ChatIdentity({
   onLeaveThread
 }: Props) {
   const target = useBackstage((s) => s.chatTarget)
+  /*
+   * Who coordinates, read from the project rather than worked out from a name
+   * or a job title. It is what decides whether ALL AGENTS is one request to
+   * one agent or the same question asked of everybody, so the header cannot
+   * describe the mode honestly without it.
+   */
+  const leadId = useProject((s) => s.project?.godAgentId ?? null)
 
   const characterName = (agent: AgentConfig) =>
     castNameForSlot(cast, agent.characterSlot)
@@ -153,20 +161,15 @@ export function ChatIdentity({
 
   if (isBroadcast) {
     /*
-     * Everyone, each on their own.
+     * One request to the team, or the same question asked of everybody.
      *
-     * This briefly routed to a single team lead who was asked to split the
-     * request up. Every gate on that path was verified working — the lead was
-     * configured, held delegate_task, and had spawned teammates to give work
-     * to — and the model still answered the whole thing itself, leaving three
-     * agents idle and the user unable to tell. So the request reaches every
-     * agent again, and the header says so rather than describing a workflow
-     * that may or may not occur.
-     *
-     * The count is stated plainly because it is the expensive part: sending to
-     * four agents is four model calls, and that is worth knowing before
-     * pressing enter rather than after.
+     * Which of the two it is depends entirely on whether the project has a
+     * lead that can work, and the difference is what the user is about to
+     * spend — so it is stated here rather than discovered afterwards from the
+     * shape of the replies.
      */
+    const lead = recipients.find((a) => a.id === leadId)
+
     const isTeamRunning = recipients.some((a) => {
       const state = states[a.id]
       return (
@@ -198,10 +201,23 @@ export function ChatIdentity({
         </div>
 
         <p className="mt-0.5 font-ui text-[11px] leading-snug text-ink-3">
-          Each one answers on its own, in its own session — {recipients.length}{' '}
-          separate {recipients.length === 1 ? 'reply' : 'replies'}, and{' '}
-          {recipients.length === 1 ? 'one model call' : `${recipients.length} model calls`}.
-          They can still hand work to each other where you have connected them.
+          {lead ? (
+            <>
+              Goes to {characterName(lead)}, who splits it up, hands the parts
+              out, and writes the one answer you read. Everyone else reports
+              back to {characterName(lead)} rather than to you.
+            </>
+          ) : (
+            <>
+              No team lead is spawned, so each one answers on its own, in its
+              own session — {recipients.length} separate{' '}
+              {recipients.length === 1 ? 'reply' : 'replies'}, and{' '}
+              {recipients.length === 1
+                ? 'one model call'
+                : `${recipients.length} model calls`}
+              . Set a lead on the Account page to have one agent coordinate.
+            </>
+          )}
         </p>
 
         {/*

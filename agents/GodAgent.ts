@@ -1,4 +1,5 @@
 import type { AgentTask, RuntimeEvent } from './agent.types'
+import type { Turn } from '../providers/provider.types'
 import { getAgent } from './agentStore'
 import { orchestrator, wasRejected } from './AgentOrchestrator'
 import { systemBus } from './EventBus'
@@ -86,11 +87,27 @@ class GodAgent {
    * and restating it here would put instructions in the conversation where the
    * user can see them being talked to instead of asked.
    */
-  run(prompt: string, origin: 'user' | 'trigger' = 'user'): TeamRunResult | { error: string } {
+  run(
+    prompt: string,
+    origin: 'user' | 'trigger' = 'user',
+    /**
+     * The conversation so far, as the renderer holds it.
+     *
+     * Passed through rather than left to the lead's own stored memory because
+     * a follow-up — "and the licence?" — is unanswerable without it, and the
+     * lead is now the only agent that sees a whole-team request.
+     */
+    history?: Turn[]
+  ): TeamRunResult | { error: string } {
     const lead = this.lead()
     if (!lead) return { error: 'This project has no team lead that can take work.' }
 
-    const result = orchestrator.submit({ agentId: lead.id, prompt, origin })
+    const result = orchestrator.submit({
+      agentId: lead.id,
+      prompt,
+      origin,
+      history: history && history.length > 0 ? history : undefined
+    })
     if (wasRejected(result)) return { error: result.error }
 
     this.remember({
@@ -220,10 +237,15 @@ You handed parts of it out. Here is what came back:
 
 ${findings}${outstanding}
 
-Write the single answer to the user's original question. Combine what your
-teammates found with your own work, say plainly where they disagree or where
-something did not finish, and do not repeat the same finding twice. Do not
-describe the delegation itself unless it changes what the answer is.`
+Write the single answer to the user's original question — you are the only one
+answering them, so this has to stand on its own. Combine what your teammates
+reported with your own work, say plainly where they disagree or where something
+did not finish, and do not repeat the same finding twice.
+
+Attribute as you go. The user cannot see your teammates' replies, only yours, so
+name whoever established each part in the sentence that carries it — "Michael
+read LICENSE.md and it is MIT", not "the licence is MIT". Keep it to who found
+what; do not narrate the hand-offs themselves.`
 
     const result = orchestrator.submit({
       agentId: entry.leadId,
