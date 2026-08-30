@@ -278,6 +278,11 @@ export type RuntimeEventType =
   // Automation
   | 'trigger.fired'
   | 'trigger.blocked'
+  | 'automation.started'
+  | 'automation.completed'
+  | 'automation.failed'
+  /** A tool call was refused by a DENY rule, or allowed without asking. */
+  | 'permission.decided'
   // Workspace
   | 'file.created'
   | 'file.modified'
@@ -325,9 +330,14 @@ export interface RuntimeEvent {
   path?: string
   model?: string
   provider?: string
-  /** On trigger.* events. */
+  /** On trigger.* and automation.* events. */
   triggerId?: string
   triggerName?: string
+  /** On automation.* events: which run it belongs to. */
+  runId?: string
+  /** On permission.decided events. */
+  category?: PermissionCategory
+  outcome?: PermissionOutcome
   reason?: string
   /** On agent.state events: the whole new state, so no consumer infers it. */
   state?: AgentRuntimeState
@@ -360,11 +370,24 @@ export type TriggerEventType =
   | 'agent.task.completed'
   | 'agent.task.started'
   | 'agent.error'
+  | 'agent.idle'
   | 'file.changed'
+  | 'file.created'
+  | 'file.deleted'
   | 'git.changed'
   | 'task.created'
   | 'task.completed'
   | 'agent.message.received'
+  /*
+   * Time. These do not come off the event bus at all — nothing emits them —
+   * they are fired by the scheduler, which is why they carry a `schedule`
+   * and the bus-driven ones do not.
+   */
+  | 'schedule.daily'
+  | 'schedule.weekly'
+  | 'schedule.interval'
+  /** Only ever run by hand, from the automation's own page. */
+  | 'manual'
 
 export type TriggerActionType =
   | 'send.message'
@@ -391,13 +414,44 @@ export interface Trigger {
   /** Optional substring the event's text must contain for the trigger to run. */
   condition: string | null
   action: TriggerActionType
+  /**
+   * The first of `agentIds`, kept because every existing trigger has one.
+   *
+   * `agentIds` is the real field now: an automation can run on a team, and a
+   * team is what produces a group conversation. This stays in step with the
+   * head of that list rather than being a second source of truth.
+   */
   targetAgentId: string | null
+  /**
+   * Every agent this automation runs on.
+   *
+   * More than one means the run posts into their group conversation instead of
+   * into each private session — which is what connects automations, group
+   * chats and agents into one thing rather than three.
+   */
+  agentIds: string[]
   message: string
+  /** Set for the `schedule.*` events, null for every other kind. */
+  schedule: TriggerSchedule | null
+  /**
+   * How much this automation may do without asking.
+   *
+   *   inherit  the project's permission rules, exactly as a person's request
+   *   strict   every impactful action asks, whatever the rules say
+   *
+   * There is deliberately no mode that grants *more* than a person's request
+   * would. An automation running unattended is the last thing that should be
+   * able to widen its own permissions.
+   */
+  permissionMode: 'inherit' | 'strict'
   maxChainDepth: number
   cooldownMs: number
   /** Persisted, so restarting cannot be used to bypass a cooldown. */
   lastFiredAt: number | null
   fireCount: number
+  /** When it last ran, and when the scheduler will next consider it. */
+  lastRunAt: number | null
+  nextRunAt: number | null
   createdAt: number
   updatedAt: number
 }
@@ -475,4 +529,208 @@ export interface ChatMessage {
   text: string
   at: number
   taskId?: string
+}
+
+/* ----------------------------------------------------------- permissions -- */
+
+/**
+ * What an agent is about to do, in the terms a person decides in.
+ *
+ * Deliberately not the same axis as `CapabilityId`. A capability answers "may
+ * this agent ever touch the terminal?" and is a property of the agent; a
+ * permission category answers "may *this* be done without asking me?" and is a
+ * property of the project. An agent can hold `terminal.execute` and still have
+ * every `npm install` stopped at the door, which is exactly the distinction
+ * that was missing: the only control was a per-tool `requiresApproval` flag
+ * nobody could see or change.
+ *
+ * Categories are derived from the tool *and its arguments*, because
+ * `terminal_run` is not one decision — `ls` and `rm -rf` arrive through the
+ * same tool and are not the same question.
+ */
+export type PermissionCategory =
+  | 'files.read'
+  | 'files.write'
+  | 'files.delete'
+  | 'commands.run'
+  | 'git.ops'
+  | 'network'
+  | 'packages.install'
+  | 'services.start'
+  | 'config.modify'
+
+/**
+ * What happens when an agent asks.
+ *
+ *   ask    stop and put it in front of the user
+ *   allow  proceed, subject to Auto Allow being on for impactful categories
+ *   deny   never, by anything, including an automation
+ */
+export type PermissionDecision = 'ask' | 'allow' | 'deny'
+
+export interface PermissionCategoryInfo {
+  id: PermissionCategory
+  /** The heading it is listed under: FILES, EXECUTION, PROJECT. */
+  group: string
+  label: string
+  blurb: string
+  /**
+   * Whether doing this unasked can change or cost something.
+   *
+   * This is what makes Auto Allow mean anything. An impactful category set to
+   * ALLOW is still asked about while Auto Allow is off — turning Auto Allow on
+   * is the user saying "stop asking me about the things I already allowed".
+   * Reading is not impactful and is never gated on it.
+   */
+  impactful: boolean
+  fallback: PermissionDecision
+}
+
+/** The permission rules for one project. Persisted, per project. */
+export interface ProjectPermissions {
+  projectId: string
+  autoAllow: boolean
+  rules: Record<PermissionCategory, PermissionDecision>
+  updatedAt: number
+}
+
+/**
+ * How a permission question was answered.
+ *
+ *   allowed  the user pressed Allow
+ *   session  a "for this session" grant covered it
+ *   auto     a rule allowed it and no prompt was needed
+ *   denied   the user pressed Deny, or the prompt went unanswered
+ *   blocked  a DENY rule refused it outright; nobody was asked
+ */
+export type PermissionOutcome = 'allowed' | 'session' | 'auto' | 'denied' | 'blocked'
+
+/** One entry in the project's permission history. */
+export interface PermissionRecord {
+  id: string
+  projectId: string
+  at: number
+  agentId: string
+  agentName: string
+  /**
+   * Who the agent was acting for, when it was not the user.
+   *
+   * A delegated task is Walter asking Jesse to do something, and the user
+   * approving it should be told both names rather than only the one holding
+   * the tool.
+   */
+  requestedByName: string | null
+  tool: string
+  category: PermissionCategory
+  summary: string
+  outcome: PermissionOutcome
+  /** Set when the work came from an automation rather than from a person. */
+  automationName: string | null
+}
+
+/* ---------------------------------------------------------- group chats -- */
+
+/**
+ * What a group of connected agents is doing.
+ *
+ * Derived, not stored: it is read from the members' live runtime states every
+ * time it is asked for, so it cannot claim a group is working after the app
+ * has been restarted.
+ */
+export type GroupStatus =
+  | 'active'
+  | 'thinking'
+  | 'working'
+  | 'waiting'
+  | 'completed'
+  | 'stopped'
+  | 'error'
+
+/**
+ * One group conversation, described for a list.
+ *
+ * A group is the set of agents reachable through connections — the same
+ * `groupOf` the runtime already uses — so a connection *is* a group chat and
+ * there is nothing separate to create. What is persisted is only the things a
+ * derivation cannot know: the name the user gave it, and how much of it they
+ * have read.
+ */
+export interface GroupChatSummary {
+  /** The thread id: `thread:` plus the sorted member ids. */
+  id: string
+  projectId: string
+  memberIds: string[]
+  memberNames: string[]
+  name: string
+  /** True when the user named it, so a generated name never overwrites it. */
+  customName: boolean
+  status: GroupStatus
+  /** What the group is working on, taken from whichever member is busy. */
+  task: string | null
+  participants: number
+  working: number
+  thinking: number
+  lastMessage: { fromName: string; text: string; at: number } | null
+  unread: number
+  /** Set when an automation runs on this group. */
+  automationId: string | null
+  automationName: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+/* --------------------------------------------------- automation schedule -- */
+
+/**
+ * When a time-based automation runs.
+ *
+ * Local time, deliberately. "Every evening" means the user's evening, and a
+ * developer tool that fires a daily review at 18:00 UTC for somebody in
+ * California is wrong in a way that is very hard to notice.
+ */
+export interface TriggerSchedule {
+  /** Minutes past local midnight. Used by daily and weekly. */
+  minuteOfDay: number
+  /**
+   * Which days it may run on: 0 = Sunday … 6 = Saturday.
+   *
+   * Weekly uses it as the day. Daily uses it as a filter, which is how
+   * "every weekday at 09:00" is expressed without a second trigger type.
+   * Empty means every day.
+   */
+  days: number[]
+  /** For `schedule.interval`: minutes between runs. */
+  everyMinutes: number
+}
+
+export type AutomationRunStatus = 'running' | 'completed' | 'failed' | 'blocked'
+
+/** Why an automation started. */
+export type AutomationOrigin = 'event' | 'schedule' | 'manual'
+
+/**
+ * One execution of one automation.
+ *
+ * Persisted and project-scoped, bounded to a recent tail. A run is a record of
+ * something that actually happened — the tasks it names are real tasks on real
+ * queues, and opening one opens the conversation those tasks wrote into.
+ */
+export interface AutomationRun {
+  id: string
+  projectId: string
+  triggerId: string
+  triggerName: string
+  origin: AutomationOrigin
+  status: AutomationRunStatus
+  startedAt: number
+  endedAt: number | null
+  agentIds: string[]
+  agentNames: string[]
+  taskIds: string[]
+  /** The group conversation, when more than one agent took part. */
+  threadId: string | null
+  correlationId: string
+  /** What came back, once it has. */
+  summary: string | null
+  error: string | null
 }
