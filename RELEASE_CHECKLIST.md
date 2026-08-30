@@ -137,15 +137,39 @@ Legend: `[x]` verified · `[~]` partially verified, scope noted · `[ ]` not don
 - [x] **Release workflow exists** — `.github/workflows/release.yml`, triggers
       on `v*`, uses `npm ci` and `secrets.GITHUB_TOKEN`
 - [x] **Checksums generated** — SHA-256 for both artifacts
-- [ ] **Repository secrets set** — `SUPABASE_URL`, `SUPABASE_ANON_KEY` must
-      exist before the workflow can build. **Blocks the release**
-- [ ] **Tag pushed**
-- [ ] **GitHub Action passes**
+- [x] **Repository secrets set** — `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- [x] **Release commit pushed** — `9ef8779` to `origin/master`
+- [x] **Tag pushed** — `v1.0.0-beta.1` → `origin`
+- [ ] **GitHub Action passes** — ⛔ **BLOCKED**, see below
 - [ ] **Installer uploaded to the release**
 - [ ] **Release marked pre-release**
 - [ ] **Checksum uploaded**
 - [ ] **Asset URL verified to return 200**
 - [ ] **Website download link updated**
+
+### ⛔ Blocker: GitHub Actions is disabled by account billing
+
+Run [33299565242](https://github.com/sup-Udh/backstage/actions/runs/33299565242)
+failed after 2 seconds having executed **zero steps**. The annotation is:
+
+> The job was not started because your account is locked due to a billing issue.
+
+This is not a defect in `release.yml` — the workflow YAML parses, and the
+runner never picked the job up. The repository is public, but an account lock
+disables Actions regardless of repository visibility.
+
+**To unblock:** settle the balance at
+<https://github.com/settings/billing>, then re-run the existing run
+(**Actions → Release → Re-run all jobs**). The tag is already pushed and does
+**not** need to be recreated — re-running builds the same commit and publishes
+the release.
+
+**Alternative, if Actions stays unavailable:** create the release by hand from
+the locally built artifacts in `release/`. They were packaged from exactly the
+source at `v1.0.0-beta.1` (verified: no packaged input changed after the
+build; the release commit added only documentation and CI config). Upload the
+installer, the portable exe, both `.sha256` files and `latest.yml`, and tick
+**Set as a pre-release**.
 
 ---
 
