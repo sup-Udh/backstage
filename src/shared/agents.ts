@@ -230,6 +230,21 @@ export interface AgentTask {
   error: string | null
   /** What this task's answer plays in a larger piece of work, if anything. */
   part?: MessagePart
+  /**
+   * The automation that started this, when one did.
+   *
+   * Carried on the task rather than looked up, because the two places that
+   * need it — the approval card and the run record — are reached from a
+   * running execution, and by then the trigger that caused it may already have
+   * been edited or deleted.
+   */
+  automationName?: string | null
+  automationRunId?: string | null
+  /**
+   * Whether this task must ask before anything impactful, whatever the rules
+   * say. Set by an automation running in `strict` permission mode.
+   */
+  strictPermissions?: boolean
 }
 
 /* ---------------------------------------------------------------- events -- */

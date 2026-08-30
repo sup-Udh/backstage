@@ -6,6 +6,7 @@ import { AccountPanel } from './AccountPanel'
 import { DangerZone } from './DangerZone'
 import { ProfileSection } from './ProfileSection'
 import { ProjectsSection } from './ProjectsSection'
+import { PermissionsSection } from './PermissionsSection'
 import { ProviderPanel } from './ProviderPanel'
 import { RosterSection } from './RosterSection'
 
@@ -44,6 +45,7 @@ const SECTIONS: { id: AccountSection; label: string }[] = [
   { id: 'profile', label: 'Profile' },
   { id: 'providers', label: 'AI Providers' },
   { id: 'agents', label: 'Agents' },
+  { id: 'permissions', label: 'Permissions' },
   { id: 'projects', label: 'Projects' },
   { id: 'account', label: 'Account' }
 ]
@@ -159,6 +161,7 @@ export function Account() {
           )}
 
           {section === 'agents' && <RosterSection />}
+          {section === 'permissions' && <PermissionsSection />}
           {section === 'projects' && <ProjectsSection />}
 
           {section === 'account' && (

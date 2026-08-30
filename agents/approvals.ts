@@ -1,30 +1,50 @@
+import type { PermissionCategory } from '../src/shared/agents'
 import { makeId } from './persist'
+import { grantForSession, recordPermission } from './permissionStore'
 
 /**
- * Human approval for dangerous tools.
+ * Human approval for actions the rules say to ask about.
  *
- * The tool registry has always declared which tools need permission; nothing
- * asked for it. This is the missing half: a tool marked `requiresApproval`
- * cannot run until the user says yes.
+ * The tool registry used to declare which tools needed permission and nothing
+ * asked for it; then this asked, and nobody could see or change what it asked
+ * about. Both halves live in `permissionStore` now — this is only the part
+ * that puts a question in front of a person and waits for the answer.
  *
  * The default on every failure path is deny. A timeout denies, a closed window
- * denies, a cancelled execution denies. An approval prompt that fails open is
- * not an approval prompt.
+ * denies, a cancelled execution denies, no listener denies. An approval prompt
+ * that fails open is not an approval prompt.
  */
 
 export interface ApprovalRequest {
   id: string
   agentId: string
   agentName: string
+  /**
+   * Who the agent is acting for, when it is not the user.
+   *
+   * "Walter wants Jesse to run npm install" is a different sentence from
+   * "Jesse wants to run npm install", and the user should never have to work
+   * out which one they are being asked.
+   */
+  requestedByName: string | null
+  /** Set when the work came from an automation rather than from a person. */
+  automationName: string | null
   taskId: string
   executionId: string
   tool: string
+  /** Which permission rule this falls under, so the card can name it. */
+  category: PermissionCategory
   /** Human summary of what is about to happen. */
   summary: string
   /** The actual arguments, so the user can see what they are approving. */
   detail: string
+  /** The folder it would happen in. */
+  workspaceName: string | null
   at: number
 }
+
+/** What the user chose. `session` also stops this category asking again today. */
+export type ApprovalAnswer = 'allow' | 'session' | 'deny'
 
 type Publisher = (request: ApprovalRequest) => void
 
@@ -54,13 +74,35 @@ export function requestApproval(
 ): Promise<boolean> {
   // With nothing listening there is nobody to ask, and "nobody asked" must
   // never mean "granted".
-  if (!publish) return Promise.resolve(false)
+  if (!publish) {
+    recordPermission({
+      agentId: input.agentId,
+      agentName: input.agentName,
+      requestedByName: input.requestedByName,
+      tool: input.tool,
+      category: input.category,
+      summary: input.summary,
+      outcome: 'denied',
+      automationName: input.automationName
+    })
+    return Promise.resolve(false)
+  }
 
   const request: ApprovalRequest = { ...input, id: makeId('appr'), at: Date.now() }
 
   return new Promise<boolean>((resolve) => {
     const timer = setTimeout(() => {
       pending.delete(request.id)
+      recordPermission({
+        agentId: request.agentId,
+        agentName: request.agentName,
+        requestedByName: request.requestedByName,
+        tool: request.tool,
+        category: request.category,
+        summary: request.summary,
+        outcome: 'denied',
+        automationName: request.automationName
+      })
       resolve(false)
     }, TIMEOUT_MS)
     // Do not hold the app open just because a prompt is unanswered.
@@ -71,11 +113,35 @@ export function requestApproval(
   })
 }
 
-export function resolveApproval(id: string, approved: boolean): boolean {
+/**
+ * Answer an outstanding request.
+ *
+ * `session` allows this one *and* stops the same category asking again until
+ * the app is closed or the project changes. It is a convenience, not a
+ * widening: `evaluateToolCall` still refuses a category the rules deny, so a
+ * grant given here cannot outlive a rule that contradicts it.
+ */
+export function resolveApproval(id: string, answer: ApprovalAnswer): boolean {
   const entry = pending.get(id)
   if (!entry) return false
+
   clearTimeout(entry.timer)
   pending.delete(id)
+
+  const approved = answer !== 'deny'
+  if (answer === 'session') grantForSession(entry.request.category)
+
+  recordPermission({
+    agentId: entry.request.agentId,
+    agentName: entry.request.agentName,
+    requestedByName: entry.request.requestedByName,
+    tool: entry.request.tool,
+    category: entry.request.category,
+    summary: entry.request.summary,
+    outcome: answer === 'deny' ? 'denied' : answer === 'session' ? 'session' : 'allowed',
+    automationName: entry.request.automationName
+  })
+
   entry.resolve(approved)
   return true
 }

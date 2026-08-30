@@ -2,6 +2,7 @@ import { useBackstage } from '../stores/backstageStore'
 import { useTeamSync } from '../agents/useTeamSync'
 import { Navbar } from '../components/Navbar/Navbar'
 import { ApprovalDock } from '../components/Approvals/ApprovalDock'
+import { AutomationToasts } from '../components/Notifications/AutomationToasts'
 import { Home } from '../pages/Home/Home'
 import { Agents } from '../pages/Agents/Agents'
 import { Automations } from '../pages/Automations/Automations'
@@ -32,8 +33,13 @@ export function AppShell() {
     <div className="flex h-full min-h-0 flex-col bg-cream">
       <Navbar />
       <Page />
-      {/* Dangerous tool calls wait here, over whatever page is showing. */}
+      {/* Tool calls the rules say to ask about wait here, over any page. */}
       <ApprovalDock />
+      {/*
+        Automations announce themselves quietly, in the corner. They are the
+        one thing that finishes while nobody is looking at it.
+      */}
+      <AutomationToasts />
     </div>
   )
 }

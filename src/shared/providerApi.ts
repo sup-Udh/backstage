@@ -16,11 +16,18 @@ import type {
   AgentRuntimeState,
   AgentTask,
   AgentValidation,
+  AutomationRun,
   AwarenessSnapshot,
   CapabilityInfo,
   ChatMessage,
   CollaborationMessage,
+  GroupChatSummary,
   OrchestrationSettings,
+  PermissionCategory,
+  PermissionCategoryInfo,
+  PermissionDecision,
+  PermissionRecord,
+  ProjectPermissions,
   RuntimeEvent,
   Trigger
 } from './agents'
@@ -126,13 +133,24 @@ export interface ApprovalRequest {
   id: string
   agentId: string
   agentName: string
+  /** Who the agent is acting for, when it is not the user. */
+  requestedByName: string | null
+  /** Set when the work came from an automation rather than from a person. */
+  automationName: string | null
   taskId: string
   executionId: string
   tool: string
+  /** Which permission rule this falls under, so the card can name it. */
+  category: PermissionCategory
   summary: string
   detail: string
+  /** The folder it would happen in. */
+  workspaceName: string | null
   at: number
 }
+
+/** What the user chose. `session` also stops the category asking again today. */
+export type ApprovalAnswer = 'allow' | 'session' | 'deny'
 
 /* -------------------------------------------------------------- terminal -- */
 
@@ -258,6 +276,38 @@ export interface ThreadInfo {
   id: string
   members: string[]
   names: string[]
+  /** The member who leads the rest, when one leads all of them. */
+  leadId: string | null
+}
+
+/**
+ * Who a group message is for.
+ *
+ * `all` reaches every spawned member independently; `lead` goes to the one who
+ * leads the rest, who may then delegate; an agent id addresses one member in
+ * front of the group.
+ */
+export type ThreadRecipient = 'all' | 'lead' | (string & {})
+
+/** What `automation:parse` makes of a sentence, before the user confirms it. */
+export interface AutomationDraft {
+  name: string
+  event: Trigger['event']
+  schedule: Trigger['schedule']
+  action: Trigger['action']
+  agentIds: string[]
+  message: string
+  condition: string | null
+  /** What the parser recognised, in the user's own words. */
+  matched: string[]
+  /** What it could not work out. */
+  missing: string[]
+}
+
+export interface AutomationRunResult {
+  ok: boolean
+  runId?: string
+  error?: string
 }
 
 export interface ThreadPostResult {
@@ -442,8 +492,55 @@ export interface BackstageApi {
     for(agentId: string): Promise<ThreadInfo | null>
     load(threadId: string): Promise<ChatMessage[]>
     clear(threadId: string): Promise<void>
-    /** Post into the group. Every member answers on its own queue. */
-    post(agentId: string, prompt: string): Promise<ThreadPostResult>
+    /**
+     * Post into the group.
+     *
+     * `recipient` chooses between the whole group, its lead, or one named
+     * member — the last still posts into the group conversation, it just says
+     * who it is for. Every recipient answers on its own queue.
+     */
+    post(
+      agentId: string,
+      prompt: string,
+      recipient?: ThreadRecipient
+    ): Promise<ThreadPostResult>
+  }
+
+  /**
+   * Group conversations, as a list.
+   *
+   * There is no `create`: a group *is* a connection between agents, so
+   * connecting two agents creates the conversation and disconnecting them ends
+   * it. What can be set is only what a derivation cannot know — the name, and
+   * whether it has been read.
+   */
+  groups: {
+    list(): Promise<GroupChatSummary[]>
+    get(threadId: string): Promise<GroupChatSummary | null>
+    /** An empty name restores the generated one. */
+    rename(threadId: string, name: string): Promise<GroupChatSummary[]>
+    markRead(threadId: string): Promise<GroupChatSummary[]>
+  }
+
+  /**
+   * Permission rules for the open project, and what they have decided.
+   *
+   * Project-scoped, like everything else below a project. Auto Allow is one
+   * field of this rather than a setting of its own, because it only means
+   * anything relative to the rules beside it.
+   */
+  permissions: {
+    categories(): Promise<PermissionCategoryInfo[]>
+    get(): Promise<ProjectPermissions>
+    update(patch: {
+      autoAllow?: boolean
+      rules?: Partial<Record<PermissionCategory, PermissionDecision>>
+    }): Promise<ProjectPermissions>
+    /** Newest first. What was asked, by whom, and what was decided. */
+    history(): Promise<PermissionRecord[]>
+    clearHistory(): Promise<PermissionRecord[]>
+    /** Categories currently covered by an "allow for this session" grant. */
+    sessionGrants(): Promise<PermissionCategory[]>
   }
 
   automation: {
@@ -452,11 +549,27 @@ export interface BackstageApi {
     listTriggers(): Promise<Trigger[]>
     saveTrigger(trigger: Partial<Trigger>): Promise<Trigger[]>
     removeTrigger(triggerId: string): Promise<Trigger[]>
+    /**
+     * Run one now, by hand.
+     *
+     * Takes the same path a schedule or an event does, so a manual run is the
+     * real automation rather than a rehearsal of it — same agents, same
+     * permission mode, same group conversation, same run record.
+     */
+    runNow(triggerId: string): Promise<AutomationRunResult>
+    /** Run history for the project, or for one automation. Newest first. */
+    listRuns(triggerId?: string): Promise<AutomationRun[]>
+    run(runId: string): Promise<AutomationRun | null>
+    /**
+     * Turn a sentence into a draft. Never saved: the user confirms it first.
+     */
+    parse(text: string): Promise<AutomationDraft>
   }
 
   approvals: {
     pending(): Promise<ApprovalRequest[]>
-    resolve(id: string, approved: boolean): Promise<boolean>
+    /** `session` allows this one and stops its category asking again today. */
+    resolve(id: string, answer: ApprovalAnswer): Promise<boolean>
     onRequest(handler: (request: ApprovalRequest) => void): () => void
   }
 

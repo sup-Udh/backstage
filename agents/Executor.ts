@@ -17,6 +17,9 @@ import { BudgetTracker, budgetFor } from './budget'
 import { systemBus } from './EventBus'
 import { agentRegistry } from './AgentRegistry'
 import { requestApproval, denyForExecution } from './approvals'
+import { evaluateToolCall, recordPermission } from './permissionStore'
+import { categoryInfo } from './permissionRules'
+import { getAgent } from './agentStore'
 
 /**
  * One agent, one task, one tool loop.
@@ -94,6 +97,19 @@ export class Execution {
       name: this.workspaceRoot.split(/[\/]/).filter(Boolean).pop() ?? this.workspaceRoot,
       exists: existsSync(this.workspaceRoot)
     }
+  }
+
+  /**
+   * Who this execution is acting for, when it is not the user.
+   *
+   * A delegated task is one agent working on another's behalf, and the person
+   * being asked to approve a command should be told both names. Resolved
+   * through `getAgent`, which is scoped to the open project, so a stale id
+   * from a deleted agent reads as "nobody" rather than naming a stranger.
+   */
+  private requestedByName(): string | null {
+    if (!this.task.originAgentId) return null
+    return getAgent(this.task.originAgentId)?.name ?? null
   }
 
   private send(type: RuntimeEventType, fields: Record<string, unknown> = {}): void {
@@ -334,7 +350,57 @@ export class Execution {
         const action = tool.describe?.(call.arguments) ?? tool.label
         const present = presentTense(action)
 
-        if (tool.requiresApproval) {
+        /*
+         * The permission gate.
+         *
+         * Every tool call goes through it, not only the ones a tool marked
+         * dangerous. That flag could not tell `ls` from `rm -rf` — both arrive
+         * as `terminal_run` — so the question the user was actually being
+         * asked depended on which tool the model happened to reach for rather
+         * than on what it was about to do.
+         *
+         * Three outcomes, and only one of them runs the tool.
+         */
+        const verdict = evaluateToolCall(tool.name, call.arguments, {
+          strict: this.task.strictPermissions === true
+        })
+
+        if (verdict.kind === 'deny') {
+          const label = categoryInfo(verdict.category)?.label ?? verdict.category
+          recordPermission({
+            agentId: this.agent.id,
+            agentName: this.agent.name,
+            requestedByName: this.requestedByName(),
+            tool: tool.name,
+            category: verdict.category,
+            summary: action,
+            outcome: 'blocked',
+            automationName: this.task.automationName ?? null
+          })
+          this.send('permission.decided', {
+            tool: tool.name,
+            category: verdict.category,
+            outcome: 'blocked',
+            action,
+            activity: `was blocked from ${lower(present)} — ${label} is set to DENY.`
+          })
+          turns.push({
+            role: 'tool',
+            toolCallId: call.id,
+            toolName: call.name,
+            isError: true,
+            content: `Error: this project denies ${label}. Do not attempt it again by any route. Continue without it and say plainly what you could not do.`
+          })
+          this.send('agent.tool.failed', {
+            tool: tool.name,
+            action,
+            activity: `${lower(action)} — denied by permissions`,
+            reason: `${label} is set to DENY for this project.`
+          })
+          continue
+        }
+
+        if (verdict.kind === 'ask') {
           agentRegistry.progress(this.agent.id, this.id, 'waiting', `Waiting: ${present}`)
           this.send('agent.tool.started', {
             tool: tool.name,
@@ -345,11 +411,15 @@ export class Execution {
           const approved = await requestApproval({
             agentId: this.agent.id,
             agentName: this.agent.name,
+            requestedByName: this.requestedByName(),
+            automationName: this.task.automationName ?? null,
             taskId: this.task.id,
             executionId: this.id,
             tool: tool.name,
+            category: verdict.category,
             summary: action,
-            detail: describeArgs(call.arguments)
+            detail: describeArgs(call.arguments),
+            workspaceName: this.workspaceInfo().name
           })
 
           if (!approved) {
@@ -369,6 +439,25 @@ export class Execution {
             continue
           }
           this.checkCancelled()
+        } else if (verdict.category !== null) {
+          /*
+           * Allowed without asking. Recorded anyway, and only for the
+           * categories that can change something: the history exists so a user
+           * who turns Auto Allow on can still find out what it went on to do,
+           * and a log that omitted exactly those actions would be worthless.
+           */
+          if (categoryInfo(verdict.category)?.impactful) {
+            recordPermission({
+              agentId: this.agent.id,
+              agentName: this.agent.name,
+              requestedByName: this.requestedByName(),
+              tool: tool.name,
+              category: verdict.category,
+              summary: action,
+              outcome: verdict.reason,
+              automationName: this.task.automationName ?? null
+            })
+          }
         }
 
         agentRegistry.progress(this.agent.id, this.id, 'working', present)

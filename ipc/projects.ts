@@ -38,6 +38,9 @@ import { agentRegistry } from '../agents/AgentRegistry'
 import { orchestrator } from '../agents/AgentOrchestrator'
 import { conversationStore } from '../agents/conversationStore'
 import { forgetAgent, removeProjectTriggers } from '../agents/triggerStore'
+import { removeProjectGroups } from '../agents/groupChats'
+import { removeProjectRuns } from '../agents/automationRuns'
+import { clearSessionGrants, removeProjectPermissions } from '../agents/permissionStore'
 import { pickFolder } from '../workspace/WorkspaceManager'
 import { PROVIDERS } from '../providers/registry'
 import { statusFor } from './providers'
@@ -131,6 +134,14 @@ export function registerProjectsHandlers(): void {
           agentSessions.forgetTerminal(t.id)
           terminals.remove(t.id)
         }
+
+        /*
+         * "Allow for this session" was granted about a folder, not about the
+         * application. Carrying it into a different project would silently
+         * apply one project's trust to another's files, which is the whole
+         * thing the per-project permission model exists to prevent.
+         */
+        clearSessionGrants()
       }
 
       return { project, agents: listAgents() }
@@ -200,6 +211,9 @@ export function registerProjectsHandlers(): void {
 
     removeProjectTriggers(id)
     removeProjectCases(id)
+    removeProjectGroups(id)
+    removeProjectRuns(id)
+    removeProjectPermissions(id)
     deleteProject(id)
     agentRegistry.refreshAll()
 

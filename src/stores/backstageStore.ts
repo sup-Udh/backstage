@@ -128,6 +128,15 @@ export type AccountSection =
   | 'profile'
   | 'providers'
   | 'agents'
+  /**
+   * Agent permissions and Auto Allow.
+   *
+   * Under Settings and not under Automations, because it governs every agent
+   * action rather than only automated ones — an automation obeys the same
+   * rules a person's request does, which is the property the whole design
+   * turns on.
+   */
+  | 'permissions'
   | 'projects'
   | 'account'
 
@@ -257,6 +266,14 @@ interface BackstageState {
   /** A command queued for the terminal to run once it is visible. */
   pendingCommand: string | null
   /**
+   * An automation run the user asked to see, from a notification.
+   *
+   * A one-shot request rather than a piece of view state: the Automations page
+   * consumes it and clears it, so returning to the page later does not reopen
+   * a run somebody looked at days ago.
+   */
+  pendingAutomationRunId: string | null
+  /**
    * Whether the terminal has ever been opened. Once it has, its panel stays
    * mounted: unmounting would dispose the xterm instance and lose the
    * scrollback of a session that is still running.
@@ -327,6 +344,8 @@ interface BackstageState {
   setActiveTerminal: (id: string | null) => void
   requestSession: (id: string | null) => void
   queueCommand: (command: string | null) => void
+  /** Open the Automations page at one run. Cleared when it is consumed. */
+  openAutomationRun: (runId: string | null) => void
   markTerminalOpened: () => void
 
   setAgentStates: (states: AgentRuntimeState[]) => void
@@ -381,6 +400,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   activeTerminalId: null,
   requestedSessionId: null,
   pendingCommand: null,
+  pendingAutomationRunId: null,
   terminalEverOpened: false,
 
   enterApp: () =>
@@ -415,6 +435,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
       activeTerminalId: null,
       requestedSessionId: null,
       pendingCommand: null,
+      pendingAutomationRunId: null,
       /*
        * Providers are *not* cleared. A connection is a credential on this
        * machine rather than a property of an account — the same reason the
@@ -446,6 +467,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
       activeTerminalId: null,
       requestedSessionId: null,
       pendingCommand: null,
+      pendingAutomationRunId: null,
     }),
 
   showProjects: () => set({ view: 'projects' }),
@@ -546,6 +568,12 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   setActiveTerminal: (activeTerminalId) => set({ activeTerminalId }),
   requestSession: (requestedSessionId) => set({ requestedSessionId }),
   queueCommand: (pendingCommand) => set({ pendingCommand }),
+  openAutomationRun: (pendingAutomationRunId) =>
+    set(
+      pendingAutomationRunId
+        ? { pendingAutomationRunId, page: 'automations' }
+        : { pendingAutomationRunId: null }
+    ),
   markTerminalOpened: () => set({ terminalEverOpened: true }),
 
   setAgentStates: (states) =>

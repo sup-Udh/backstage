@@ -4,11 +4,16 @@ import type {
   AgentRuntimeState,
   AgentTask,
   AgentValidation,
+  AutomationRun,
   AwarenessSnapshot,
   CapabilityInfo,
   ChatMessage,
   CollaborationMessage,
+  GroupChatSummary,
   OrchestrationSettings,
+  PermissionCategoryInfo,
+  PermissionRecord,
+  ProjectPermissions,
   RunTaskAck,
   RunTaskParams,
   Trigger
@@ -30,6 +35,12 @@ import {
   postToThread,
   threadFor
 } from '../agents/threads'
+import {
+  getGroupChat,
+  listGroupChats,
+  markGroupRead,
+  renameGroupChat
+} from '../agents/groupChats'
 import { agentRegistry, validateAgent } from '../agents/AgentRegistry'
 import { orchestrator, wasRejected } from '../agents/AgentOrchestrator'
 import { godAgent } from '../agents/GodAgent'
@@ -42,13 +53,31 @@ import { getSettings, updateSettings } from '../agents/settingsStore'
 import {
   deleteTrigger,
   forgetAgent,
+  getTrigger,
   listTriggers,
   upsertTrigger
 } from '../agents/triggerStore'
+import { initScheduler, disposeScheduler } from '../agents/Scheduler'
+import {
+  disposeAutomationRunner,
+  initAutomationRunner,
+  runAutomation
+} from '../agents/automationRunner'
+import { getRun, listRuns } from '../agents/automationRuns'
+import { parseAutomation } from '../agents/nlAutomation'
+import { PERMISSION_CATEGORIES } from '../agents/permissionRules'
+import {
+  clearPermissionHistory,
+  getPermissions,
+  listPermissionHistory,
+  sessionGranted,
+  updatePermissions
+} from '../agents/permissionStore'
 import {
   pendingApprovals,
   resolveApproval,
-  setApprovalPublisher
+  setApprovalPublisher,
+  type ApprovalAnswer
 } from '../agents/approvals'
 import { awarenessSnapshot, refreshGit } from '../workspace/awareness'
 import { getWorkspaceRoot } from '../workspace/WorkspaceManager'
@@ -98,6 +127,8 @@ function recipients(target: string | string[] | undefined): AgentConfig[] {
 
 export function registerAgentHandlers(): void {
   initTriggerEngine()
+  initAutomationRunner()
+  initScheduler()
   initThreads()
   agentRegistry.refreshAll()
 
@@ -430,9 +461,39 @@ export function registerAgentHandlers(): void {
     clearThread(String(threadId ?? ''))
   )
 
-  ipcMain.handle('threads:post', (_e, agentId: unknown, prompt: unknown) =>
-    postToThread(String(agentId ?? ''), String(prompt ?? ''))
+  ipcMain.handle(
+    'threads:post',
+    (_e, agentId: unknown, prompt: unknown, recipient?: unknown) =>
+      postToThread(
+        String(agentId ?? ''),
+        String(prompt ?? ''),
+        typeof recipient === 'string' && recipient ? recipient : 'all'
+      )
   )
+
+  /* ------------------------------------------------------- group chats -- */
+
+  /*
+   * Groups are derived from connections rather than stored, so there is
+   * deliberately no create handler here. Connecting two agents is what makes a
+   * group chat exist; the only things that can be *set* are the name and
+   * whether it has been read.
+   */
+  ipcMain.handle('groups:list', (): GroupChatSummary[] => listGroupChats())
+
+  ipcMain.handle('groups:get', (_e, threadId: unknown): GroupChatSummary | null =>
+    getGroupChat(String(threadId ?? ''))
+  )
+
+  ipcMain.handle('groups:rename', (_e, threadId: unknown, name: unknown) => {
+    renameGroupChat(String(threadId ?? ''), String(name ?? ''))
+    return listGroupChats()
+  })
+
+  ipcMain.handle('groups:markRead', (_e, threadId: unknown): GroupChatSummary[] => {
+    markGroupRead(String(threadId ?? ''))
+    return listGroupChats()
+  })
 
   /* ------------------------------------------------------- shared state -- */
 
@@ -471,17 +532,98 @@ export function registerAgentHandlers(): void {
     return listTriggers()
   })
 
+  /*
+   * Run now.
+   *
+   * The same path a schedule or an event takes — `runAutomation` — so there is
+   * no version of an automation that behaves differently because a person
+   * started it. The trigger is resolved through `getTrigger`, which is scoped
+   * to the open project, so a run cannot be started against an automation
+   * belonging to another one however the id arrived.
+   */
+  ipcMain.handle('automation:runNow', (_e, id: unknown) => {
+    const trigger = getTrigger(String(id ?? ''))
+    if (!trigger) return { ok: false, error: 'That automation no longer exists.' }
+    if (!trigger.enabled) return { ok: false, error: 'That automation is paused.' }
+    return runAutomation(trigger, { origin: 'manual' })
+  })
+
+  ipcMain.handle(
+    'automation:listRuns',
+    (_e, triggerId?: unknown): AutomationRun[] =>
+      listRuns(30, typeof triggerId === 'string' && triggerId ? triggerId : undefined)
+  )
+
+  ipcMain.handle(
+    'automation:run',
+    (_e, runId: unknown): AutomationRun | null => getRun(String(runId ?? '')) ?? null
+  )
+
+  /*
+   * Natural language, parsed in the main process against the open project's
+   * roster. Here rather than in the renderer not for speed: this is the only
+   * side that can be trusted about which agents exist, and a parser handed a
+   * roster by its caller could be handed one that is not the open project's.
+   */
+  ipcMain.handle('automation:parse', (_e, text: unknown) =>
+    parseAutomation(
+      String(text ?? ''),
+      listAgents().map((a) => ({ id: a.id, name: a.name, role: a.role }))
+    )
+  )
+
+  /* --------------------------------------------------------- permissions -- */
+
+  ipcMain.handle(
+    'permissions:categories',
+    (): PermissionCategoryInfo[] => PERMISSION_CATEGORIES.map((c) => ({ ...c }))
+  )
+
+  ipcMain.handle('permissions:get', (): ProjectPermissions => getPermissions())
+
+  ipcMain.handle('permissions:update', (_e, patch: unknown): ProjectPermissions => {
+    if (!patch || typeof patch !== 'object') return getPermissions()
+    return updatePermissions(patch as Parameters<typeof updatePermissions>[0])
+  })
+
+  ipcMain.handle('permissions:history', (): PermissionRecord[] =>
+    listPermissionHistory(60)
+  )
+
+  ipcMain.handle('permissions:clearHistory', (): PermissionRecord[] => {
+    clearPermissionHistory()
+    return listPermissionHistory(60)
+  })
+
+  ipcMain.handle('permissions:sessionGrants', () => sessionGranted())
+
   /* ----------------------------------------------------------- approvals -- */
 
   ipcMain.handle('approvals:pending', () => pendingApprovals())
 
-  ipcMain.handle('approvals:resolve', (_e, id: unknown, approved: unknown): boolean =>
-    resolveApproval(String(id ?? ''), approved === true)
-  )
+  /*
+   * Three answers, not two. "Allow for this session" is a real third option —
+   * it grants the *category* until the app closes or the project changes — and
+   * collapsing it into a boolean is how it would quietly become a permanent
+   * rule the user never wrote.
+   *
+   * Anything unrecognised denies. That is the direction this has to fail in.
+   */
+  ipcMain.handle('approvals:resolve', (_e, id: unknown, answer: unknown): boolean => {
+    const choice: ApprovalAnswer =
+      answer === true || answer === 'allow'
+        ? 'allow'
+        : answer === 'session'
+          ? 'session'
+          : 'deny'
+    return resolveApproval(String(id ?? ''), choice)
+  })
 }
 
 /** Called on quit, so nothing is left mid-execution against a dead window. */
 export function disposeAgentHandlers(): void {
   setApprovalPublisher(null)
+  disposeScheduler()
+  disposeAutomationRunner()
   orchestrator.dispose()
 }

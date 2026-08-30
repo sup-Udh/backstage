@@ -156,7 +156,40 @@ const api: BackstageApi = {
     listTriggers: () => ipcRenderer.invoke('automation:listTriggers'),
     saveTrigger: (trigger) => ipcRenderer.invoke('automation:saveTrigger', trigger),
     removeTrigger: (triggerId) =>
-      ipcRenderer.invoke('automation:removeTrigger', triggerId)
+      ipcRenderer.invoke('automation:removeTrigger', triggerId),
+    runNow: (triggerId) => ipcRenderer.invoke('automation:runNow', triggerId),
+    listRuns: (triggerId) => ipcRenderer.invoke('automation:listRuns', triggerId),
+    run: (runId) => ipcRenderer.invoke('automation:run', runId),
+    parse: (text) => ipcRenderer.invoke('automation:parse', text)
+  },
+
+  /*
+   * Group conversations. Note the absence of a create: a group is a connection
+   * between agents, so `agents.connect` is what brings one into existence.
+   */
+  groups: {
+    list: () => ipcRenderer.invoke('groups:list'),
+    get: (threadId) => ipcRenderer.invoke('groups:get', threadId),
+    rename: (threadId, name) => ipcRenderer.invoke('groups:rename', threadId, name),
+    markRead: (threadId) => ipcRenderer.invoke('groups:markRead', threadId)
+  },
+
+  /*
+   * Permission rules for the open project.
+   *
+   * The renderer can read and change them, which is the point — they are the
+   * user's settings. What it cannot do is act on them: every decision is taken
+   * in the main process, inside the execution that is about to run the tool,
+   * so a compromised renderer could no more skip a DENY than it could run the
+   * command itself.
+   */
+  permissions: {
+    categories: () => ipcRenderer.invoke('permissions:categories'),
+    get: () => ipcRenderer.invoke('permissions:get'),
+    update: (patch) => ipcRenderer.invoke('permissions:update', patch),
+    history: () => ipcRenderer.invoke('permissions:history'),
+    clearHistory: () => ipcRenderer.invoke('permissions:clearHistory'),
+    sessionGrants: () => ipcRenderer.invoke('permissions:sessionGrants')
   },
 
   /*
@@ -166,7 +199,7 @@ const api: BackstageApi = {
    */
   approvals: {
     pending: () => ipcRenderer.invoke('approvals:pending'),
-    resolve: (id, approved) => ipcRenderer.invoke('approvals:resolve', id, approved),
+    resolve: (id, answer) => ipcRenderer.invoke('approvals:resolve', id, answer),
     onRequest: (handler) => subscribe<ApprovalRequest>('agent:approval', handler)
   },
 
@@ -195,7 +228,8 @@ const api: BackstageApi = {
     for: (agentId) => ipcRenderer.invoke('threads:for', agentId),
     load: (threadId) => ipcRenderer.invoke('threads:load', threadId),
     clear: (threadId) => ipcRenderer.invoke('threads:clear', threadId),
-    post: (agentId, prompt) => ipcRenderer.invoke('threads:post', agentId, prompt)
+    post: (agentId, prompt, recipient) =>
+      ipcRenderer.invoke('threads:post', agentId, prompt, recipient ?? 'all')
   },
 
   sessions: {

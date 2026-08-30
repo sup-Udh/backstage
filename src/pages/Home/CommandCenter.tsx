@@ -12,6 +12,7 @@ import { recipientsFor, spawnedAgents, useTeam } from '../../stores/teamStore'
 import { useProject } from '../../stores/projectStore'
 import { PromptBox } from './PromptBox'
 import { TeamHeader } from './TeamHeader'
+import { CollaborationRail } from './CollaborationRail'
 import { ChatIdentity } from './ChatIdentity'
 import { MessagesPanel } from './MessagesPanel'
 import { TerminalPanel } from '../../workspace/TerminalPanel'
@@ -84,6 +85,7 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
   const agents = useTeam((s) => s.agents)
   const cancel = useTeam((s) => s.cancel)
   const refreshTasks = useTeam((s) => s.refreshTasks)
+  const refreshGroups = useTeam((s) => s.refreshGroups)
   /* Who coordinates, from the project. Never inferred from a name or a role. */
   const leadId = useProject((s) => s.project?.godAgentId ?? null)
 
@@ -108,6 +110,20 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
   const activeWorker = findWorker(workers, target)
   const isSession = activeWorker?.kind === 'cli'
   const inThread = threadTarget !== null && thread !== null
+
+  /**
+   * Who the next group message is for.
+   *
+   * `all` posts to every member; an agent id addresses one of them in front of
+   * the group; `lead` hands it to whoever leads the rest, who may then split
+   * it up. Reset whenever the thread changes — carrying "for Jesse" into a
+   * different group would send the next message to somebody the user never
+   * chose.
+   */
+  const [recipient, setRecipient] = useState<string>('all')
+  useEffect(() => {
+    setRecipient('all')
+  }, [thread?.id])
 
   /* Once opened the terminal stays mounted, or its scrollback dies with it. */
   useEffect(() => {
@@ -239,10 +255,13 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
       const posting =
         worker?.kind === 'cli' && worker.sessionId
           ? window.backstage.sessions.postGroup(worker.sessionId, text)
-          : window.backstage.threads.post(groupTarget, text)
+          : window.backstage.threads.post(groupTarget, text, recipient)
 
       void posting.then((result) => {
         void refreshThread()
+        // Posting changes the group's status and its last message, both of
+        // which the rail above is showing.
+        void refreshGroups()
         if (!result.accepted && result.error) {
           pushMessage(groupTarget, {
             id: localId('sys'),
@@ -412,6 +431,34 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
     <section className="flex h-full min-h-0 min-w-0 flex-col border-l-[3px] border-ink bg-cream">
       <TeamHeader workers={workers} onSpawn={onSpawn} />
 
+      {/*
+        Collaboration, above the conversation rather than behind a character.
+
+        Only on the conversation surface: the terminal and the file tree are
+        full-height tools, and a summary strip stealing four lines from a PTY
+        is worse than a summary the user has to switch tabs for.
+      */}
+      {tab === 'messages' && (
+        <CollaborationRail
+          onOpenGroup={(group) => {
+            /*
+             * Straight into the conversation. No character menu, no second
+             * dialog, no re-picking the members — the group was clicked, and
+             * the group is what opens.
+             */
+            const entry = group.memberIds[0]
+            if (!entry) return
+            selectAgent(entry)
+            void setThreadTarget(entry).then(() => {
+              // Reading it is what clears the badge; the main process marks it
+              // read as part of loading, so this only re-reads the count.
+              void refreshGroups()
+            })
+            setTab('messages')
+          }}
+        />
+      )}
+
       {/* One surface at a time, chosen here. */}
       <nav className="flex shrink-0 border-b-[3px] border-ink bg-cream-2">
         {TABS.map((t, i) => {
@@ -534,6 +581,57 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
             >
               {!anyConnected ? 'Open Connections' : 'Open a folder'}
             </button>
+          </div>
+        )}
+
+        {/*
+          Who a group message is for.
+
+          Shown only inside a group, because outside one there is exactly one
+          recipient and a control offering a choice of one is noise. ALL is the
+          default and the common case; naming a member still posts into the
+          group — everyone sees it and sees the answer — which is the
+          difference between addressing somebody in a group chat and sending
+          them a DM.
+        */}
+        {tab === 'messages' && inThread && thread && (
+          <div className="mb-2 flex flex-wrap items-center gap-1">
+            <span className="mr-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.12em] text-ink-3">
+              To
+            </span>
+            {[
+              { id: 'all', label: `All (${thread.members.length})` },
+              ...(thread.leadId
+                ? [
+                    {
+                      id: 'lead',
+                      label: `${thread.names[thread.members.indexOf(thread.leadId)] ?? 'Lead'} · lead`
+                    }
+                  ]
+                : []),
+              ...thread.members.map((id, i) => ({
+                id,
+                label: thread.names[i] ?? id
+              }))
+            ].map((option) => {
+              const on = recipient === option.id
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setRecipient(option.id)}
+                  aria-pressed={on}
+                  className={[
+                    'border-2 px-1.5 py-0.5 font-pixel text-[9px] font-semibold uppercase tracking-[0.06em] transition-colors',
+                    on
+                      ? 'border-ink bg-brand text-on-brand'
+                      : 'border-rule text-ink-3 hover:border-ink hover:text-ink'
+                  ].join(' ')}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
           </div>
         )}
 

@@ -13,6 +13,9 @@ export type {
   AgentRuntimeState,
   AgentTask,
   AgentValidation,
+  AutomationOrigin,
+  AutomationRun,
+  AutomationRunStatus,
   AwarenessSnapshot,
   CapabilityId,
   CapabilityInfo,
@@ -20,13 +23,22 @@ export type {
   CollaborationKind,
   CollaborationMessage,
   ExecutionProfile,
+  GroupChatSummary,
+  GroupStatus,
   OrchestrationSettings,
+  PermissionCategory,
+  PermissionCategoryInfo,
+  PermissionDecision,
+  PermissionOutcome,
+  PermissionRecord,
+  ProjectPermissions,
   RuntimeEvent,
   RuntimeEventType,
   TaskStatus,
   Trigger,
   TriggerActionType,
-  TriggerEventType
+  TriggerEventType,
+  TriggerSchedule
 } from '../src/shared/agents'
 
 export { BUSY_STATUSES } from '../src/shared/agents'
@@ -60,6 +72,11 @@ export interface TaskRequest {
   caseId?: string | null
   /** Prior turns to seed the model with. Trimmed again before the request. */
   history?: import('../providers/provider.types').Turn[]
+  /** The automation behind this work, when there is one. See AgentTask. */
+  automationName?: string | null
+  automationRunId?: string | null
+  /** Force an approval prompt for anything impactful, whatever the rules say. */
+  strictPermissions?: boolean
   /**
    * What this task's answer will be, if it is not simply an answer.
    *

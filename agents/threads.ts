@@ -1,9 +1,10 @@
 import type { ChatMessage, RuntimeEvent } from './agent.types'
-import { getAgent, groupOf, listAgents, threadIdFor } from './agentStore'
+import { getAgent, groupOf, listAgents, threadIdFor, workersOf } from './agentStore'
 import { conversationStore } from './conversationStore'
 import { systemBus } from './EventBus'
 import { makeId } from './persist'
 import { orchestrator } from './AgentOrchestrator'
+import { markGroupRead } from './groupChats'
 import { getWorkspaceRoot } from '../workspace/WorkspaceManager'
 
 /**
@@ -20,8 +21,8 @@ import { getWorkspaceRoot } from '../workspace/WorkspaceManager'
  * members, so it gets the same per-workspace scoping, trimming and
  * persistence for free.
  *
- * Nothing in a thread is simulated. A user message is submitted to every
- * member as a real task on their own queue; agent replies land here because
+ * Nothing in a thread is simulated. A user message is submitted to real
+ * agents as real tasks on their own queues; agent replies land here because
  * the runtime reported them; agent-to-agent lines land here because those
  * agents genuinely messaged each other.
  */
@@ -39,7 +40,16 @@ const chainThreads = new Map<string, string>()
 /** Cap, so a long session cannot grow this map without bound. */
 const MAX_CHAINS = 500
 
-function remember(correlationId: string, threadId: string): void {
+/**
+ * Tie a chain of work to a group conversation.
+ *
+ * Exported because the automation runner needs it too: an automation running
+ * on three agents is one chain whose replies belong in their shared thread,
+ * and without this they would each land only in a private session the user has
+ * no reason to be looking at.
+ */
+export function rememberChainThread(correlationId: string, threadId: string): void {
+  if (!correlationId || !threadId) return
   if (chainThreads.size >= MAX_CHAINS) {
     const oldest = chainThreads.keys().next().value
     if (oldest !== undefined) chainThreads.delete(oldest)
@@ -56,6 +66,14 @@ export interface ThreadInfo {
   members: string[]
   /** Display names, resolved so the renderer does not have to. */
   names: string[]
+  /**
+   * The member who leads the others, if any.
+   *
+   * Carried so the composer can offer "the lead decides who handles this" as a
+   * recipient without re-deriving direction in the renderer — and so it offers
+   * it only when there genuinely is a lead.
+   */
+  leadId: string | null
 }
 
 /** The group this agent collaborates with, or null if it has no connections. */
@@ -65,8 +83,26 @@ export function threadFor(agentId: string): ThreadInfo | null {
   return {
     id: threadIdFor(members),
     members,
-    names: members.map((id) => getAgent(id)?.name ?? id)
+    names: members.map((id) => getAgent(id)?.name ?? id),
+    leadId: leadWithin(members)
   }
+}
+
+/**
+ * Who leads this group, if anybody does.
+ *
+ * Only an agent that leads *every* other member counts. In a chain A→B→C,
+ * B leads C but cannot speak for A, so handing B a whole-group message would
+ * quietly drop one member — and a recipient control that silently reaches two
+ * of three people is worse than not offering the option.
+ */
+function leadWithin(members: string[]): string | null {
+  for (const id of members) {
+    const led = new Set(workersOf(id))
+    const others = members.filter((m) => m !== id)
+    if (others.length > 0 && others.every((m) => led.has(m))) return id
+  }
+  return null
 }
 
 /**
@@ -88,8 +124,25 @@ function isKnownThread(threadId: string): boolean {
   return listAgents().some((agent) => threadFor(agent.id)?.id === threadId)
 }
 
+/** The group a thread id names, or null if it does not name one here. */
+export function threadById(threadId: string): ThreadInfo | null {
+  if (!threadId) return null
+  for (const agent of listAgents()) {
+    const thread = threadFor(agent.id)
+    if (thread?.id === threadId) return thread
+  }
+  return null
+}
+
 export function loadThread(threadId: string): ChatMessage[] {
   if (!isKnownThread(threadId)) return []
+  /*
+   * Opening a conversation is reading it. Marking here rather than in a
+   * separate call the renderer has to remember to make is what keeps the
+   * unread badge honest — there is no path that shows the messages and leaves
+   * them counted as unseen.
+   */
+  markGroupRead(threadId)
   return conversationStore.load(workspaceId(), threadId)
 }
 
@@ -98,7 +151,8 @@ export function clearThread(threadId: string): void {
   conversationStore.clear(workspaceId(), threadId)
 }
 
-function append(threadId: string, message: ChatMessage): void {
+/** Append a line to a group transcript. Used here and by the automation runner. */
+export function appendToThread(threadId: string, message: ChatMessage): void {
   conversationStore.append(workspaceId(), threadId, message)
 }
 
@@ -111,13 +165,27 @@ export interface PostResult {
 /**
  * Post into a group thread.
  *
- * The message goes to every member as a real task, sharing one correlation id
- * so their replies can be recognised as part of this conversation. Each agent
- * answers on its own queue with its own model — three agents in a thread is
- * three pieces of work, and merging them into a single reply would be
- * inventing a consensus none of them reached.
+ * The message goes to the chosen recipients as real tasks, sharing one
+ * correlation id so their replies can be recognised as part of this
+ * conversation. Each agent answers on its own queue with its own model — three
+ * agents in a thread is three pieces of work, and merging them into a single
+ * reply would be inventing a consensus none of them reached.
+ *
+ * `recipient` is what the composer's ALL / WALTER / JESSE control sends:
+ *
+ *   'all'      every spawned member answers, independently  (the default)
+ *   'lead'     only the member who leads the rest, who may then delegate
+ *   <agentId>  one member, in the group's own conversation rather than in DM
+ *
+ * The last of those is the one worth being precise about: it is still a group
+ * message. Everyone in the thread sees it and sees the answer — it just says
+ * who it is for, which is how a person addresses one member of a group chat.
  */
-export function postToThread(agentId: string, prompt: string): PostResult {
+export function postToThread(
+  agentId: string,
+  prompt: string,
+  recipient: string = 'all'
+): PostResult {
   const thread = threadFor(agentId)
   if (!thread) {
     return { accepted: false, error: 'That agent is not connected to anyone.' }
@@ -134,7 +202,24 @@ export function postToThread(agentId: string, prompt: string): PostResult {
     return { accepted: false, error: 'Nobody in this group is spawned.' }
   }
 
-  const { tasks, errors } = orchestrator.broadcast(spawned, text, 'user')
+  let addressed = spawned
+  if (recipient === 'lead') {
+    if (!thread.leadId || !spawned.includes(thread.leadId)) {
+      return { accepted: false, error: 'This group has no lead who can take it on.' }
+    }
+    addressed = [thread.leadId]
+  } else if (recipient !== 'all') {
+    if (!thread.members.includes(recipient)) {
+      return { accepted: false, error: 'That agent is not in this group.' }
+    }
+    if (!spawned.includes(recipient)) {
+      const name = getAgent(recipient)?.name ?? 'That agent'
+      return { accepted: false, error: `${name} is not spawned.` }
+    }
+    addressed = [recipient]
+  }
+
+  const { tasks, errors } = orchestrator.broadcast(addressed, text, 'user')
   if (tasks.length === 0) {
     return {
       accepted: false,
@@ -143,13 +228,20 @@ export function postToThread(agentId: string, prompt: string): PostResult {
     }
   }
 
-  remember(tasks[0].correlationId, thread.id)
+  rememberChainThread(tasks[0].correlationId, thread.id)
 
-  append(thread.id, {
+  const to =
+    recipient === 'all'
+      ? null
+      : (getAgent(addressed[0])?.name ?? null)
+
+  appendToThread(thread.id, {
     id: makeId('msg'),
     kind: 'user',
     agentId: thread.id,
-    text,
+    // Addressed messages carry who they were for, so the transcript reads the
+    // way the conversation actually went rather than as an unattributed line.
+    text: to ? `@${to} ${text}` : text,
     at: Date.now()
   })
 
@@ -179,13 +271,39 @@ export function initThreads(): void {
         ? chainThreads.get(event.correlationId)
         : undefined
       if (!threadId) return
-      append(threadId, {
+      appendToThread(threadId, {
         id: event.id,
         kind: 'agent',
         agentId,
         fromAgentId: agentId,
         fromName: event.agentName ?? getAgent(agentId)?.name ?? agentId,
         text: event.message,
+        at: event.at,
+        taskId: event.taskId
+      })
+      return
+    }
+
+    /*
+     * A failure belongs in the thread too.
+     *
+     * The conversation is the record of what the team did, and "Jesse could
+     * not finish" is part of that record. Leaving it out was what made a
+     * failed member look like a member who had simply not answered yet — and
+     * the group would sit at WORKING with nothing coming.
+     */
+    if (event.type === 'agent.failed' && event.message) {
+      const threadId = event.correlationId
+        ? chainThreads.get(event.correlationId)
+        : undefined
+      if (!threadId) return
+      appendToThread(threadId, {
+        id: event.id,
+        kind: 'system',
+        agentId,
+        fromAgentId: agentId,
+        fromName: event.agentName ?? getAgent(agentId)?.name ?? agentId,
+        text: `Could not finish: ${event.message}`,
         at: event.at,
         taskId: event.taskId
       })
@@ -212,7 +330,7 @@ export function initThreads(): void {
        * collaboration line resolves to two real agents rather than to the
        * thread itself, which has no character and no name of its own.
        */
-      append(thread.id, {
+      appendToThread(thread.id, {
         id: event.id,
         kind: 'collaboration',
         agentId: event.targetAgentId,

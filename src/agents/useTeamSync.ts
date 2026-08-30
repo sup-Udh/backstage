@@ -54,6 +54,42 @@ const COLLABORATION_CHANGING = new Set<RuntimeEvent['type']>([
   'agent.message.received'
 ])
 
+/**
+ * Events that change what a group chat looks like on Home.
+ *
+ * Every one of them moves a status, a last message or an unread count, and
+ * the summaries are derived in the main process from live runtime state — so
+ * the renderer cannot work any of it out for itself, it has to ask again.
+ *
+ * Deliberately not the whole event stream. `agent.message.delta` fires many
+ * times a second while a model is writing, and re-deriving every group on each
+ * fragment would walk the roster and read a transcript sixty times a second
+ * for a summary that has not changed.
+ */
+const GROUP_CHANGING = new Set<RuntimeEvent['type']>([
+  'agent.completed',
+  'agent.failed',
+  'agent.idle',
+  'agent.activated',
+  'agent.delegated',
+  'agent.message.sent',
+  'agent.connected',
+  'agent.disconnected',
+  'task.started',
+  'task.completed',
+  'task.failed',
+  'task.cancelled'
+])
+
+/** Events that change the automation run list. */
+const AUTOMATION_CHANGING = new Set<RuntimeEvent['type']>([
+  'automation.started',
+  'automation.completed',
+  'automation.failed',
+  'trigger.fired',
+  'trigger.blocked'
+])
+
 export function useTeamSync(): void {
   const ingestEvent = useBackstage((s) => s.ingestEvent)
   const setAgentStates = useBackstage((s) => s.setAgentStates)
@@ -69,6 +105,7 @@ export function useTeamSync(): void {
   useEffect(() => {
     if (!window.backstage?.agents) return
     void refresh()
+    void useTeam.getState().refreshPermissions()
     void window.backstage.providers.status().then(setProviders)
     void window.backstage.agents.states().then(setAgentStates)
     void window.backstage.agents.collaboration().then(setCollaboration)
@@ -110,6 +147,31 @@ export function useTeamSync(): void {
 
       if (COLLABORATION_CHANGING.has(event.type)) {
         void window.backstage.agents.collaboration().then(setCollaboration)
+      }
+
+      /*
+       * Group summaries and automation runs, re-read rather than patched.
+       *
+       * Both are derived in the main process — a group's status comes from its
+       * members' live registry state, and a run settles only when every task
+       * it started has — so there is nothing the renderer could correctly
+       * patch locally. Re-reading is also what keeps them right when something
+       * changes that produced no event the renderer saw.
+       */
+      if (GROUP_CHANGING.has(event.type)) {
+        void useTeam.getState().refreshGroups()
+      }
+      if (AUTOMATION_CHANGING.has(event.type)) {
+        void useTeam.getState().refreshRuns()
+        void useTeam.getState().refreshGroups()
+      }
+      /*
+       * A permission decision taken without asking still belongs in the
+       * history the user reads afterwards — that is the whole point of turning
+       * Auto Allow on and walking away.
+       */
+      if (event.type === 'permission.decided') {
+        void useTeam.getState().refreshPermissions()
       }
 
       // Spawning, despawning and connecting change the roster, not just a
