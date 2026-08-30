@@ -140,36 +140,41 @@ Legend: `[x]` verified · `[~]` partially verified, scope noted · `[ ]` not don
 - [x] **Repository secrets set** — `SUPABASE_URL`, `SUPABASE_ANON_KEY`
 - [x] **Release commit pushed** — `9ef8779` to `origin/master`
 - [x] **Tag pushed** — `v1.0.0-beta.1` → `origin`
-- [ ] **GitHub Action passes** — ⛔ **BLOCKED**, see below
-- [ ] **Installer uploaded to the release**
-- [ ] **Release marked pre-release**
-- [ ] **Checksum uploaded**
-- [ ] **Asset URL verified to return 200**
-- [ ] **Website download link updated**
+- [x] **GitHub Action passes** — run
+      [33299565242](https://github.com/sup-Udh/backstage/actions/runs/33299565242),
+      attempt 3, all 13 steps green
+- [x] **Installer uploaded to the release**
+- [x] **Release marked pre-release**
+- [x] **Checksum uploaded** — both artifacts, plus `latest.yml`
+- [x] **Asset URL verified to return 200** — all five assets
+- [ ] **Website download link updated** — the website is not in this
+      repository; see [DOWNLOAD_RELEASE_SETUP.md](DOWNLOAD_RELEASE_SETUP.md)
 
-### ⛔ Blocker: GitHub Actions is disabled by account billing
+### The release
 
-Run [33299565242](https://github.com/sup-Udh/backstage/actions/runs/33299565242)
-failed after 2 seconds having executed **zero steps**. The annotation is:
+<https://github.com/sup-Udh/backstage/releases/tag/v1.0.0-beta.1>
 
-> The job was not started because your account is locked due to a billing issue.
+| Asset | Size | SHA-256 |
+|---|---|---|
+| `Backstage-Setup-1.0.0-beta.1.exe` | 101,279,961 | `c4bcd922c459456517983ba1c29c673f5cf95eef5a2b9154b977339bf75f85a5` |
+| `Backstage-Portable-1.0.0-beta.1.exe` | 101,070,099 | `5d9d4ba14c8756a6964916dbd712cea2f2fd13d1cb0a51d76310507aafcb9a6a` |
 
-This is not a defect in `release.yml` — the workflow YAML parses, and the
-runner never picked the job up. The repository is public, but an account lock
-disables Actions regardless of repository visibility.
+### What it took to get green
 
-**To unblock:** settle the balance at
-<https://github.com/settings/billing>, then re-run the existing run
-(**Actions → Release → Re-run all jobs**). The tag is already pushed and does
-**not** need to be recreated — re-running builds the same commit and publishes
-the release.
+Two failures on the way, neither of them a defect in `release.yml`:
 
-**Alternative, if Actions stays unavailable:** create the release by hand from
-the locally built artifacts in `release/`. They were packaged from exactly the
-source at `v1.0.0-beta.1` (verified: no packaged input changed after the
-build; the release commit added only documentation and CI config). Upload the
-installer, the portable exe, both `.sha256` files and `latest.yml`, and tick
-**Set as a pre-release**.
+1. **Attempt 1 — account locked for billing.** The job was never started and
+   ran zero steps, so it said nothing about whether the workflow was correct.
+   Cleared by settling the GitHub balance.
+2. **Attempt 2 — `Write Supabase configuration` exited 1.** The guard did its
+   job: the repository secrets were not set, and the step refuses to build an
+   installer that could never sign anyone in. Cleared by adding
+   `SUPABASE_URL` and `SUPABASE_ANON_KEY` under
+   *Settings → Secrets and variables → Actions*.
+
+Worth remembering for next time: **a tag run executes the workflow file as it
+was at the tagged commit.** Editing `release.yml` on `master` does not change
+what a re-run of an existing tag does.
 
 ---
 
