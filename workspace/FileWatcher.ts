@@ -22,7 +22,18 @@ export interface FileChange {
   at: number
 }
 
-const IGNORED = /(^|[\\/])(\.git|node_modules|dist|out|build|\.next|coverage|__pycache__|target|\.venv|\.cache)([\\/]|$)/
+/*
+ * `release` earns its place here for a second reason beyond noise.
+ *
+ * On Windows chokidar watches a directory by holding an open handle on it
+ * (ReadDirectoryChangesW). electron-builder packages into `release/
+ * win-unpacked.tmp` and then *renames* that directory into place — and a
+ * directory with an open handle cannot be renamed, so the rename fails with
+ * EPERM and the whole build dies. A Backstage instance left running with its
+ * own repository open as the project was therefore enough to make `npm run
+ * dist` fail every time, from inside the product being packaged.
+ */
+const IGNORED = /(^|[\\/])(\.git|node_modules|dist|out|build|release|\.next|coverage|__pycache__|target|\.venv|\.cache)([\\/]|$)/
 
 /** Collapse bursts, and cap how many changes one burst can report. */
 const DEBOUNCE_MS = 400

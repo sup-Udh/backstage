@@ -1,0 +1,172 @@
+# ---------------------------------------------------------------------------
+# Backstage — release
+# ---------------------------------------------------------------------------
+#
+# Pushing a `v*` tag builds the Windows installer and publishes it as a
+# GitHub pre-release. Nothing else triggers this: a tag is the one signal that
+# says "this commit is a release", and building on every push would produce a
+# pile of artifacts nobody asked for.
+#
+#   git tag -a v1.0.0-beta.1 -m "Backstage v1.0.0-beta.1"
+#   git push origin v1.0.0-beta.1
+#
+# `workflow_dispatch` is here so the pipeline itself can be exercised without
+# burning a tag — it builds and uploads workflow artifacts but creates no
+# release.
+# ---------------------------------------------------------------------------
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# The built-in token, scoped to exactly what it needs. No personal access
+# token: GITHUB_TOKEN can create releases and upload assets in its own
+# repository, which is the whole job here.
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` rather than `npm install`: package-lock.json is committed, and
+      # a release must be built from the exact tree that was tested, not from
+      # whatever the registry resolves to today.
+      - name: Install dependencies
+        run: npm ci
+
+      # ---------------------------------------------------------------------
+      # Refuse to build a mislabelled release
+      # ---------------------------------------------------------------------
+      #
+      # electron-builder names every artifact from package.json's version, not
+      # from the tag. If they disagree, the tag says v1.0.0-beta.2 and the file
+      # inside says 1.0.0-beta.1, and the mistake is only visible after the
+      # release is public. Cheaper to fail here.
+      - name: Check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $pkg = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          Write-Host "package.json: $pkg"
+          Write-Host "git tag     : $tag"
+          if ($pkg -ne $tag) {
+            Write-Error "Tag v$tag does not match package.json version $pkg."
+            exit 1
+          }
+
+      # ---------------------------------------------------------------------
+      # Supabase configuration
+      # ---------------------------------------------------------------------
+      #
+      # The public pair only — the project URL and the anon/publishable key.
+      # The anon key is a signed JWT asserting the `anon` role, every table it
+      # can reach is behind row level security, and it is designed to ship
+      # inside client applications. It is held as a repository secret so it
+      # stays out of git history, not because it is a credential.
+      #
+      # SUPABASE_SERVICE_ROLE_KEY must never be added here. It bypasses every
+      # RLS policy in the database and Backstage has no code path that reads it.
+      #
+      # electron-builder copies this into `resources/.env` (see
+      # electron-builder.yml → extraResources), which is where supabase/env.ts
+      # looks in a packaged run.
+      - name: Write Supabase configuration
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if (-not $env:SUPABASE_URL -or -not $env:SUPABASE_ANON_KEY) {
+            Write-Error "Repository secrets SUPABASE_URL and SUPABASE_ANON_KEY are not set. The installer would ship unable to sign anyone in."
+            exit 1
+          }
+          "SUPABASE_URL=$env:SUPABASE_URL`nSUPABASE_ANON_KEY=$env:SUPABASE_ANON_KEY`n" |
+            Out-File -FilePath .env -Encoding utf8 -NoNewline
+          Write-Host "Wrote .env (values not echoed)."
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build renderer, preload and main
+        run: npm run build
+
+      # `--publish never` on purpose. electron-builder's default policy in CI
+      # is to publish on a tag, which would race the explicit release step
+      # below and create a second, half-filled release. It still writes
+      # latest.yml because a publish provider is configured.
+      - name: Package installer
+        run: npx electron-builder --win --publish never
+
+      # ---------------------------------------------------------------------
+      # Checksums
+      # ---------------------------------------------------------------------
+      - name: Generate SHA-256 checksums
+        run: |
+          Push-Location release
+          $files = Get-ChildItem -Filter *.exe
+          if (-not $files) { Write-Error "No .exe produced in release/."; exit 1 }
+          foreach ($f in $files) {
+            $hash = (Get-FileHash $f.Name -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($f.Name)" | Out-File "$($f.Name).sha256" -Encoding ascii
+            Write-Host "$hash  $($f.Name)"
+          }
+          Pop-Location
+
+      # A dry run (workflow_dispatch) keeps its output as a workflow artifact
+      # so the pipeline can be verified end to end without publishing anything.
+      - name: Upload build artifacts
+        if: "!startsWith(github.ref, 'refs/tags/v')"
+        uses: actions/upload-artifact@v4
+        with:
+          name: backstage-windows
+          path: |
+            release/*.exe
+            release/*.sha256
+            release/latest.yml
+          retention-days: 7
+
+      # ---------------------------------------------------------------------
+      # The release
+      # ---------------------------------------------------------------------
+      #
+      # `prerelease: true` is not cosmetic — it keeps this build out of the
+      # "Latest" slot on the repository's front page and out of
+      # /releases/latest, so nothing can mistake a beta for the stable line.
+      - name: Publish GitHub pre-release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Backstage ${{ github.ref_name }}
+          body_path: RELEASE_NOTES_${{ github.ref_name }}.md
+          prerelease: true
+          draft: false
+          fail_on_unmatched_files: true
+          files: |
+            release/Backstage-Setup-*.exe
+            release/Backstage-Portable-*.exe
+            release/*.sha256
+            release/latest.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

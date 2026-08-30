@@ -7,6 +7,11 @@ dist/
 build/
 *.tsbuildinfo
 
+# Packaged artifacts (installers, portable exes, unpacked app trees).
+# These are release outputs and are attached to a GitHub Release, never
+# committed - the largest is well over GitHub's file size limit anyway.
+release/
+
 # Logs
 *.log
 npm-debug.log*
@@ -27,3 +32,7 @@ Thumbs.db
 # Tooling caches
 .codebroker/
 .cache/
+
+# Local scratch
+.claude/
+*.local

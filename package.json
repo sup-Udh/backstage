@@ -1,7 +1,22 @@
 {
   "name": "backstage",
-  "version": "0.1.0",
-  "description": "Backstage - give your AI agents a place to work.",
+  "productName": "Backstage",
+  "version": "1.0.0-beta.1",
+  "description": "Backstage — give your AI agents a place to work.",
+  "author": {
+    "name": "udhay rajeev",
+    "email": "rajivrajan1@gmail.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/sup-Udh/backstage",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sup-Udh/backstage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sup-Udh/backstage/issues"
+  },
+  "private": true,
   "main": "./out/main/index.js",
   "scripts": {
     "predev": "npm run icons",
@@ -11,7 +26,10 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild terminal/lineExtractor.test.ts terminal/claudeVersion.test.ts agents/relationships.test.ts agents/roleProfiles.test.ts agents/permissionRules.test.ts agents/schedule.test.ts agents/nlAutomation.test.ts agents/activityMap.test.ts terminal/claudeActivity.test.ts projects/projectRules.test.ts providers/gemini/geminiAdapter.test.ts --bundle --platform=node --format=cjs --outbase=. --outdir=out/test --log-level=error && esbuild src/themes/shared/office.test.ts src/world/pixel/characterSprite.test.ts src/world/engine/behavior.test.ts src/components/Markdown/markdown.test.ts src/agents/teamRun.test.ts --bundle --platform=node --format=cjs --outbase=src --outdir=out/test --log-level=error && node out/test/terminal/lineExtractor.test.js && node out/test/terminal/claudeVersion.test.js && node out/test/agents/relationships.test.js && node out/test/agents/roleProfiles.test.js && node out/test/agents/permissionRules.test.js && node out/test/agents/schedule.test.js && node out/test/agents/nlAutomation.test.js && node out/test/agents/activityMap.test.js && node out/test/terminal/claudeActivity.test.js && node out/test/projects/projectRules.test.js && node out/test/providers/gemini/geminiAdapter.test.js && node out/test/themes/shared/office.test.js && node out/test/world/pixel/characterSprite.test.js && node out/test/world/engine/behavior.test.js && node out/test/components/Markdown/markdown.test.js && node out/test/agents/teamRun.test.js && node scripts/build-integration-test.mjs && node out/test/collaboration.test.js && node out/test/activity.test.js"
+    "test": "esbuild terminal/lineExtractor.test.ts terminal/claudeVersion.test.ts agents/relationships.test.ts agents/roleProfiles.test.ts agents/permissionRules.test.ts agents/schedule.test.ts agents/nlAutomation.test.ts agents/activityMap.test.ts terminal/claudeActivity.test.ts projects/projectRules.test.ts providers/gemini/geminiAdapter.test.ts --bundle --platform=node --format=cjs --outbase=. --outdir=out/test --log-level=error && esbuild src/themes/shared/office.test.ts src/world/pixel/characterSprite.test.ts src/world/engine/behavior.test.ts src/components/Markdown/markdown.test.ts src/agents/teamRun.test.ts --bundle --platform=node --format=cjs --outbase=src --outdir=out/test --log-level=error && node out/test/terminal/lineExtractor.test.js && node out/test/terminal/claudeVersion.test.js && node out/test/agents/relationships.test.js && node out/test/agents/roleProfiles.test.js && node out/test/agents/permissionRules.test.js && node out/test/agents/schedule.test.js && node out/test/agents/nlAutomation.test.js && node out/test/agents/activityMap.test.js && node out/test/terminal/claudeActivity.test.js && node out/test/projects/projectRules.test.js && node out/test/providers/gemini/geminiAdapter.test.js && node out/test/themes/shared/office.test.js && node out/test/world/pixel/characterSprite.test.js && node out/test/world/engine/behavior.test.js && node out/test/components/Markdown/markdown.test.js && node out/test/agents/teamRun.test.js && node scripts/build-integration-test.mjs && node out/test/collaboration.test.js && node out/test/activity.test.js",
+    "package": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder --win",
+    "dist:portable": "npm run build && electron-builder --win portable"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
@@ -34,6 +52,7 @@
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.4",
     "electron": "^37.0.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "tailwindcss": "^4.1.12",
     "typescript": "^5.9.2",

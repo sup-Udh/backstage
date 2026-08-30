@@ -1,0 +1,152 @@
+# ---------------------------------------------------------------------------
+# Backstage — packaging
+# ---------------------------------------------------------------------------
+#
+# `electron-vite` builds the three bundles into `out/`. This turns `out/` into
+# an installable application. The two halves are deliberately separate: `npm
+# run build` stays fast and is what CI and the typecheck loop run, and
+# packaging only happens when an artifact is actually wanted.
+#
+#   npm run package   unpacked app in release/win-unpacked  (fast smoke test)
+#   npm run dist      NSIS installer + portable exe in release/
+# ---------------------------------------------------------------------------
+
+appId: com.backstage.app
+productName: Backstage
+copyright: Copyright © 2026 udhay rajeev
+
+# Must match `app.setAppUserModelId('com.backstage.app')` in appIcon.ts. When
+# these disagree Windows files the running window under a different identity
+# than the installed shortcut, and the taskbar shows a second, iconless button
+# next to the pinned one.
+
+directories:
+  output: release
+  buildResources: build
+
+# ---------------------------------------------------------------------------
+# What goes in the asar
+# ---------------------------------------------------------------------------
+#
+# An explicit allow-list rather than the default "everything except…". The
+# repository root holds a `.env`, design notes, a Supabase migration folder and
+# several scratch workspaces (batman-test/, test-workspace/, cases/), none of
+# which belong in a shipped artifact — and a deny-list only excludes the ones
+# somebody remembered to write down.
+
+files:
+  - out/**
+  - package.json
+  - node_modules/**
+  # Source maps are built but never shipped: they would publish the full
+  # renderer source to anyone who opens DevTools on the packaged app.
+  - '!**/*.map'
+  - '!**/*.{ts,tsx}'
+  - '!**/{test,__tests__,tests,powered-test,example,examples}/**'
+  - '!**/*.{md,markdown}'
+
+# node-pty is a native addon. Node cannot dlopen a .node file from inside an
+# asar archive, so the whole package is unpacked next to it.
+asarUnpack:
+  - '**/node_modules/@lydell/node-pty/**'
+
+# ---------------------------------------------------------------------------
+# What sits beside the asar, readable as ordinary files
+# ---------------------------------------------------------------------------
+
+extraResources:
+  # The generated icon set. `appIconPath()` already looks in
+  # `resources/build/` for a packaged run, so nothing in the code changes.
+  - from: build
+    to: build
+    filter:
+      - '**/*'
+
+  # The public Supabase pair, when one exists at build time.
+  #
+  # Written by the release workflow from repository secrets — never committed.
+  # A `filter` rather than a bare `from:` so that a local `npm run dist` on a
+  # checkout without a `.env` copies nothing instead of failing the build.
+  #
+  # Only ever the URL and the anon/publishable key. The anon key is a signed
+  # JWT asserting the `anon` role, every table behind it is under row level
+  # security, and it is designed to ship inside client applications. The
+  # service-role key is never read by this application and must never be here.
+  - from: .
+    to: .
+    filter:
+      - .env
+
+# ---------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  # Shown in the executable's Details tab and by SmartScreen. Without it
+  # Windows falls back to the filename.
+  legalTrademarks: Backstage
+
+  # No `certificateFile` / `certificateSubjectName`: this beta is unsigned on
+  # purpose. See CODE_SIGNING_SETUP.md — a self-signed certificate is worse
+  # than none, because it is still untrusted but looks deliberate.
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Backstage
+  # Uninstall the previous beta before laying down the new one, so an upgrade
+  # does not leave two entries in Apps & Features.
+  deleteAppDataOnUninstall: false
+  artifactName: Backstage-Setup-${version}.${ext}
+  uninstallDisplayName: Backstage ${version}
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+
+portable:
+  artifactName: Backstage-Portable-${version}.${ext}
+
+# ---------------------------------------------------------------------------
+# macOS / Linux
+# ---------------------------------------------------------------------------
+#
+# Configured but NOT built or tested for this beta — Windows is the only
+# supported target for 1.0.0-beta.1. These exist so a later `--mac` / `--linux`
+# starts from something sane rather than from defaults.
+
+mac:
+  icon: build/icon.png
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+
+linux:
+  icon: build/icons
+  category: Development
+  target:
+    - AppImage
+
+# ---------------------------------------------------------------------------
+# Publishing
+# ---------------------------------------------------------------------------
+#
+# Declared so electron-builder emits `latest.yml` alongside the installer.
+# Nothing publishes from a local run — the workflow uploads artifacts itself —
+# but `latest.yml` is the manifest electron-updater will need the day auto
+# update is turned on. See AUTO_UPDATE_PLAN.md.
+
+publish:
+  provider: github
+  owner: sup-Udh
+  repo: backstage
+  releaseType: prerelease
