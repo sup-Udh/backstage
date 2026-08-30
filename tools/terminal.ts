@@ -51,7 +51,6 @@ export const terminalRun: AgentTool = {
   label: 'Running a command',
   description:
     'Run a shell command in the workspace and get back stdout, stderr and the exit code. Use this to build, test, lint or inspect. Commands that would destroy work are refused.',
-  requiresApproval: true,
   inputSchema: {
     type: 'object',
     properties: {

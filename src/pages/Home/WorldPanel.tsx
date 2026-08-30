@@ -579,6 +579,24 @@ export function WorldPanel({ engine, switching, workers, cast }: Props) {
                       : `${a.name} leads. ${b.name} reports back.`}
                   </p>
                 )}
+                {/*
+                  A connection is a conversation, so the first thing the menu
+                  offers is the conversation. Clicking a link used to lead only
+                  to removing it, which meant the one gesture that reveals a
+                  collaboration exists could not open it.
+                */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThread(linkMenu.a)
+                    setTab('messages')
+                    setLinkMenu(null)
+                  }}
+                  className="block w-full border-b-2 border-rule px-2 py-1 text-left font-pixel text-[10px] font-semibold uppercase tracking-[0.06em] text-ink transition-colors hover:bg-brand"
+                >
+                  Open group chat →
+                </button>
+
                 <div className="flex">
                   {!derived && (
                     <button

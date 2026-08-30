@@ -1,5 +1,5 @@
 import type { Agent, AgentListener, AgentRuntime, AgentStatus } from './agent.types'
-import { groupForTool } from './toolActivity'
+import type { AgentActivity } from '../shared/activity'
 import type { AgentConfig, AgentRuntimeState, RuntimeEvent } from '../shared/providerApi'
 
 /**
@@ -176,8 +176,16 @@ export class LiveTeamRuntime implements AgentRuntime {
 
       const status: AgentStatus = body.celebrating > 0 ? 'success' : state.status
 
+      /*
+       * The activity travels with the state rather than being accumulated
+       * from events on this side. That is what stops the world drifting: the
+       * main process is the only thing that decides what an agent is doing,
+       * and this mirror can never be a step behind it or a step ahead.
+       */
       if (
         body.status !== status ||
+        body.activity?.startedAt !== state.activity?.startedAt ||
+        body.activity?.type !== state.activity?.type ||
         body.task !== (state.action ?? state.task) ||
         body.taskId !== state.taskId ||
         body.executionId !== state.executionId ||
@@ -185,6 +193,7 @@ export class LiveTeamRuntime implements AgentRuntime {
         body.spawned !== state.spawned
       ) {
         body.status = status
+        body.activity = state.activity
         body.task = state.action ?? state.task
         body.taskId = state.taskId
         body.executionId = state.executionId
@@ -210,21 +219,22 @@ export class LiveTeamRuntime implements AgentRuntime {
 
     switch (event.type) {
       /*
-       * What the agent is actually doing, at tool granularity.
+       * What the agent is actually doing.
        *
-       * The event already carries the tool's registry name and always has;
-       * the world simply never looked at it, which is why an agent grepping
-       * the codebase and an agent running the test suite were drawn as the
-       * same person making the same two-frame typing motion. Nothing is
-       * invented here — the group is a lookup on a name main supplied.
+       * The event carries the whole normalised activity, built in the main
+       * process from a real tool call and its real arguments. Nothing is
+       * inferred here and nothing is looked up: this mirror copies a fact.
+       *
+       * `agent.state` carries the same activity a moment later, so this is
+       * strictly the fast path — an agent whose state event is delayed still
+       * ends up correct, and one that never emits an activity is still drawn
+       * from its status.
        */
-      case 'agent.tool.started':
-        if (body && event.tool) {
-          const group = groupForTool(event.tool)
-          if (body.activity !== group) {
-            body.activity = group
-            this.emit()
-          }
+      case 'agent.activity':
+        if (body && event.agentActivity) {
+          body.activity = event.agentActivity
+          body.status = event.agentActivity.status
+          this.emit()
         }
         break
 
@@ -243,7 +253,13 @@ export class LiveTeamRuntime implements AgentRuntime {
           body.status = 'success'
           body.task = 'Done'
           body.celebrating = SUCCESS_HOLD
-          body.activity = null
+          /*
+           * The activity is left alone. The main process reports `completed`
+           * and holds it for a couple of seconds before dropping it, so the
+           * badge says ✓ COMPLETE for exactly as long as the celebration pose
+           * runs — clearing it here would take the words away and leave the
+           * character waving at nothing.
+           */
           this.emit()
         }
         break
@@ -344,6 +360,38 @@ export class LiveTeamRuntime implements AgentRuntime {
     if (body.status === status && body.task === task) return
     body.status = status
     body.task = task
+    this.emit()
+  }
+
+  /**
+   * What a CLI session is doing, in the same terms as everybody else.
+   *
+   * Separate from `setExternalStatus` because it changes far more often: a
+   * Claude session moves from reading to searching to running a command
+   * several times inside one "working" status, and that is exactly the
+   * granularity this whole pass exists to show. The status is a summary of
+   * the process; this is what the process is doing.
+   *
+   * The activity leads the status when it has an opinion, for the same reason
+   * it does for configured agents — a session that reports WAITING FOR
+   * APPROVAL is not working, whatever the output timer last concluded.
+   */
+  setExternalActivity(id: string, activity: AgentActivity | null): void {
+    const body = this.find(id)
+    if (!body || !this.external.has(id)) return
+
+    const same =
+      body.activity?.type === activity?.type &&
+      body.activity?.detailFull === activity?.detailFull
+    if (same) return
+
+    body.activity = activity
+    if (activity) {
+      body.status = activity.status
+      body.task = activity.detailFull
+        ? `${activity.label} ${activity.detailFull}`
+        : activity.label
+    }
     this.emit()
   }
 

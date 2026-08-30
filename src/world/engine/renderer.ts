@@ -1,5 +1,5 @@
 import type { SceneDef, Theme, ThemePalette } from '../../themes/types'
-import type { ToolGroup } from '../../agents/toolActivity'
+import type { ActivityFamily } from '../../shared/activity'
 import type { CharacterDef } from '../../characters/character.types'
 import type { CharacterRuntime } from '../world.types'
 import {
@@ -98,7 +98,7 @@ export type ScreenMode =
 export interface ScreenState {
   mode: ScreenMode
   /** The tool family the occupant is running, for the corner mark. */
-  tool: ToolGroup | null
+  tool: ActivityFamily | null
 }
 
 /** A connection being dragged out from a character but not yet dropped. */
@@ -295,7 +295,7 @@ export class WorldRenderer {
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
-    tool: ToolGroup
+    tool: ActivityFamily
   ): void {
     ctx.fillStyle = this.pal.brandLite
     switch (tool) {

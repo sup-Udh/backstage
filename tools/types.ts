@@ -51,11 +51,20 @@ export interface AgentTool {
   label: string
   description: string
   inputSchema: ToolSchema
-  /**
-   * Whether running this needs the user to say yes first. Read-only tools are
-   * automatic; anything that can destroy work is not.
+  /*
+   * There is deliberately no `requiresApproval` here any more.
+   *
+   * It was a boolean per tool, and a tool is not a decision: `ls` and
+   * `rm -rf build` both arrive as `terminal_run`, so the flag could only ever
+   * answer both the same way — and it answered "ask", every time, for every
+   * shell command a user had already said they were happy with.
+   *
+   * Whether a call needs approval is now derived from the tool *and its
+   * arguments* by `agents/permissionRules.ts`, and answered against the
+   * project's own permission settings. Adding a tool therefore does not
+   * involve deciding this here; it involves adding a line to that mapping,
+   * and forgetting to falls closed.
    */
-  requiresApproval?: boolean
   /** A short activity line describing this specific call. */
   describe?: (input: Record<string, unknown>) => string
   execute(input: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult>

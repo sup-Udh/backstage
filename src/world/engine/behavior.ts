@@ -236,7 +236,7 @@ export class Director {
   onStatusChange(c: CharacterRuntime, agent: Agent, present: Set<string>): void {
     const status = agent.status
     c.partnerId = agent.partnerId ?? null
-    c.activity = agent.activity ?? null
+    c.activity = agent.activity?.type ?? null
 
     switch (status) {
       /*
@@ -393,7 +393,7 @@ export class Director {
     dt: number,
     all: CharacterRuntime[]
   ): void {
-    c.activity = agent.activity ?? null
+    c.activity = agent.activity?.type ?? null
     c.partnerId = agent.partnerId ?? null
 
     if (c.path.length > 0) {

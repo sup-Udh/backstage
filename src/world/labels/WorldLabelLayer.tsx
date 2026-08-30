@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import type { WorldEngine } from '../engine/WorldEngine'
 import { STATUS_GLYPH, STATUS_LABEL } from '../../characters/character.states'
+import { ACTIVITY_GLYPH, badgeText } from '../../shared/activity'
 import type { AgentStatus } from '../../agents/agent.types'
 import { WorldLabel } from './WorldLabel'
 import { labelFontSize } from './labelSpec'
@@ -55,6 +56,23 @@ const ACTIVE: AgentStatus[] = [
  * overlapping the neighbour is the lesser problem.
  */
 const MAX_STACK = 3
+
+/**
+ * How much room a badge gets, by how crowded the room is.
+ *
+ * §25 and §39: one agent working can afford `RUNNING COMMAND npm run build`,
+ * and eight cannot — at that point the labels are wider than the people
+ * wearing them and the office stops being readable. `badgeText` degrades in a
+ * fixed order rather than truncating, so a crowded room loses precision
+ * before it loses meaning, and the full text is a click away in the
+ * inspector.
+ */
+function badgeBudget(count: number): number {
+  if (count <= 2) return 30
+  if (count <= 4) return 24
+  if (count <= 6) return 19
+  return 15
+}
 
 interface Rect {
   x: number
@@ -190,6 +208,7 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
 
   const nameSize = labelFontSize('character-name')
   const statusSize = labelFontSize('character-status')
+  const budget = badgeBudget(views.length)
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
@@ -207,18 +226,45 @@ export function WorldLabelLayer({ engine, hoveredId, selectedId }: Props) {
               tone={chosen ? 'selected' : 'default'}
             />
             {/*
-              A status only when there is one worth reading. Six idle agents
-              used to carry six IDLE plates, which is six pieces of text
-              saying nothing is happening — the room says that already.
+              What they are actually doing, when there is something to say.
+
+              The activity leads: "READING package.json" is the sentence this
+              whole system exists to put on screen, and it is only available
+              because the runtime reported a real tool call with real
+              arguments. The status is the fallback for the states an activity
+              cannot express — an agent queued behind other work, or one whose
+              provider failed — and an idle agent gets neither, which is what
+              keeps six people at desks from carrying six plates saying
+              nothing is happening.
             */}
-            {(active || chosen) && (
+            {(v.activity || active || chosen) && (
               <WorldLabel
                 ref={register(`${v.characterId}:status`)}
                 kind="character-status"
-                text={STATUS_LABEL[v.status]}
-                glyph={STATUS_GLYPH[v.status]}
+                text={
+                  v.activity
+                    ? badgeText(v.activity, budget)
+                    : STATUS_LABEL[v.status]
+                }
+                glyph={
+                  v.activity
+                    ? ACTIVITY_GLYPH[v.activity.type]
+                    : STATUS_GLYPH[v.status]
+                }
                 fontSize={statusSize}
                 tone={chosen ? 'selected' : 'active'}
+                /*
+                 * The whole thing, for a pointer. The badge is deliberately
+                 * short; nothing is lost, it is one hover away — and the
+                 * inspector has all of it without hovering.
+                 */
+                title={
+                  v.activity
+                    ? [v.activity.label, v.activity.detailFull]
+                        .filter(Boolean)
+                        .join(' ')
+                    : undefined
+                }
               />
             )}
           </div>

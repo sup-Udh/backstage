@@ -97,6 +97,7 @@ export function useTeamSync(): void {
   const setProviders = useBackstage((s) => s.setProviders)
   const addApproval = useBackstage((s) => s.addApproval)
   const setApprovals = useBackstage((s) => s.setApprovals)
+  const setActivityLog = useBackstage((s) => s.setActivityLog)
 
   const agents = useTeam((s) => s.agents)
   const refresh = useTeam((s) => s.refresh)
@@ -108,9 +109,25 @@ export function useTeamSync(): void {
     void useTeam.getState().refreshPermissions()
     void window.backstage.providers.status().then(setProviders)
     void window.backstage.agents.states().then(setAgentStates)
+    /*
+     * The activity record so far.
+     *
+     * Every later line arrives on the event stream, so this is only the
+     * catch-up: a window opened mid-task, or one that has just switched
+     * project, would otherwise show an empty timeline for work that is
+     * visibly happening in the room next to it.
+     */
+    void window.backstage.agents.activityTimeline().then(setActivityLog)
     void window.backstage.agents.collaboration().then(setCollaboration)
     void window.backstage.approvals.pending().then(setApprovals)
-  }, [refresh, setProviders, setAgentStates, setCollaboration, setApprovals])
+  }, [
+    refresh,
+    setProviders,
+    setAgentStates,
+    setCollaboration,
+    setApprovals,
+    setActivityLog
+  ])
 
   /*
    * Give every configured agent a body, and take it away again when the agent

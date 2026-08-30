@@ -1,5 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { terminals, type SessionAgent } from './TerminalSessionManager'
+import type { AgentActivity } from '../src/shared/activity'
+import { ACTIVITY_LABEL, statusForActivity } from '../src/shared/activity'
+import type { SessionActivity } from './claudeActivity'
 
 /**
  * External CLI agent sessions.
@@ -49,6 +52,20 @@ export interface AgentSession {
   characterChosen: boolean
   /** Other sessions this one is connected to. Derived, never stored. */
   connections: string[]
+  /**
+   * What this session is doing, in the same vocabulary every agent uses.
+   *
+   * Carried on the session record rather than on a channel of its own, so it
+   * reaches the renderer through the push that already exists — the world, the
+   * selector, the chat header and the activity panel all read the session
+   * list, and none of them needs to learn a second subscription to learn what
+   * Claude is doing.
+   *
+   * Null until the session says something recognisable. That is the honest
+   * resting value: a process producing output whose content we cannot classify
+   * is working, and the status field already says so.
+   */
+  activity: AgentActivity | null
 }
 
 /**
@@ -108,7 +125,8 @@ class AgentSessions extends EventEmitter {
         name: `${kind.replace(/^./, (c) => c.toUpperCase())} ${n}`,
         characterSlot: UNASSIGNED_SLOT,
         characterChosen: false,
-        connections: []
+        connections: [],
+        activity: null
       }
       this.sessions.set(session.id, session)
       this.lastOutputAt.set(session.id, Date.now())
@@ -137,6 +155,19 @@ class AgentSessions extends EventEmitter {
       // A dead process must never be shown as working.
       session.status = exitCode === 0 ? 'exited' : 'error'
       session.endedAt = Date.now()
+      /*
+       * And it must never be shown as still reading a file. A session that has
+       * ended keeps an error badge if it failed, because that is the thing the
+       * user needs to see, and loses everything else.
+       */
+      session.activity =
+        exitCode === 0
+          ? null
+          : this.buildActivity(session, {
+              type: 'error',
+              detail: `exited with code ${exitCode}`,
+              detailFull: `The session ended with exit code ${exitCode}.`
+            })
       // A connection to a process that has stopped is not a connection. It
       // would otherwise keep occupying a slot on whoever it was linked to.
       this.unlinkAll(session.id)
@@ -152,15 +183,101 @@ class AgentSessions extends EventEmitter {
       const now = Date.now()
       for (const s of this.sessions.values()) {
         if (s.status !== 'working') continue
-        const quietFor = now - (this.lastOutputAt.get(s.id) ?? now)
+          const quietFor = now - (this.lastOutputAt.get(s.id) ?? now)
         if (quietFor > IDLE_AFTER_MS) {
           s.status = 'waiting'
+          /*
+           * Quiet at its prompt. That is not idleness and not a hang: the CLI
+           * has finished its turn and is waiting to be told something, which
+           * is a state the user can act on. An approval prompt is left alone —
+           * it is also silent, and it is a different question.
+           */
+          if (s.activity?.type !== 'waiting_for_permission') {
+            s.activity = this.buildActivity(s, {
+              type: 'waiting_for_user',
+              detail: null,
+              detailFull: null
+            })
+          }
           changed = true
         }
       }
       if (changed) this.emit('changed', this.list())
     }, 1000)
     this.timer.unref?.()
+  }
+
+  /**
+   * Turn a classifier result into a full activity.
+   *
+   * The session id is the identity, never the display name: renaming Claude 1
+   * to Michael must not detach it from its own activity, and two sessions must
+   * never be able to collide on a name.
+   */
+  private buildActivity(
+    session: AgentSession,
+    input: SessionActivity
+  ): AgentActivity {
+    return {
+      agentId: session.id,
+      projectId: session.projectId ?? '',
+      type: input.type,
+      label: input.label ?? ACTIVITY_LABEL[input.type],
+      detail: input.detail,
+      detailFull: input.detailFull ?? input.detail,
+      startedAt: Date.now(),
+      status: statusForActivity(input.type),
+      toolName: null,
+      filePath: input.filePath ?? null,
+      command: input.command ?? null,
+      progress: null
+    }
+  }
+
+  /**
+   * Record what a session is doing, from its own output.
+   *
+   * Keyed by session id, so Claude 1 reading a file cannot move Claude 2's
+   * badge — the requirement the Claude brief puts at §9 and the reason there
+   * is no "current session" anywhere in this class.
+   */
+  setActivity(sessionId: string, input: SessionActivity | null): void {
+    const session = this.sessions.get(sessionId)
+    if (!session || session.status === 'exited') return
+
+    if (input === null) {
+      if (session.activity === null) return
+      session.activity = null
+      this.emit('changed', this.list())
+      return
+    }
+
+    const previous = session.activity
+    const next = this.buildActivity(session, input)
+    // Same work, same clock. A banner reprinted by a repaint is not a new read.
+    if (
+      previous &&
+      previous.type === next.type &&
+      previous.detailFull === next.detailFull
+    ) {
+      return
+    }
+
+    session.activity = next
+    /*
+     * A session that is producing recognisable output is working, whatever the
+     * idle timer last concluded. Without this a banner arriving after a quiet
+     * spell would leave the status saying "waiting" while the activity said
+     * "reading" — two views of one session disagreeing, which is the exact
+     * failure this whole pass exists to remove.
+     */
+    if (next.status === 'working' || next.status === 'thinking') {
+      session.status = 'working'
+    } else if (next.status === 'waiting') {
+      session.status = 'waiting'
+    }
+    this.lastOutputAt.set(sessionId, Date.now())
+    this.emit('changed', this.list())
   }
 
   private byTerminal(terminalId: string): AgentSession | undefined {
@@ -254,6 +371,11 @@ class AgentSessions extends EventEmitter {
      */
     if (session.status === 'working') {
       session.status = 'waiting'
+      session.activity = this.buildActivity(session, {
+        type: 'stopped',
+        detail: null,
+        detailFull: null
+      })
       this.lastOutputAt.set(session.id, Date.now())
       this.emit('changed', this.list())
     }

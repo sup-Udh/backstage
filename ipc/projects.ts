@@ -41,6 +41,7 @@ import { forgetAgent, removeProjectTriggers } from '../agents/triggerStore'
 import { removeProjectGroups } from '../agents/groupChats'
 import { removeProjectRuns } from '../agents/automationRuns'
 import { clearSessionGrants, removeProjectPermissions } from '../agents/permissionStore'
+import { removeProjectActivity } from '../agents/activityStore'
 import { pickFolder } from '../workspace/WorkspaceManager'
 import { PROVIDERS } from '../providers/registry'
 import { statusFor } from './providers'
@@ -142,6 +143,14 @@ export function registerProjectsHandlers(): void {
          * thing the per-project permission model exists to prevent.
          */
         clearSessionGrants()
+
+        /*
+         * And the office empties. Live activity belongs to the project it
+         * happened in — carrying "reading package.json" across a switch would
+         * put Project A's work above a Project B character's head, which is
+         * the ghost §42 is about.
+         */
+        removeProjectActivity(prevActive.id)
       }
 
       return { project, agents: listAgents() }
@@ -214,6 +223,7 @@ export function registerProjectsHandlers(): void {
     removeProjectGroups(id)
     removeProjectRuns(id)
     removeProjectPermissions(id)
+    removeProjectActivity(id)
     deleteProject(id)
     agentRegistry.refreshAll()
 

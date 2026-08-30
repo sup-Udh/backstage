@@ -1596,6 +1596,23 @@ const POSTURES: Record<CharacterState, Posture[]> = {
     P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'down' })
   ],
 
+  /**
+   * A command running.
+   *
+   * Two frames of hitting the key, then the body stays hunched over the desk
+   * with the hands off and the eyes down, watching. `headDy` holds the head
+   * low through the waiting frames, which is the part that reads as "watching
+   * something happen" rather than "reading something".
+   */
+  sitTerminal: [
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 0, gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'down', headDy: 1, brow: 'knit' }),
+    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 2, arm: 'rest', gaze: 'down', headDy: 1, brow: 'knit' }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'ahead' })
+  ],
+
   /** Reading: hands off the keys, eyes tracking down the screen. */
   sitReading: [
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down' }),
@@ -1604,6 +1621,23 @@ const POSTURES: Record<CharacterState, Posture[]> = {
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down' }),
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'blink' }),
     P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'ahead', brow: 'knit' })
+  ],
+
+  /**
+   * Scanning the workspace.
+   *
+   * The head sweeps left and right and the hands keep moving — restless where
+   * `sitReading` is still. Nothing here is a new drawing: it is the same
+   * `typing` and `rest` arms and the same gaze offsets, arranged to a
+   * different rhythm.
+   */
+  sitSearching: [
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down' }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 1, gaze: 'down', headDx: -1 }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'side', headDx: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'typing', swing: 0, gaze: 'down', headDx: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'down', headDy: 1 }),
+    P({ legs: 'sit', bob: 1, arm: 'rest', gaze: 'side', headDx: -1, brow: 'knit' })
   ],
 
   /**

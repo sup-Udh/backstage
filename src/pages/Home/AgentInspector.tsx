@@ -1,7 +1,14 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CharacterDef } from '../../characters/character.types'
 import { CharacterSprite } from '../../world/CharacterSprite'
-import { STATUS_GLYPH, STATUS_LABEL } from '../../characters/character.states'
+import {
+  STATUS_GLYPH,
+  STATUS_LABEL,
+  characterStateForAgent
+} from '../../characters/character.states'
+import { ACTIVITY_GLYPH } from '../../shared/activity'
+import { elapsedLabel } from '../../components/Activity/ActivityBadge'
+import { ActivityTimeline } from '../../components/Activity/ActivityTimeline'
 import { MAX_CONNECTIONS, type Worker } from '../../agents/workers'
 
 interface Props {
@@ -55,6 +62,19 @@ export function AgentInspector({
   onRecast
 }: Props) {
   const active = ACTIVE.includes(worker.status)
+  const activity = worker.activity
+
+  /*
+   * A ticking clock, and only while something is running. Nothing else on this
+   * panel changes during a two-minute command, so without it the elapsed
+   * figure would read 0s for the whole two minutes.
+   */
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (!activity) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [activity])
   const [connecting, setConnecting] = useState(false)
   const [recasting, setRecasting] = useState(false)
   const [renaming, setRenaming] = useState(false)
@@ -101,7 +121,7 @@ export function AgentInspector({
         <div className="shrink-0 border-2 border-slate-rule bg-slate-2 p-1">
           <CharacterSprite
             appearance={character.appearance}
-            state={worker.status === 'idle' ? 'idle' : 'working'}
+            state={characterStateForAgent(worker.status, true, activity?.type ?? null)}
             scale={2}
           />
         </div>
@@ -168,15 +188,39 @@ export function AgentInspector({
           <Label>Status</Label>
           <p className="mt-1 flex items-center gap-1.5 font-pixel text-xs font-semibold uppercase tracking-[0.06em]">
             <span aria-hidden className={active ? 'blink text-brand' : 'text-dim'}>
-              {STATUS_GLYPH[worker.status]}
+              {activity ? ACTIVITY_GLYPH[activity.type] : STATUS_GLYPH[worker.status]}
             </span>
             <span className={active ? 'text-brand' : 'text-dim'}>
-              {STATUS_LABEL[worker.status]}
+              {activity ? activity.label : STATUS_LABEL[worker.status]}
             </span>
+            {activity && (
+              <span className="ml-auto font-mono text-[10px] tabular-nums text-dim">
+                {elapsedLabel(activity.startedAt, now)}
+              </span>
+            )}
           </p>
+
+          {/*
+            The whole target rather than the shortened one. This panel is
+            precisely where the badge above the character defers to — §24 asks
+            for a small label in the world and the detail on click, and this is
+            the click.
+          */}
+          {activity?.detailFull && (
+            <p className="mt-1 break-all font-mono text-[11px] leading-snug text-brand-lite">
+              {activity.detailFull}
+            </p>
+          )}
+
           <p className="mt-1 font-ui text-[12px] leading-snug text-on-slate">
-            {worker.action ?? worker.task ?? 'Nothing right now.'}
+            {worker.task ?? worker.action ?? 'Nothing right now.'}
           </p>
+
+          {activity?.toolName && (
+            <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.08em] text-dim">
+              tool {activity.toolName}
+            </p>
+          )}
           {/*
             Only offered when there is something to look at. A button that
             opens an empty task list teaches the user it is not worth pressing.
@@ -190,6 +234,21 @@ export function AgentInspector({
               View task →
             </button>
           )}
+        </div>
+
+        {/*
+          What led up to it.
+
+          The same record the activity panel shows, scoped to this character —
+          §40 asks the inspector to answer "what is this person doing" without
+          the user opening anything else, and the last few steps are most of
+          that answer.
+        */}
+        <div>
+          <Label>Recent activity</Label>
+          <div className="-mx-1 mt-1 border-2 border-slate-rule bg-slate-2">
+            <ActivityTimeline agentId={worker.id} limit={6} />
+          </div>
         </div>
 
         {/*

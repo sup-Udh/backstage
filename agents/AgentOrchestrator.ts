@@ -17,6 +17,7 @@ import {
 import { chainMessageCount, isRepeat, recordCollaboration } from './collaborationStore'
 import { getSettings } from './settingsStore'
 import { attachTask, caseForChain } from '../cases/caseStore'
+import { clearActivity, report } from './activityStore'
 
 /**
  * The orchestrator.
@@ -245,6 +246,14 @@ export class AgentOrchestrator {
       const text = await execution.run()
       setTaskStatus(task.id, 'completed', { result: text })
 
+      /*
+       * The last thing the run says. Held on screen for a couple of seconds by
+       * the activity store and then dropped, which is what makes COMPLETE →
+       * IDLE something the user can actually see rather than a character that
+       * abruptly stops.
+       */
+      report(agentId, { type: 'completed', detail: task.title })
+
       this.remember(agentId, {
         id: makeId('msg'),
         kind: 'agent',
@@ -287,6 +296,7 @@ export class AgentOrchestrator {
     } catch (err) {
       if (err instanceof CancelledError) {
         setTaskStatus(task.id, 'cancelled')
+        report(agentId, { type: 'stopped', detail: task.title })
         systemBus.emit({
           type: 'agent.cancelled',
           agentId,
@@ -308,6 +318,17 @@ export class AgentOrchestrator {
       } else {
         error = err instanceof Error ? err.message : 'Something went wrong.'
         setTaskStatus(task.id, 'failed', { error })
+
+        /*
+         * The real reason, not the word ERROR on its own. §22: an error the
+         * user cannot read is one they cannot act on, and the runtime already
+         * knows what went wrong.
+         */
+        report(agentId, {
+          type: 'error',
+          detail: error.length > 60 ? `${error.slice(0, 59)}…` : error,
+          detailFull: error
+        })
 
         this.remember(agentId, {
           id: makeId('msg'),
@@ -376,6 +397,9 @@ export class AgentOrchestrator {
     agentRegistry.setQueued(agentId, 0)
 
     if (lane.current) {
+      // The execution reports `stopped` when it actually unwinds; until then
+      // the badge stays on whatever it was genuinely doing.
+
       lane.current.cancel()
       /*
        * Say so immediately. The execution unwinds at the next step or tool
@@ -386,6 +410,12 @@ export class AgentOrchestrator {
       agentRegistry.beginStop(agentId, lane.current.id)
       return true
     }
+    /*
+     * Nothing was running, so there is nothing to unwind and nothing will
+     * report `stopped`. Drop the badge here instead, or a cancelled queue
+     * leaves the character wearing the activity of work that never began.
+     */
+    clearActivity(agentId)
     agentRegistry.refresh(agentId)
     return false
   }
@@ -494,6 +524,30 @@ export class AgentOrchestrator {
       return
     }
 
+    /*
+     * Both ends, said out loud.
+     *
+     * §17: the office has to show a hand-off as a hand-off. The sender is
+     * delegating *to somebody named*, and the receiver is taking work in
+     * rather than having independently decided to start something. Two
+     * characters both drawn as "working" is the office failing to report the
+     * one thing that makes it a team.
+     */
+    report(from.id, {
+      type: 'delegating',
+      detail: to.name,
+      detailFull: to.name,
+      targetAgentId: to.id,
+      targetAgentName: to.name
+    })
+    report(to.id, {
+      type: 'receiving_task',
+      detail: from.name,
+      detailFull: from.name,
+      targetAgentId: from.id,
+      targetAgentName: from.name
+    })
+
     // Both sides see it. The receiver reads it as an incoming request; the
     // sender's session records what they handed over.
     this.remember(to.id, {
@@ -526,6 +580,20 @@ export class AgentOrchestrator {
     const to = event.targetAgentId ? getAgent(event.targetAgentId) : undefined
     const message = event.message?.trim()
     if (!from || !to || !message) return
+
+    /*
+     * Talking, not delegating. The distinction is visible: a message changes
+     * nothing about what the receiver is doing, so only the sender's activity
+     * moves. Marking the receiver as busy for a note they have not read yet
+     * would be the office claiming work that has not started.
+     */
+    report(from.id, {
+      type: 'talking_to_agent',
+      detail: to.name,
+      detailFull: to.name,
+      targetAgentId: to.id,
+      targetAgentName: to.name
+    })
 
     /*
      * A message is context, not work. It lands in the receiver's memory and

@@ -11,6 +11,13 @@ interface Props {
   tone?: LabelTone
   /** A small glyph ahead of the text, e.g. the status mark. */
   glyph?: string
+  /**
+   * The untruncated text, for a pointer.
+   *
+   * A badge is cut to fit above somebody's head; this is where the rest of it
+   * goes, so nothing the runtime reported is actually lost — only deferred.
+   */
+  title?: string
 }
 
 /**
@@ -30,7 +37,7 @@ interface Props {
  * how a label looks.
  */
 export const WorldLabel = forwardRef<HTMLDivElement, Props>(function WorldLabel(
-  { kind, text, fontSize, tone = 'default', glyph },
+  { kind, text, fontSize, tone = 'default', glyph, title },
   ref
 ) {
   const name = kind === 'character-name' || kind === 'world-marker'
@@ -58,6 +65,7 @@ export const WorldLabel = forwardRef<HTMLDivElement, Props>(function WorldLabel(
   return (
     <div
       ref={ref}
+      title={title}
       className={[
         'pointer-events-none absolute left-0 top-0 z-20 flex items-center',
         'border border-ink font-pixel font-semibold uppercase whitespace-nowrap',

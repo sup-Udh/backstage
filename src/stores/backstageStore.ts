@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { useAuth } from './authStore'
 import { groupForTool, type ToolRun } from '../agents/toolActivity'
+import type { ActivityEvent } from '../shared/activity'
 import type {
   AgentRuntimeState,
   AgentSession,
@@ -153,6 +154,16 @@ export interface ActivityEntry {
 
 /** How many activity lines to keep per agent. */
 const ACTIVITY_LIMIT = 80
+
+/**
+ * How much of the activity timeline the renderer keeps.
+ *
+ * The main process holds the authoritative, project-scoped record; this is a
+ * mirror for the panel that shows it, fed by the same event stream everything
+ * else reads. Bounded here as well as there, because a session left open all
+ * day would otherwise accumulate a copy of the whole thing in the renderer.
+ */
+const TIMELINE_LIMIT = 120
 /** How many collaboration entries to keep on screen. */
 const COLLAB_LIMIT = 120
 /**
@@ -215,6 +226,15 @@ interface BackstageState {
   agentStates: Record<string, AgentRuntimeState>
   /** Shared agent-to-agent activity. Not private memory. */
   collaboration: CollaborationMessage[]
+  /**
+   * What every agent has been doing, in order.
+   *
+   * A mirror of the main process's timeline, which is where the record
+   * actually lives. Kept here so the panel can render without a round trip on
+   * every event, and refilled from the main process whenever a project opens —
+   * the two can only ever disagree by one event in flight.
+   */
+  activityLog: ActivityEvent[]
   /** Dangerous tool calls waiting on the user. */
   approvals: ApprovalRequest[]
 
@@ -350,6 +370,7 @@ interface BackstageState {
 
   setAgentStates: (states: AgentRuntimeState[]) => void
   setCollaboration: (messages: CollaborationMessage[]) => void
+  setActivityLog: (entries: ActivityEvent[]) => void
   setApprovals: (requests: ApprovalRequest[]) => void
   addApproval: (request: ApprovalRequest) => void
   removeApproval: (id: string) => void
@@ -384,6 +405,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   sessionLines: {},
   agentStates: {},
   collaboration: [],
+  activityLog: [],
   approvals: [],
 
   providers: [],
@@ -422,6 +444,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
       sessionLines: {},
       agentStates: {},
       collaboration: [],
+      activityLog: [],
       approvals: [],
       chatTarget: ALL_AGENTS,
       selectedAgentId: null,
@@ -454,6 +477,7 @@ export const useBackstage = create<BackstageState>((set, get) => ({
       sessionLines: {},
       agentStates: {},
       collaboration: [],
+      activityLog: [],
       approvals: [],
       chatTarget: ALL_AGENTS,
       selectedAgentId: null,
@@ -586,6 +610,9 @@ export const useBackstage = create<BackstageState>((set, get) => ({
   setCollaboration: (collaboration) =>
     set({ collaboration: collaboration.slice(-COLLAB_LIMIT) }),
 
+  setActivityLog: (entries) =>
+    set({ activityLog: entries.slice(-TIMELINE_LIMIT) }),
+
   setApprovals: (approvals) => set({ approvals }),
 
   addApproval: (request) =>
@@ -629,6 +656,35 @@ export const useBackstage = create<BackstageState>((set, get) => ({
 
       if (event.type === 'agent.state' && event.state) {
         next.agentStates = { ...s.agentStates, [event.state.agentId]: event.state }
+      }
+
+      /*
+       * The activity timeline.
+       *
+       * Built from the event rather than fetched, so the panel updates in the
+       * same tick the world does — §27 is explicit that the sequence has to be
+       * visible while the task runs, not assembled at the end. The main
+       * process has already decided that this activity is a *change* worth
+       * recording; the renderer only has to render it.
+       */
+      if (event.type === 'agent.activity' && event.agentActivity && agentId) {
+        const activity = event.agentActivity
+        next.activityLog = [
+          ...s.activityLog,
+          {
+            id: event.id,
+            agentId,
+            agentName: event.agentName ?? agentId,
+            projectId: activity.projectId,
+            type: activity.type,
+            label: activity.label,
+            detail: activity.detail,
+            detailFull: activity.detailFull,
+            at: event.at,
+            toolName: activity.toolName,
+            targetAgentName: activity.targetAgentName
+          }
+        ].slice(-TIMELINE_LIMIT)
       }
 
       /*

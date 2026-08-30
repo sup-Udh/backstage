@@ -4,6 +4,8 @@ import { detectiveTheme } from '../../themes/detective/theme'
 import type { Agent, AgentStatus } from '../../agents/agent.types'
 import type { CharacterRuntime } from '../world.types'
 import type { SceneDef } from '../../themes/types'
+import type { ActivityType, AgentActivity } from '../../shared/activity'
+import { ACTIVITY_LABEL, statusForActivity } from '../../shared/activity'
 
 /**
  * Checks for the office's behaviour.
@@ -54,6 +56,27 @@ function check(name: string, actual: unknown, expected: unknown): void {
 /* ------------------------------------------------------------- fixtures -- */
 
 const scene: SceneDef = detectiveTheme.buildScene(760, 420)
+
+/**
+ * An activity in the shape the runtime produces one.
+ *
+ * The director reads the type and nothing else, but building the whole record
+ * keeps the test honest about what it is feeding in — a partial object would
+ * pass here and fail the moment anything downstream read a field.
+ */
+function fakeActivity(type: ActivityType): AgentActivity {
+  return {
+    agentId: 'a',
+    projectId: 'test',
+    type,
+    label: ACTIVITY_LABEL[type],
+    detail: null,
+    detailFull: null,
+    startedAt: 0,
+    status: statusForActivity(type),
+    progress: null
+  }
+}
 
 function agent(id: string, status: AgentStatus, slot = 0): Agent {
   return {
@@ -219,14 +242,29 @@ console.log('\nWorking sends a character to its own desk')
   console.log('\nWhat the agent is running changes the pose')
 
   const reading = agent('a', 'working')
-  reading.activity = 'files'
+  reading.activity = fakeActivity('reading_file')
   director.update(a, reading, 1 / 60, [a])
-  check('a file tool reads the screen', a.state, 'sitReading')
+  check('reading a file reads the screen', a.state, 'sitReading')
 
   const running = agent('a', 'working')
-  running.activity = 'terminal'
+  running.activity = fakeActivity('running_command')
   director.update(a, running, 1 / 60, [a])
-  check('a terminal tool types', a.state, 'sitWorking')
+  check('running a command gets its own pose', a.state, 'sitTerminal')
+
+  const writing = agent('a', 'working')
+  writing.activity = fakeActivity('writing_file')
+  director.update(a, writing, 1 / 60, [a])
+  check('writing a file types', a.state, 'sitWorking')
+
+  const searching = agent('a', 'working')
+  searching.activity = fakeActivity('searching_code')
+  director.update(a, searching, 1 / 60, [a])
+  check('searching is restless, not still', a.state, 'sitSearching')
+
+  const blocked = agent('a', 'waiting')
+  blocked.activity = fakeActivity('waiting_for_permission')
+  director.update(a, blocked, 1 / 60, [a])
+  check('waiting for approval stops the work pose', a.state, 'sitWaiting')
 
   /* ----------------------------------------------------------------- */
   console.log('\nTalking is done face to face')

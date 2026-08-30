@@ -175,7 +175,8 @@ export const useTeam = create<TeamState>((set, get) => ({
       groups,
       runs,
       permissions,
-      permissionCategories
+      permissionCategories,
+      permissionHistory
     ] = await Promise.all([
       window.backstage.agents.list(),
       window.backstage.agents.capabilities(),
@@ -184,7 +185,16 @@ export const useTeam = create<TeamState>((set, get) => ({
       window.backstage.groups.list(),
       window.backstage.automation.listRuns(),
       window.backstage.permissions.get(),
-      window.backstage.permissions.categories()
+      window.backstage.permissions.categories(),
+      /*
+       * The history is loaded here and not only by the settings page.
+       *
+       * `refresh` is what runs when a project is opened, and without this the
+       * previous project's decisions would stay in the mirror until somebody
+       * happened to visit Permissions — one project's record of what its
+       * agents did, on screen under another project's name.
+       */
+      window.backstage.permissions.history()
     ])
 
     // Validate every agent up front, so a card can say *why* it cannot be
@@ -204,6 +214,7 @@ export const useTeam = create<TeamState>((set, get) => ({
       runs,
       permissions,
       permissionCategories,
+      permissionHistory,
       validations,
       loaded: true
     })

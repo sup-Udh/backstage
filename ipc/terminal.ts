@@ -2,6 +2,8 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { terminals } from '../terminal/TerminalSessionManager'
 import { agentSessions } from '../terminal/AgentSessionManager'
 import { sessionTranscripts } from '../terminal/sessionTranscript'
+import { activityFromLine, clearsPermission } from '../terminal/claudeActivity'
+import { forgetAgent as forgetAgentActivity, reportExternal } from '../agents/activityStore'
 import { detectClaude } from '../terminal/claudeDetect'
 // Straight from the rules module rather than the store: sessions share the
 // limits but have nothing to do with the persisted roster.
@@ -58,7 +60,17 @@ export function registerTerminalHandlers(): void {
   agentSessions.on('started', (session) =>
     broadcast('agentSession:started', session)
   )
-  agentSessions.on('ended', (session) => broadcast('agentSession:ended', session))
+  agentSessions.on('ended', (session) => {
+    broadcast('agentSession:ended', session)
+    /*
+     * A session that has ended leaves no badge and no ghost. §22 of the Claude
+     * brief: the conversation and the terminal history stay, the *live*
+     * activity does not — a character wearing RUNNING COMMAND for a process
+     * that exited is the worst kind of stale, because it is indistinguishable
+     * from one that is genuinely stuck.
+     */
+    forgetAgentActivity(`cli-${session.terminalSessionId}`)
+  })
 
   /*
    * Workspace and session activity also go onto the central bus, which is what
@@ -143,7 +155,9 @@ export function registerTerminalHandlers(): void {
   ipcMain.handle('terminal:close', (_e, id: unknown) => {
     if (typeof id === 'string') {
       for (const session of agentSessions.list()) {
-        if (session.terminalSessionId === id) sessionTranscripts.forget(session.id)
+        if (session.terminalSessionId !== id) continue
+        sessionTranscripts.forget(session.id)
+        forgetAgentActivity(`cli-${session.terminalSessionId}`)
       }
       agentSessions.forgetTerminal(id)
       terminals.remove(id)
@@ -160,7 +174,56 @@ export function registerTerminalHandlers(): void {
 
   /* ---------------------------------------------- CLI sessions as agents -- */
 
-  sessionTranscripts.on('line', (line) => broadcast('agentSession:line', line))
+  /*
+   * The readable transcript, and what it says the session is doing.
+   *
+   * One subscription rather than two: the line has already been reconstructed
+   * from the PTY by `LineExtractor`, and classifying it here means the pixel
+   * character, the chat, the terminal panel and the activity timeline are all
+   * downstream of the same reconstructed line rather than of three separate
+   * readings of the byte stream.
+   *
+   * Only output lines are classified. What the *user* typed is not a statement
+   * about what Claude is doing — sending "edit App.tsx" must not put the
+   * character into WRITING before Claude has done anything.
+   */
+  sessionTranscripts.on('line', (line) => {
+    broadcast('agentSession:line', line)
+    if (line.kind !== 'output') return
+
+    const activity = activityFromLine(line.text)
+    if (activity) {
+      agentSessions.setActivity(line.sessionId, activity)
+
+      /*
+       * And into the shared activity record, under the same worker id the
+       * world and the chat address the session by.
+       *
+       * This is what makes Claude a member of the team rather than a terminal
+       * with a face: the activity timeline, the inspector's recent-activity
+       * list and an API agent's are one record, in one order, so "Walter
+       * delegated to Claude 1, Claude 1 ran the tests" reads as a single
+       * sequence instead of two panels the user has to interleave themselves.
+       */
+      const session = agentSessions.get(line.sessionId)
+      if (session) {
+        reportExternal(`cli-${session.terminalSessionId}`, session.name, activity)
+      }
+      return
+    }
+    /*
+     * A refusal ends an approval prompt without producing a banner, so it is
+     * the one case that needs its own signal — otherwise a denied action would
+     * leave the character stuck in WAITING FOR APPROVAL for a prompt that is
+     * no longer on screen.
+     */
+    if (clearsPermission(line.text)) {
+      const session = agentSessions.get(line.sessionId)
+      if (session?.activity?.type === 'waiting_for_permission') {
+        agentSessions.setActivity(line.sessionId, null)
+      }
+    }
+  })
 
   ipcMain.handle('agentSession:lines', (_e, id: unknown) =>
     typeof id === 'string' ? sessionTranscripts.lines(id) : []

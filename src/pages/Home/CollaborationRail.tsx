@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useBackstage } from '../../stores/backstageStore'
 import { useTeam } from '../../stores/teamStore'
+import { useProjectCast } from '../../stores/projectStore'
+import { castForSlot } from '../../project/cast'
+import { CharacterSprite } from '../../world/CharacterSprite'
+import type { CharacterDef } from '../../characters/character.types'
 import type {
   AutomationRun,
   GroupChatSummary,
@@ -80,6 +84,12 @@ export function CollaborationRail({ onOpenGroup }: Props) {
   const agents = useTeam((s) => s.agents)
   const triggers = useTeam((s) => s.triggers)
   const setPage = useBackstage((s) => s.setPage)
+  /*
+   * The project's cast, so a face on a card is one the project actually chose.
+   * There is no other route to a character in this application, which is what
+   * makes it impossible for another world's people to appear here.
+   */
+  const cast = useProjectCast()
 
   const [open, setOpen] = useState(true)
   const [showStructure, setShowStructure] = useState(false)
@@ -156,6 +166,7 @@ export function CollaborationRail({ onOpenGroup }: Props) {
                 <GroupRow
                   key={group.id}
                   group={group}
+                  faces={facesFor(group, agents, cast)}
                   onOpen={() => onOpenGroup(group)}
                 />
               ))}
@@ -284,7 +295,35 @@ function Empty({
  * conversation rather than replacing it. Clicking opens the conversation
  * directly: no character menu, no second modal, no re-picking the agents.
  */
-function GroupRow({ group, onOpen }: { group: GroupChatSummary; onOpen: () => void }) {
+/**
+ * The characters in a group, in member order.
+ *
+ * Resolved through the project's cast rather than from the agent's own record,
+ * for the same reason every other surface does: switching a project's world
+ * re-casts the team, and a card that remembered the old face would show
+ * somebody who is no longer in the office.
+ */
+function facesFor(
+  group: GroupChatSummary,
+  agents: { id: string; characterSlot: number }[],
+  cast: CharacterDef[]
+): CharacterDef[] {
+  if (cast.length === 0) return []
+  return group.memberIds
+    .map((id) => agents.find((a) => a.id === id))
+    .filter((a): a is { id: string; characterSlot: number } => a !== undefined)
+    .map((a) => castForSlot(cast, a.characterSlot))
+}
+
+function GroupRow({
+  group,
+  faces,
+  onOpen
+}: {
+  group: GroupChatSummary
+  faces: CharacterDef[]
+  onOpen: () => void
+}) {
   const isLive = LIVE.includes(group.status)
 
   return (
@@ -295,6 +334,28 @@ function GroupRow({ group, onOpen }: { group: GroupChatSummary; onOpen: () => vo
         className="block w-full border-2 border-ink bg-paper px-2 py-1.5 text-left shadow-[2px_2px_0_0_var(--color-shadow)] transition-transform duration-75 hover:-translate-y-px hover:bg-brand-pale"
       >
         <div className="flex items-baseline gap-2">
+          {/*
+            Who is in it, as faces. Still frames rather than animated ones:
+            three of these per row beside a canvas world that is already
+            running is a lot of requestAnimationFrame for decoration.
+          */}
+          {faces.length > 0 && (
+            <span className="flex shrink-0 -space-x-1 self-center" aria-hidden>
+              {faces.slice(0, 3).map((face, i) => (
+                <span
+                  key={`${face.id}-${i}`}
+                  className="grid h-5 w-5 place-items-center overflow-hidden border border-ink bg-cream-2"
+                >
+                  <CharacterSprite
+                    appearance={face.appearance}
+                    scale={1}
+                    animated={false}
+                    className="-mt-1"
+                  />
+                </span>
+              ))}
+            </span>
+          )}
           <span className="min-w-0 flex-1 truncate font-pixel text-[11px] font-bold uppercase tracking-[0.04em] text-ink">
             {group.name}
           </span>

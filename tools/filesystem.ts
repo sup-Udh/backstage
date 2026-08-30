@@ -244,7 +244,6 @@ export const filesystemCreate: AgentTool = {
   label: 'Creating a file',
   description:
     'Create a new file, or overwrite one that already exists. Parent folders are created as needed. To change part of an existing file prefer filesystem_edit.',
-  requiresApproval: true,
   inputSchema: {
     type: 'object',
     properties: {
@@ -286,7 +285,6 @@ export const filesystemEdit: AgentTool = {
   label: 'Editing a file',
   description:
     'Replace an exact snippet in an existing file. oldText must match the file exactly and appear once. Fails rather than guessing, so it can never silently destroy work.',
-  requiresApproval: true,
   inputSchema: {
     type: 'object',
     properties: {

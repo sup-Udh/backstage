@@ -11,6 +11,7 @@
  * until neither process could pass an agent to the other.
  */
 
+import type { ActivityEvent, AgentActivity } from './activity'
 import type {
   AgentConfig,
   AgentRuntimeState,
@@ -43,6 +44,7 @@ import type {
 import type { AuthApi } from './auth'
 
 export type * from './agents'
+export type * from './activity'
 export type * from './projects'
 export type * from './auth'
 
@@ -203,6 +205,15 @@ export interface AgentSession {
   characterChosen: boolean
   /** Other live sessions this one is connected to. */
   connections: string[]
+  /**
+   * What this session is doing, in the same vocabulary every agent uses.
+   *
+   * Read from the tool banners Claude Code actually renders as it performs an
+   * operation — never from its prose, and never from an announced intention.
+   * Null when nothing recognisable has been printed, in which case `status`
+   * still says whether the process is producing output.
+   */
+  activity: AgentActivity | null
 }
 
 /**
@@ -444,6 +455,17 @@ export interface BackstageApi {
 
     /* Live state, one entry per agent. Never a single global status. */
     states(): Promise<AgentRuntimeState[]>
+
+    /**
+     * What every agent is doing, in normalised terms.
+     *
+     * Also present on each `AgentRuntimeState`, so this is only for the first
+     * paint and for recovering after a project switch — the live path is the
+     * `agent.activity` event and the state that travels with it.
+     */
+    activities(): Promise<AgentActivity[]>
+    /** Recent activity, oldest first. The whole project, or one agent. */
+    activityTimeline(agentId?: string): Promise<ActivityEvent[]>
 
     /* Work. */
     run(params: RunTaskParams): Promise<RunTaskAck>

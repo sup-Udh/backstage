@@ -14,6 +14,16 @@ interface Props {
   facing?: Facing
   /** Integer upscale factor. Non-integers would break the pixel grid. */
   scale?: number
+  /**
+   * Whether to run the animation loop.
+   *
+   * Off for the small avatars in a list, where a dozen of these can be on
+   * screen at once and each one otherwise holds its own `requestAnimationFrame`
+   * running for as long as the panel is open — beside a canvas world that is
+   * already animating. A still frame is the right amount of movement for a
+   * face in a row; the office next door is where characters move.
+   */
+  animated?: boolean
   className?: string
 }
 
@@ -28,6 +38,7 @@ export function CharacterSprite({
   state = 'idle',
   facing = 'down',
   scale = 4,
+  animated = true,
   className
 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
@@ -62,11 +73,13 @@ export function CharacterSprite({
         SPRITE_W,
         SPRITE_H
       )
-      raf = requestAnimationFrame(draw)
+      if (animated) raf = requestAnimationFrame(draw)
     }
-    raf = requestAnimationFrame(draw)
+    // A still avatar draws once, on the clip's first frame, and holds it.
+    if (animated) raf = requestAnimationFrame(draw)
+    else draw(started)
     return () => cancelAnimationFrame(raf)
-  }, [art, state, facing])
+  }, [art, state, facing, animated])
 
   return (
     <canvas

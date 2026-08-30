@@ -11,6 +11,8 @@
  * provider an agent uses, never the key behind it.
  */
 
+import type { AgentActivity } from './activity'
+
 /* ---------------------------------------------------------- capabilities -- */
 
 /**
@@ -177,6 +179,19 @@ export interface AgentRuntimeState {
   status: AgentLifecycle
   /** Specific and present-tense: "Reading package.json". */
   action: string | null
+  /**
+   * What the agent is doing, structured.
+   *
+   * The normalised activity — see `src/shared/activity.ts` — rather than the
+   * prose in `action`. Carried on the runtime state deliberately: every
+   * surface in the product already reads this object, so putting the activity
+   * here is what makes the pixel world, the roster, the chat header and the
+   * group summaries incapable of disagreeing about what somebody is doing.
+   *
+   * `action` stays, derived from this, because it is a sentence and this is a
+   * record; the two are for different places.
+   */
+  activity: AgentActivity | null
   /** Headline of the task being worked on. */
   task: string | null
   taskId: string | null
@@ -290,6 +305,14 @@ export type RuntimeEventType =
   /** A collaboration link was created or removed between two agents. */
   | 'agent.connected'
   | 'agent.disconnected'
+  /**
+   * What an agent is doing, in normalised terms.
+   *
+   * Emitted whenever the activity meaningfully changes — not per tool call
+   * and not per output chunk. Every provider produces these through the same
+   * store, so a consumer of this event never learns which one was running.
+   */
+  | 'agent.activity'
   // Automation
   | 'trigger.fired'
   | 'trigger.blocked'
@@ -350,6 +373,8 @@ export interface RuntimeEvent {
   triggerName?: string
   /** On automation.* events: which run it belongs to. */
   runId?: string
+  /** On agent.activity events: the whole normalised activity. */
+  agentActivity?: AgentActivity
   /** On permission.decided events. */
   category?: PermissionCategory
   outcome?: PermissionOutcome

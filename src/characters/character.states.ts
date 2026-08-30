@@ -1,23 +1,122 @@
 import type { AgentStatus } from '../agents/agent.types'
-import type { ToolGroup } from '../agents/toolActivity'
+import type { ActivityType } from '../shared/activity'
 import type { CharacterState } from './character.types'
 
+/**
+ * Which pose an activity is drawn as, when the character is at a desk.
+ *
+ * The bridge between the normalised activity vocabulary and the animation
+ * table — and the reason the office can say what somebody is doing without a
+ * word of text. It is deliberately many-to-few: twenty-four activities become
+ * seven seated poses, because a person watching can tell reading from typing
+ * from waiting and cannot tell `searching_files` from `searching_code`. The
+ * badge carries the precision; the body carries the gist.
+ *
+ * Absent from this table means "no opinion", and the status decides instead.
+ */
+const SEATED_FOR_ACTIVITY: Partial<Record<ActivityType, CharacterState>> = {
+  /* hands off the keys, eyes on the screen */
+  reading_file: 'sitReading',
+  inspecting_project: 'sitReading',
+  analyzing: 'sitReading',
+
+  /* restless, scanning */
+  searching_files: 'sitSearching',
+  searching_code: 'sitSearching',
+  web_search: 'sitSearching',
+
+  /* hands on the keys */
+  writing_file: 'sitWorking',
+  creating_file: 'sitWorking',
+  deleting_file: 'sitWorking',
+
+  /* a keystroke, then watching something happen */
+  running_command: 'sitTerminal',
+  terminal_output: 'sitTerminal',
+  testing: 'sitTerminal',
+  building: 'sitTerminal',
+  installing_dependency: 'sitTerminal',
+  git_operation: 'sitTerminal',
+
+  /* turned away from the screen */
+  reporting: 'sitTalking',
+  delegating: 'sitTalking',
+  talking_to_agent: 'sitTalking',
+
+  /* still, and visibly not working */
+  receiving_task: 'sitWaiting',
+  waiting_for_agent: 'sitWaiting',
+  waiting_for_permission: 'sitWaiting',
+  waiting_for_user: 'sitWaiting',
+
+  thinking: 'sitThinking',
+  planning: 'sitThinking',
+
+  error: 'sitError',
+  stopped: 'sitting',
+  idle: 'sitting'
+}
+
+/**
+ * The standing equivalent.
+ *
+ * Sparser on purpose: a character on their feet has nowhere to type and no
+ * screen to read, so most work collapses to the one standing work pose. What
+ * has to survive the collapse is the distinction between doing something,
+ * thinking about something, talking to somebody and waiting — which is
+ * exactly what a person across a room can tell.
+ */
+const STANDING_FOR_ACTIVITY: Partial<Record<ActivityType, CharacterState>> = {
+  thinking: 'thinking',
+  planning: 'thinking',
+  analyzing: 'thinking',
+  reporting: 'talking',
+  delegating: 'talking',
+  talking_to_agent: 'talking',
+  receiving_task: 'waiting',
+  waiting_for_agent: 'waiting',
+  waiting_for_permission: 'waiting',
+  waiting_for_user: 'waiting',
+  completed: 'success',
+  error: 'error',
+  stopped: 'idle',
+  idle: 'idle'
+}
+
+/**
+ * What to draw for an agent.
+ *
+ * The activity leads and the status is the fallback. That order matters: the
+ * activity is the specific fact — "running npm test" — and the status is the
+ * generalisation of it, so deriving the pose from the status would throw away
+ * the very thing this system exists to show. An agent with no activity is
+ * still drawn correctly, which is what keeps the world working for anything
+ * that has not been taught to report one.
+ */
 export function characterStateForAgent(
   status: AgentStatus,
   seated = false,
-  activity: ToolGroup | null = null
+  activity: ActivityType | null = null
 ): CharacterState {
+  if (activity) {
+    /*
+     * The celebration outranks the activity it followed. `success` is a
+     * two-second flourish the world plays over the top of whatever the agent
+     * last did, and letting `completed` resolve to a resting pose would mean
+     * the finish were never visible.
+     */
+    if (status === 'success') return seated ? 'sitTalking' : 'success'
+    const pose = seated
+      ? SEATED_FOR_ACTIVITY[activity]
+      : STANDING_FOR_ACTIVITY[activity]
+    if (pose) return pose
+    // A busy activity with no pose of its own is still work being done.
+    if (activity !== 'completed') return seated ? 'sitWorking' : 'working'
+  }
+
   switch (status) {
     case 'working':
-      if (!seated) return 'working'
-      /*
-       * What the tool actually is changes the pose, because it changes what a
-       * person would be doing. Reading a file or a diff is done with the
-       * hands off the keys; running a command or a search is typing. The
-       * runtime already reports which tool started, so this is reading real
-       * activity rather than inventing a rhythm.
-       */
-      return activity === 'files' || activity === 'git' ? 'sitReading' : 'sitWorking'
+      return seated ? 'sitWorking' : 'working'
     case 'thinking':
       return seated ? 'sitThinking' : 'thinking'
     case 'talking':
@@ -147,11 +246,26 @@ export const ANIMATIONS: Record<CharacterState, AnimationClip> = {
   sitWorking: clip([0.3, 0.18, 0.22, 0.4, 0.18, 0.35]),
 
   /*
+   * A command running. A keystroke or two, then a long hunched hold watching
+   * the output — which is what running `npm test` actually looks like, and
+   * why it must not share a clip with writing a file. The two short frames at
+   * the front and the 1.1s hold in the middle are the whole read.
+   */
+  sitTerminal: clip([0.16, 0.14, 0.9, 0.7, 1.1, 0.4]),
+
+  /*
    * Reading the screen. Hands off the keys, the head tracks down the page,
    * and every so often one hand comes up to scroll. Long holds: reading is
    * the one work pose where stillness is the truthful thing to draw.
    */
   sitReading: clip([0.85, 1.15, 0.4, 1.3, 0.5, 0.95]),
+
+  /*
+   * Scanning. Even, quick frames with the head moving side to side — the
+   * opposite rhythm to reading, which is what stops "searching src/" and
+   * "reading App.tsx" looking like the same person doing the same thing.
+   */
+  sitSearching: clip([0.28, 0.22, 0.3, 0.24, 0.34, 0.26]),
 
   /*
    * Seated thought. Push back from the desk, hand to the chin, look up, hold,

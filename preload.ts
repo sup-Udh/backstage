@@ -121,6 +121,9 @@ const api: BackstageApi = {
     spawn: (agentId) => ipcRenderer.invoke('agents:spawn', agentId),
     despawn: (agentId) => ipcRenderer.invoke('agents:despawn', agentId),
     states: () => ipcRenderer.invoke('agents:states'),
+    activities: () => ipcRenderer.invoke('agents:activities'),
+    activityTimeline: (agentId) =>
+      ipcRenderer.invoke('agents:activityTimeline', agentId),
 
     run: (params: RunTaskParams) => ipcRenderer.invoke('agents:run', params),
     cancel: (agentId) => ipcRenderer.invoke('agents:cancel', agentId),

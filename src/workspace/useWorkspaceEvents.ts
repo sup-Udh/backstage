@@ -97,6 +97,19 @@ export function useWorkspaceEvents(): void {
          */
         teamRuntime.updateExternal(agentId, { name: session.name, slot })
 
+        /*
+         * And what it is doing, on every update rather than only when the
+         * status changes.
+         *
+         * A Claude session moves from reading to searching to running a
+         * command several times inside a single "working" status, and those
+         * are precisely the transitions the office is meant to show. Gating
+         * this on a status change would collapse the whole sequence into one
+         * unchanging WORKING — which is the behaviour this pass exists to
+         * remove.
+         */
+        teamRuntime.setExternalActivity(agentId, session.activity ?? null)
+
         const previous = known.current.get(session.id)
         if (previous === session.status) continue
         known.current.set(session.id, session.status)
@@ -121,6 +134,8 @@ export function useWorkspaceEvents(): void {
         )
 
         if (session.status === 'exited' || session.status === 'error') {
+          // Whatever it was doing, it is not doing it any more.
+          teamRuntime.setExternalActivity(agentId, null)
           ingestEvent({
             id: localId('cli'),
             type: 'agent.completed',

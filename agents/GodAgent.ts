@@ -5,6 +5,7 @@ import { orchestrator, wasRejected } from './AgentOrchestrator'
 import { systemBus } from './EventBus'
 import { listCollaboration } from './collaborationStore'
 import { chainSettled, chainTasks, getTask } from './taskStore'
+import { report } from './activityStore'
 import { getActiveProject } from '../projects/projectStore'
 
 /**
@@ -163,7 +164,33 @@ class GodAgent {
         continue
       }
 
-      if (!chainSettled(entry.correlationId)) continue
+      /*
+       * The lead has finished its own turn but the team has not.
+       *
+       * §18: this is the moment a lead must stop reporting WORKING. It is not
+       * working — it is blocked on Jesse and Mike, and a user watching the
+       * office needs to see whose turn it actually is. Named where the names
+       * are known, so the badge reads WAITING FOR JESSE rather than a
+       * generic wait.
+       */
+      if (!chainSettled(entry.correlationId)) {
+        const outstanding = chainTasks(entry.correlationId)
+          .filter(
+            (t) =>
+              t.id !== entry.rootTaskId &&
+              (t.status === 'running' || t.status === 'queued')
+          )
+          .map((t) => getAgent(t.agentId)?.name)
+          .filter((n): n is string => typeof n === 'string')
+
+        const who = [...new Set(outstanding)]
+        report(root.agentId, {
+          type: 'waiting_for_agent',
+          detail: who.length > 0 ? who.join(', ') : null,
+          detailFull: who.length > 0 ? who.join(', ') : null
+        })
+        continue
+      }
 
       const delegated = chainTasks(entry.correlationId).filter(
         (t) => t.id !== entry.rootTaskId

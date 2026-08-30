@@ -122,7 +122,6 @@ export const gitCommit: AgentTool = {
     },
     required: ['message']
   },
-  requiresApproval: true,
   describe: (i) => `Committed: ${String(i.message ?? '').slice(0, 48)}`,
   execute: async (input, ctx) => {
     const message = typeof input.message === 'string' ? input.message.trim() : ''

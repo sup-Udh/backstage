@@ -15,11 +15,12 @@ import {
 import { systemPromptFor } from './prompts'
 import { BudgetTracker, budgetFor } from './budget'
 import { systemBus } from './EventBus'
-import { agentRegistry } from './AgentRegistry'
 import { requestApproval, denyForExecution } from './approvals'
 import { evaluateToolCall, recordPermission } from './permissionStore'
 import { categoryInfo } from './permissionRules'
 import { getAgent } from './agentStore'
+import { activityForTool } from './activityMap'
+import { report } from './activityStore'
 
 /**
  * One agent, one task, one tool loop.
@@ -252,7 +253,29 @@ export class Execution {
       }
 
       tracker.nextStep()
-      agentRegistry.progress(this.agent.id, this.id, 'thinking', 'Thinking')
+      /*
+       * A model call is in flight. Reported as an activity rather than as a
+       * status string, so the world, the chat header and the timeline all
+       * learn it from the same place — and so it is `thinking` and not
+       * `working`, which is a distinction the user can see in the pose.
+       *
+       * Only the fact that reasoning is happening. Never its contents: no
+       * partial text, no tool plan, nothing from the model's own output goes
+       * into an activity.
+       */
+      report(
+        this.agent.id,
+        /*
+         * A team lead pulling its delegates' answers together is doing
+         * something the user asked to see by name (§46). It is still a model
+         * call, so it is still `thinking` — only the label changes, and it
+         * changes on a fact the runtime already carries rather than on a
+         * guess about what the prompt contains.
+         */
+        this.task.part === 'synthesis'
+          ? { type: 'analyzing', label: 'SYNTHESISING' }
+          : { type: 'thinking' }
+      )
 
       let result
       try {
@@ -305,7 +328,13 @@ export class Execution {
       })
 
       if (result.text?.trim()) {
-        agentRegistry.progress(this.agent.id, this.id, 'talking', 'Reporting back')
+        /*
+         * Through the activity store like everything else. This was the last
+         * place that wrote a status directly, and one direct write is all it
+         * takes for the badge over a character's head to disagree with the
+         * roster beside it.
+         */
+        report(this.agent.id, { type: 'reporting' })
         this.send('agent.message', { message: result.text.trim(), model })
       }
 
@@ -349,6 +378,22 @@ export class Execution {
 
         const action = tool.describe?.(call.arguments) ?? tool.label
         const present = presentTense(action)
+
+        /*
+         * What this call actually is, in the interface's vocabulary.
+         *
+         * Derived from the tool name and its arguments by `activityMap`, which
+         * is shared by every provider — the tool registry is the same registry
+         * whichever model asked for it, so this is the point where OpenAI and
+         * Gemini stop being distinguishable.
+         *
+         * Computed before the permission gate so the same mapping describes
+         * both the approval prompt and the work itself.
+         */
+        const mapped = activityForTool(tool.name, call.arguments)
+        const targetName = mapped.targetAgentId
+          ? (getAgent(mapped.targetAgentId)?.name ?? null)
+          : null
 
         /*
          * The permission gate.
@@ -401,7 +446,21 @@ export class Execution {
         }
 
         if (verdict.kind === 'ask') {
-          agentRegistry.progress(this.agent.id, this.id, 'waiting', `Waiting: ${present}`)
+          /*
+           * Blocked on a person. Its own activity rather than a flavour of
+           * working, because §19 is right that the user has to be able to see
+           * the difference between an agent that is busy and an agent that is
+           * waiting for them — those look identical otherwise, and the second
+           * one never resolves on its own.
+           */
+          report(this.agent.id, {
+            type: 'waiting_for_permission',
+            detail: mapped.detail ?? action,
+            detailFull: mapped.detailFull ?? action,
+            toolName: tool.name,
+            filePath: mapped.filePath ?? null,
+            command: mapped.command ?? null
+          })
           this.send('agent.tool.started', {
             tool: tool.name,
             action: present,
@@ -460,7 +519,17 @@ export class Execution {
           }
         }
 
-        agentRegistry.progress(this.agent.id, this.id, 'working', present)
+        report(this.agent.id, {
+          type: mapped.type,
+          label: mapped.label,
+          detail: mapped.detail,
+          detailFull: mapped.detailFull,
+          toolName: tool.name,
+          filePath: mapped.filePath ?? null,
+          command: mapped.command ?? null,
+          targetAgentId: mapped.targetAgentId ?? null,
+          targetAgentName: targetName
+        })
         this.send('agent.working', { tool: tool.name, action: present, model })
         this.send('agent.tool.started', {
           tool: tool.name,

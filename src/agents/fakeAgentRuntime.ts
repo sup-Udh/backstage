@@ -1,5 +1,6 @@
 import type { Agent, AgentListener, AgentRuntime, AgentStatus } from './agent.types'
-import { groupForTool, type ToolGroup } from './toolActivity'
+import type { ActivityType, AgentActivity } from '../shared/activity'
+import { ACTIVITY_LABEL, statusForActivity } from '../shared/activity'
 import { makeRng } from '../world/pixel/ops'
 import { EventBus } from './agentEvents'
 import { buildTaskScript, type Beat } from './taskScript'
@@ -70,7 +71,37 @@ const WEIGHTS: [AgentStatus, number][] = [
  * already shown to the user*, so what the character does and what the label
  * says still agree, which is the property that matters.
  */
-const SHOWCASE_ACTIVITY: ToolGroup[] = ['files', 'terminal', 'git', 'web', 'files', 'terminal']
+const SHOWCASE_ACTIVITY: ActivityType[] = [
+  'reading_file',
+  'running_command',
+  'git_operation',
+  'web_search',
+  'searching_code',
+  'testing'
+]
+
+/**
+ * A showcase activity, in the same shape a real one arrives in.
+ *
+ * The landing page is a shop window and says so — it invents work because
+ * there is no account behind it and nothing to report. What it must not do is
+ * invent a *different shape* of work: building the same `AgentActivity` the
+ * runtime produces is what lets one world renderer draw both, and is why the
+ * simulation cannot drift away from the thing it is advertising.
+ */
+function showcaseActivity(id: string, type: ActivityType): AgentActivity {
+  return {
+    agentId: id,
+    projectId: 'showcase',
+    type,
+    label: ACTIVITY_LABEL[type],
+    detail: null,
+    detailFull: null,
+    startedAt: Date.now(),
+    status: statusForActivity(type),
+    progress: null
+  }
+}
 
 const DURATIONS: Partial<Record<AgentStatus, [number, number]>> = {
   working: [16, 30],
@@ -318,7 +349,10 @@ export class FakeAgentRuntime implements AgentRuntime {
      */
     a.activity =
       status === 'working'
-        ? SHOWCASE_ACTIVITY[Math.floor(this.rng() * SHOWCASE_ACTIVITY.length)]
+        ? showcaseActivity(
+            a.id,
+            SHOWCASE_ACTIVITY[Math.floor(this.rng() * SHOWCASE_ACTIVITY.length)]
+          )
         : null
     if (status !== 'talking') a.partnerId = null
     this.remaining[i] = this.duration(status)
@@ -388,6 +422,8 @@ export class FakeAgentRuntime implements AgentRuntime {
     tool?: string
     model?: string
     targetAgentId?: string
+    /** The whole normalised activity, on `agent.activity` events. */
+    agentActivity?: AgentActivity
   }): void {
     const id = event.agentId
 
@@ -404,10 +440,10 @@ export class FakeAgentRuntime implements AgentRuntime {
         if (id) this.hold(id, 'thinking', event.action ?? 'Working out what to look at')
         break
 
-      case 'agent.tool.started':
-        if (id && event.tool) {
+      case 'agent.activity':
+        if (id && event.agentActivity) {
           const agent = this.get(id)
-          if (agent) agent.activity = groupForTool(event.tool)
+          if (agent) agent.activity = event.agentActivity
         }
         if (id) this.hold(id, 'working', event.action ?? 'Working')
         break

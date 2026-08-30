@@ -1,4 +1,6 @@
 import type { AgentLifecycle, AgentRuntimeState, AgentValidation } from './agent.types'
+import type { AgentActivity } from '../src/shared/activity'
+import { activitySentence } from '../src/shared/activity'
 import { getAgent, listAgents } from './agentStore'
 import { hasApiKey, readConfig } from '../credentials/secureStore'
 import { getProviderDefinition } from '../providers/registry'
@@ -57,6 +59,7 @@ class AgentRegistry {
       agentId,
       status: 'offline',
       action: null,
+      activity: null,
       task: null,
       taskId: null,
       executionId: null,
@@ -112,6 +115,7 @@ class AgentRegistry {
       state.status = this.restingStatus(agentId, state.hasWorked)
       if (state.status === 'offline') {
         state.action = null
+        state.activity = null
         state.task = null
       }
     }
@@ -153,6 +157,7 @@ class AgentRegistry {
     state.task = task
     state.status = 'thinking'
     state.action = 'Reading the brief'
+    state.activity = null
     state.lastError = null
     state.hasWorked = true
     state.updatedAt = Date.now()
@@ -174,9 +179,43 @@ class AgentRegistry {
     state.taskId = null
     state.task = null
     state.action = null
+    /*
+     * The activity is deliberately *not* cleared here.
+     *
+     * The last thing an execution reports is `completed`, `error` or
+     * `stopped`, and that is the one the user most needs to see — a ✓ that is
+     * wiped in the same tick it was written is a ✓ nobody ever sees. The
+     * activity store holds a terminal activity for a couple of seconds and
+     * then drops it, which is what produces COMPLETE → IDLE rather than a
+     * character that simply stops.
+     */
     state.lastError = error ?? null
     state.status = error ? 'error' : this.restingStatus(agentId, true)
     state.updatedAt = Date.now()
+    this.announce(agentId)
+  }
+
+  /**
+   * Record what this agent is doing, in normalised terms.
+   *
+   * Written here rather than published on a channel of its own, because this
+   * object is what every surface in the product already reads. The status and
+   * the prose `action` are both *derived from* the activity rather than set
+   * beside it — which is what makes it impossible for the badge to say
+   * "waiting for approval" while the roster says the same agent is working.
+   *
+   * Called only by `activityStore`, which is the single writer.
+   */
+  setActivity(agentId: string, activity: AgentActivity | null): void {
+    const state = this.states.get(agentId) ?? this.blank(agentId)
+    state.activity = activity
+    if (activity) {
+      state.status = activity.status
+      state.action = activitySentence(activity)
+      if (activity.status !== 'error') state.lastError = null
+    }
+    state.updatedAt = Date.now()
+    this.states.set(agentId, state)
     this.announce(agentId)
   }
 

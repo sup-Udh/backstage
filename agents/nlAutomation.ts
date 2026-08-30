@@ -174,17 +174,28 @@ interface EventMatch {
   matched: string
 }
 
-/** Event phrases, longest and most specific first. */
+/**
+ * Event phrases, most specific first.
+ *
+ * The gap between "when" and the verb is bounded by length rather than
+ * delimited by a full stop. It was `[^.]*`, which reads as "up to the end of
+ * the sentence" and is right until the subject of the sentence is a filename:
+ * "when package.json changes" contains a full stop, so the phrase most likely
+ * to be typed was the one phrase that could never match.
+ */
 const EVENT_PHRASES: { re: RegExp; event: TriggerEventType }[] = [
   { re: /\bwhen(?:ever)?\s+(?:a\s+)?(?:new\s+)?file\s+is\s+created\b/, event: 'file.created' },
   { re: /\bwhen(?:ever)?\s+(?:a\s+)?file\s+is\s+deleted\b/, event: 'file.deleted' },
   { re: /\b(?:when(?:ever)?|after|on)\s+(?:a\s+)?commit\b/, event: 'git.changed' },
-  { re: /\bwhen(?:ever)?\s+(?:the\s+)?(?:git|branch|working\s+tree)\b[^.]*\bchang/, event: 'git.changed' },
-  { re: /\bwhen(?:ever)?\s+[^.]*\bfails?\b/, event: 'agent.error' },
-  { re: /\bwhen(?:ever)?\s+[^.]*\b(?:errors?|breaks?)\b/, event: 'agent.error' },
-  { re: /\bwhen(?:ever)?\s+[^.]*\b(?:finish|complete)/, event: 'agent.task.completed' },
-  { re: /\bwhen(?:ever)?\s+[^.]*\b(?:goes\s+)?idle\b/, event: 'agent.idle' },
-  { re: /\bwhen(?:ever)?\s+[^.]*\bchang/, event: 'file.changed' }
+  {
+    re: /\bwhen(?:ever)?\s+(?:the\s+)?(?:git|branch|working\s+tree)\b.{0,80}?\bchang/,
+    event: 'git.changed'
+  },
+  { re: /\bwhen(?:ever)?\s+.{0,80}?\bfails?\b/, event: 'agent.error' },
+  { re: /\bwhen(?:ever)?\s+.{0,80}?\b(?:errors?|breaks?)\b/, event: 'agent.error' },
+  { re: /\bwhen(?:ever)?\s+.{0,80}?\b(?:finish|complete)/, event: 'agent.task.completed' },
+  { re: /\bwhen(?:ever)?\s+.{0,80}?\b(?:goes\s+)?idle\b/, event: 'agent.idle' },
+  { re: /\bwhen(?:ever)?\s+.{0,80}?\bchang/, event: 'file.changed' }
 ]
 
 /** A quoted string or a filename, used as the IF condition. */

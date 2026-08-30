@@ -1,5 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type {
+  ActivityEvent,
+  AgentActivity,
   AgentConfig,
   AgentRuntimeState,
   AgentTask,
@@ -82,6 +84,12 @@ import {
 import { awarenessSnapshot, refreshGit } from '../workspace/awareness'
 import { getWorkspaceRoot } from '../workspace/WorkspaceManager'
 import { makeId } from '../agents/persist'
+import {
+  activityTimeline,
+  clearActivity,
+  forgetAgent as forgetAgentActivity,
+  listActivities
+} from '../agents/activityStore'
 
 /**
  * The agent surface.
@@ -159,6 +167,9 @@ export function registerAgentHandlers(): void {
     orchestrator.cancel(id)
     deleteAgent(id)
     forgetAgent(id)
+    // A deleted agent must not leave a badge, or a line in the timeline
+    // pointing at somebody the roster can no longer name.
+    forgetAgentActivity(id)
     agentRegistry.refreshAll()
     return listAgents()
   })
@@ -196,6 +207,8 @@ export function registerAgentHandlers(): void {
   ipcMain.handle('agents:despawn', (_e, agentId: unknown): AgentConfig[] => {
     const id = String(agentId ?? '')
     orchestrator.cancel(id)
+    // Leaving the office ends whatever was on screen above their head.
+    clearActivity(id)
     const agent = setSpawned(id, false)
     agentRegistry.refresh(id)
     if (agent) {
@@ -210,6 +223,22 @@ export function registerAgentHandlers(): void {
   })
 
   ipcMain.handle('agents:states', (): AgentRuntimeState[] => agentRegistry.list())
+
+  /* ------------------------------------------------------------ activity -- */
+
+  /*
+   * What everyone is doing, and what they have just done.
+   *
+   * Both are project-scoped in the store rather than here, so there is no path
+   * by which a renderer asking politely gets another project's activity.
+   */
+  ipcMain.handle('agents:activities', (): AgentActivity[] => listActivities())
+
+  ipcMain.handle(
+    'agents:activityTimeline',
+    (_e, agentId?: unknown): ActivityEvent[] =>
+      activityTimeline(60, typeof agentId === 'string' && agentId ? agentId : undefined)
+  )
 
   /* ---------------------------------------------------------------- work -- */
 

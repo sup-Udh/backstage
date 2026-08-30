@@ -1,5 +1,5 @@
 import type { AgentLifecycle } from '../shared/agents'
-import type { ToolGroup } from './toolActivity'
+import type { AgentActivity } from '../shared/activity'
 
 /**
  * The renderer's view of an agent.
@@ -77,16 +77,15 @@ export interface Agent {
   partnerId?: string | null
 
   /**
-   * The family of the tool that most recently started running.
+   * What this agent is doing, normalised.
    *
-   * The runtime already reports every tool call — this is not new information
-   * and it is not a second state machine, it is the existing `tool` field on
-   * `agent.tool.started` filed under a heading. What it buys is that reading a
-   * file and running a command stop looking identical: one is a person with
-   * their hands off the keyboard reading a screen, the other is a person
-   * typing, and both of those are already what the tool names say.
+   * Mirrored from the main process, which builds it from real runtime events —
+   * a tool call with its arguments, an approval going up, a hand-off being
+   * made. Nothing on this side invents one, and nothing on this side asks
+   * which provider produced it: an OpenAI agent, a Gemini agent and a Claude
+   * Code session all arrive here as the same shape.
    */
-  activity?: ToolGroup | null
+  activity?: AgentActivity | null
 }
 
 export type AgentListener = (agents: Agent[]) => void

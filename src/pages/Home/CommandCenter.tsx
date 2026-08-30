@@ -13,6 +13,8 @@ import { useProject } from '../../stores/projectStore'
 import { PromptBox } from './PromptBox'
 import { TeamHeader } from './TeamHeader'
 import { CollaborationRail } from './CollaborationRail'
+import { ActivityTimeline } from '../../components/Activity/ActivityTimeline'
+import { ActivityBadge } from '../../components/Activity/ActivityBadge'
 import { ChatIdentity } from './ChatIdentity'
 import { MessagesPanel } from './MessagesPanel'
 import { TerminalPanel } from '../../workspace/TerminalPanel'
@@ -510,6 +512,25 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
         />
       )}
 
+      {/*
+        What has actually been happening, live.
+
+        Directly under the identity strip, because it answers the question the
+        identity strip raises: the header says Jane is reading a file, and this
+        says which files she read to get there. Scoped to whoever is on screen
+        — a whole-team request shows everybody's, which is the one case where
+        several agents are working at once and the interleaving is the point.
+
+        Collapsible, and it collapses to a single row. §52: the world stays
+        atmospheric and this is context beside it, not a dashboard over it.
+      */}
+      {tab === 'messages' && (
+        <ActivityStrip
+          agentId={isBroadcast || inThread ? null : target}
+          workers={workers}
+        />
+      )}
+
       {/* The active surface. Only this scrolls. */}
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === 'messages' && (
@@ -666,6 +687,73 @@ export function CommandCenter({ cast, workers, onSpawn }: Props) {
           </label>
         )}
       </div>
+    </section>
+  )
+}
+
+/**
+ * The live activity strip.
+ *
+ * Two things, in the order somebody asks for them: what is happening now, and
+ * what happened just before. Both come from the same normalised record the
+ * pixel world is drawn from, so this strip and the character it describes can
+ * never disagree — and both are real: the current activity is a tool the agent
+ * genuinely called, and every line beneath it was written when an activity
+ * actually changed.
+ *
+ * Collapsed to a single row when nothing is running, so an idle team costs one
+ * line rather than a panel.
+ */
+function ActivityStrip({
+  agentId,
+  workers
+}: {
+  /** One worker, or null for the whole project. */
+  agentId: string | null
+  workers: Worker[]
+}) {
+  const log = useBackstage((s) => s.activityLog)
+  const [open, setOpen] = useState(true)
+
+  const worker = findWorker(workers, agentId)
+  const activity = worker?.activity ?? null
+
+  const lines = agentId ? log.filter((e) => e.agentId === agentId) : log
+  if (lines.length === 0 && !activity) return null
+
+  /** The character's name, so the log and the office agree on who is who. */
+  const nameFor = (id: string) => findWorker(workers, id)?.name ?? id
+
+  return (
+    <section className="shrink-0 border-b-2 border-rule bg-cream-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-1 text-left transition-colors hover:bg-brand-pale"
+      >
+        <span className="shrink-0 font-pixel text-[9px] font-bold uppercase tracking-[0.12em] text-ink-3">
+          Activity
+        </span>
+        <span className="min-w-0 flex-1 truncate">
+          {activity ? (
+            <ActivityBadge activity={activity} />
+          ) : (
+            <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
+              {lines.length} step{lines.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </span>
+        <span aria-hidden className="shrink-0 font-pixel text-[10px] text-ink-3">
+          {open ? '▾' : '▸'}
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t-2 border-rule">
+          <ActivityTimeline agentId={agentId} limit={10} nameFor={nameFor} />
+        </div>
+      )}
     </section>
   )
 }

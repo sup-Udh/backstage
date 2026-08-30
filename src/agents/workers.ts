@@ -6,9 +6,11 @@ import type {
   AgentSessionStatus,
   ProviderStatus
 } from '../shared/providerApi'
+import type { AgentActivity } from '../shared/activity'
 import type { CharacterDef } from '../characters/character.types'
 import { castNameForSlot } from '../project/cast'
 import { BUSY_STATUSES } from '../shared/agents'
+import { activitySentence } from '../shared/activity'
 
 /**
  * One projection of everything that can do work.
@@ -55,6 +57,15 @@ export interface Worker {
   status: AgentLifecycle
   /** Present-tense description of the current step, when there is one. */
   action: string | null
+  /**
+   * What this worker is doing, normalised.
+   *
+   * The same shape for a configured agent and a CLI session, which is the
+   * whole point of the projection: a panel showing "what is Claude 2 doing"
+   * and one showing "what is Jane doing" are the same component reading the
+   * same field.
+   */
+  activity: AgentActivity | null
   task: string | null
   busy: boolean
   /** Whether stopping it would do anything right now. */
@@ -242,6 +253,7 @@ export function buildWorkers({
       model: agent.modelId ?? provider?.selectedModel ?? 'no model',
       status,
       action: state?.action ?? null,
+      activity: state?.activity ?? null,
       task: state?.task ?? null,
       busy: BUSY_STATUSES.includes(status),
       // Only an execution can be cancelled; queued work counts, because
@@ -257,7 +269,17 @@ export function buildWorkers({
   for (const session of sessions) {
     // A finished session is history, not a worker. It stays in the tasks log.
     if (session.status === 'exited') continue
-    const status = lifecycleForSession(session.status)
+    /*
+     * The activity's own status wins when there is one.
+     *
+     * `lifecycleForSession` reads whether the process is producing output,
+     * which cannot distinguish "waiting for approval" from "quietly working".
+     * A recognised banner can, and the selector must not disagree with the
+     * badge over the same character's head.
+     */
+    const status = session.activity
+      ? session.activity.status
+      : lifecycleForSession(session.status)
 
     workers.push({
       id: workerIdFor(session),
@@ -272,7 +294,19 @@ export function buildWorkers({
       provider: CLI_PROVIDER[session.provider ?? ''] ?? 'CLI',
       model: `${session.provider ?? 'cli'} cli`,
       status,
-      action: session.status === 'working' ? (session.lastOutput ?? null) : null,
+      /*
+       * The activity leads, and the raw last line of output is the fallback.
+       *
+       * A recognised banner gives "READING package.json"; anything else is
+       * whatever the process last printed, which is honest — it is real
+       * output — and is exactly what was shown before this system existed.
+       */
+      action: session.activity
+        ? activitySentence(session.activity)
+        : session.status === 'working'
+          ? (session.lastOutput ?? null)
+          : null,
+      activity: session.activity ?? null,
       task: session.status === 'working' ? (session.lastOutput ?? null) : null,
       busy: session.status === 'working' || session.status === 'starting',
       // Interrupting a session at its prompt does nothing worth offering.

@@ -33,8 +33,25 @@ export type CharacterState =
   | 'sitting'
   /** Seated, hands on the keyboard. */
   | 'sitWorking'
+  /**
+   * Seated at a running command: a burst on the keys, then watching output.
+   *
+   * Its own state rather than a flavour of `sitWorking`, because running
+   * something and writing something are the two activities a user most needs
+   * to tell apart at a glance — one is steady typing, the other is a keystroke
+   * followed by a long, hunched wait, and those look completely different.
+   */
+  | 'sitTerminal'
   /** Seated, hands off the keyboard, reading the screen. */
   | 'sitReading'
+  /**
+   * Seated and scanning: the head sweeping, quick glances, restless hands.
+   *
+   * Distinct from reading for the same reason. Reading holds still; searching
+   * does not, and the difference is what makes "SEARCHING src/" legible
+   * before anybody reads the badge.
+   */
+  | 'sitSearching'
   /** Seated, leaning back, hand at the chin, looking up. */
   | 'sitThinking'
   /** Seated, turned away from the screen towards somebody. */

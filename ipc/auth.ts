@@ -11,6 +11,7 @@ import {
   signOut,
   updateDisplayName
 } from '../supabase/authService'
+import { clearAllActivity } from '../agents/activityStore'
 import {
   completeOnboarding,
   forgetUserPrefs,
@@ -159,7 +160,20 @@ export function registerAuthHandlers(): void {
   ipcMain.handle('auth:state', (): AuthState => getAuthState())
   ipcMain.handle('auth:signInWithGoogle', (): Promise<AuthState> => signInWithGoogle())
   ipcMain.handle('auth:cancelSignIn', (): AuthState => cancelSignIn())
-  ipcMain.handle('auth:signOut', (): Promise<AuthState> => signOut())
+  /*
+   * Signing out empties the office as well as the account.
+   *
+   * Every scoped read already answers with nothing once `currentUserId` is
+   * blank, but live activity is held in memory and keyed by agent id rather
+   * than resolved through a project on every read — so it is the one thing
+   * that would survive a sign-out and be waiting above a character's head for
+   * whoever signed in next.
+   */
+  ipcMain.handle('auth:signOut', async (): Promise<AuthState> => {
+    const state = await signOut()
+    clearAllActivity()
+    return state
+  })
 
   /*
    * Provider onboarding.

@@ -4,6 +4,7 @@ import type { SceneDef, Theme } from '../../themes/types'
 import { makeRng } from '../pixel/ops'
 import { WORLD_SPRITE_H, WORLD_SPRITE_W } from './spriteCache'
 import type { AgentView, CharacterRuntime } from '../world.types'
+import { activityFamily } from '../../shared/activity'
 import { Director, Workstations } from './behavior'
 import type { CharacterDef } from '../../characters/character.types'
 import { castForSlot } from '../../project/cast'
@@ -582,8 +583,16 @@ export class WorldEngine {
       const screen = this.screens[station.monitor]
       screen.mode = screenFor(c.state)
       // The mark only belongs on a screen somebody is actually working at.
+      /*
+       * The monitor mark is a four-pixel glyph, so it gets the family rather
+       * than the activity: there is no drawing that distinguishes searching
+       * code from searching files at that size, and pretending otherwise
+       * would just be noise on a screen.
+       */
       screen.tool =
-        screen.mode === 'typing' || screen.mode === 'reading' ? c.activity : null
+        (screen.mode === 'typing' || screen.mode === 'reading') && c.activity
+          ? activityFamily(c.activity)
+          : null
     }
   }
 
@@ -622,7 +631,8 @@ export class WorldEngine {
         role: agent?.role ?? c.def.role,
         model: agent?.model ?? 'Unknown',
         status: agent?.status ?? 'idle',
-        task: agent?.task ?? null
+        task: agent?.task ?? null,
+        activity: agent?.activity ?? null
       }
     })
     for (const fn of this.viewListeners) fn(this.views)

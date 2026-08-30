@@ -1,5 +1,5 @@
 import type { AgentStatus } from '../agents/agent.types'
-import type { ToolGroup } from '../agents/toolActivity'
+import type { ActivityType, AgentActivity } from '../shared/activity'
 import type {
   CharacterDef,
   CharacterState,
@@ -89,8 +89,14 @@ export interface CharacterRuntime {
   phase: number
   /** Who this character is currently exchanging something with. */
   partnerId: string | null
-  /** The tool family the agent last started, which colours the work pose. */
-  activity: ToolGroup | null
+  /**
+   * The normalised activity the agent last reported, which chooses the pose.
+   *
+   * Only the type: the body needs to know that this is a file read and not a
+   * command, and has no use for the filename. The detail travels to the label
+   * layer instead, which is where text belongs.
+   */
+  activity: ActivityType | null
 }
 
 /** What the UI layer is told about, at status-change frequency only. */
@@ -101,4 +107,14 @@ export interface AgentView {
   model: string
   status: AgentStatus
   task: string | null
+  /**
+   * What the agent is doing, whole.
+   *
+   * Carried to the label layer rather than reduced to a status, because the
+   * badge over somebody's head is the one place in the product where the
+   * detail earns its space: READING package.json says something WORKING never
+   * could. Null when there is nothing to report, which is how an idle
+   * character keeps a bare name plate.
+   */
+  activity: AgentActivity | null
 }
